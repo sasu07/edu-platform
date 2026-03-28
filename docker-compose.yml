@@ -32,8 +32,6 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        # URL-ul la care frontend-ul face request-uri API
-        # Folosește localhost:8000 pentru acces din browser (nu din Docker network)
         VITE_API_URL: http://localhost:8000
     container_name: etox-frontend
     ports:
@@ -42,3 +40,7 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    volumes:
+      # Montează dist/ local → Nginx servește direct fișierele compilate local.
+      # Actualizare: rulează `npm run build` în /frontend, fără rebuild Docker.
+      - ./frontend/dist:/usr/share/nginx/html:ro

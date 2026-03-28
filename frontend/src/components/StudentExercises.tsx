@@ -330,14 +330,21 @@ export default function StudentExercises() {
     setGenError(null);
     setLoading(true);
     setGroups([]);
+
+    // Verifică limita — dacă primim 403 blocăm, orice altă eroare o ignorăm silențios
     try {
       await logExerciseGeneration();
     } catch (err: any) {
-      setLoading(false);
-      setGenError(err.response?.data?.detail || 'Limita de generări a fost atinsă.');
-      refreshLimits();
-      return;
+      const status = err.response?.status;
+      if (status === 403) {
+        setLoading(false);
+        setGenError(err.response?.data?.detail || 'Limita de generări a fost atinsă.');
+        refreshLimits();
+        return;
+      }
+      // 404 / 500 / rețea — continuăm generarea fără a bloca
     }
+
     try {
       const params: Parameters<typeof getExercises>[0] = {
         only_roots: true,

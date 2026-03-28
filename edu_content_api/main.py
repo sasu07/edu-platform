@@ -76,23 +76,47 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.on_event("startup")
 def startup_event():
-    """Rulează migrările SQL pendinte la pornirea aplicației."""
+    """Rulează doar migrările SQL care nu au fost aplicate încă."""
     import glob as glob_mod
     from database import conn_pool
     if conn_pool is None:
         return
-    migrations_dir = os.path.join(os.path.dirname(__file__), "migrations")
-    sql_files = sorted(glob_mod.glob(os.path.join(migrations_dir, "*.sql")))
     with conn_pool.connection() as conn:
+        # Tabel de tracking — creat o singură dată
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    filename VARCHAR(255) PRIMARY KEY,
+                    applied_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+        conn.commit()
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT filename FROM schema_migrations")
+            applied = {row[0] for row in cur.fetchall()}
+
+        migrations_dir = os.path.join(os.path.dirname(__file__), "migrations")
+        sql_files = sorted(glob_mod.glob(os.path.join(migrations_dir, "*.sql")))
+
         for sql_file in sql_files:
+            filename = os.path.basename(sql_file)
+            if filename in applied:
+                continue
             with open(sql_file, "r") as f:
                 sql = f.read()
             try:
                 with conn.cursor() as cur:
                     cur.execute(sql)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO schema_migrations (filename) VALUES (%s)",
+                        (filename,),
+                    )
                 conn.commit()
-            except Exception:
+            except Exception as e:
                 conn.rollback()
+                print(f"Migration {filename} skipped: {e}")
 
 
 @app.on_event("shutdown")
