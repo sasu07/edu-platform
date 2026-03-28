@@ -1930,12 +1930,36 @@ def list_teachers(
     _admin: UserDB = Depends(require_role(UserRole.ADMIN)),
     conn: Connection = Depends(get_db_conn),
 ):
-    """Admin: listează toți profesorii platformei."""
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             "SELECT id, full_name, email FROM users WHERE role = 'teacher' ORDER BY full_name"
         )
         return cur.fetchall()
+
+
+@app.post("/admin/teachers", response_model=UserDB, tags=["Admin"])
+def create_teacher(
+    body: UserRegister,
+    _admin: UserDB = Depends(require_role(UserRole.ADMIN)),
+    conn: Connection = Depends(get_db_conn),
+):
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT id FROM users WHERE email = %s", (body.email,))
+        if cur.fetchone():
+            raise HTTPException(status_code=400, detail="Email deja înregistrat")
+
+        cur.execute(
+            """
+            INSERT INTO users (email, password_hash, full_name, role)
+            VALUES (%s, %s, %s, 'teacher')
+            RETURNING id, email, full_name, role, is_active, created_at
+            """,
+            (body.email, hash_password(body.password), body.full_name),
+        )
+        user_row = cur.fetchone()
+        conn.commit()
+
+    return UserDB(**user_row)
 
 # # HELP REQUESTS — endpoint suplimentar cu răspunsuri incluse (pentru student)
 
@@ -1982,7 +2006,10 @@ def my_help_requests_full(
 
 @app.post("/auth/register", response_model=Token, tags=["Auth"])
 def register(body: UserRegister, conn: Connection = Depends(get_db_conn)):
-    """Înregistrare utilizator nou (student sau teacher)."""
+    allowed_roles = (UserRole.STUDENT, UserRole.SCHOOL_TEACHER)
+    if body.role not in allowed_roles:
+        raise HTTPException(status_code=400, detail="Conturile de profesor platformă se creează doar de administrator")
+
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("SELECT id FROM users WHERE email = %s", (body.email,))
         if cur.fetchone():

@@ -143,6 +143,8 @@ export const upgradeSubscription = (userId: string, planType: string = 'premium'
   });
 export const cancelSubscription = (userId: string) =>
   api.delete(`/admin/subscriptions/${userId}`);
+export const createTeacher = (data: { email: string; password: string; full_name: string }) =>
+  api.post('/admin/teachers', { ...data, role: 'teacher' });
 export const getMyAccess = () => api.get<{ can_help_requests: boolean; can_download_pdf: boolean }>('/auth/me/access');
 
 export const getSources = () => api.get<Source[]>('/sources/');

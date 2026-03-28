@@ -131,6 +131,62 @@
 .admin-premium-btn:hover:not(:disabled) { background: #fef3c7; }
 .admin-premium-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+.admin-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.admin-section-head .admin-section-title {
+  margin-bottom: 0;
+}
+
+.admin-add-teacher-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #1d4ed8;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.admin-add-teacher-btn:hover { background: #dbeafe; }
+
+.admin-new-teacher-form {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.admin-nt-fields {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.admin-nt-fields input {
+  flex: 1;
+  min-width: 160px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+  font-size: 0.88rem;
+  outline: none;
+}
+
+.admin-nt-fields input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.12);
+}
+
 .admin-cancel-btn {
   display: flex;
   align-items: center;

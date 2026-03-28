@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Shield, Crown, UserCheck, XCircle } from 'lucide-react';
-import { getAdminUsers, upgradeSubscription, cancelSubscription } from '../api';
+import { Shield, Crown, UserCheck, XCircle, UserPlus } from 'lucide-react';
+import { getAdminUsers, upgradeSubscription, cancelSubscription, createTeacher } from '../api';
 import './AdminPanel.css';
 
 interface UserRow {
@@ -40,6 +40,11 @@ export default function AdminPanel() {
   const [upgrading, setUpgrading] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
+
+  const [showNewTeacher, setShowNewTeacher] = useState(false);
+  const [newTeacher, setNewTeacher] = useState({ full_name: '', email: '', password: '' });
+  const [teacherMsg, setTeacherMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [creatingTeacher, setCreatingTeacher] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -85,6 +90,23 @@ export default function AdminPanel() {
     }
   };
 
+  const handleCreateTeacher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreatingTeacher(true);
+    setTeacherMsg(null);
+    try {
+      await createTeacher(newTeacher);
+      setTeacherMsg({ text: 'Cont profesor creat cu succes.', ok: true });
+      setNewTeacher({ full_name: '', email: '', password: '' });
+      setShowNewTeacher(false);
+      load();
+    } catch (err: any) {
+      setTeacherMsg({ text: err.response?.data?.detail || 'Eroare', ok: false });
+    } finally {
+      setCreatingTeacher(false);
+    }
+  };
+
   if (loading) return <div className="admin-panel">Se încarcă...</div>;
 
   return (
@@ -92,6 +114,50 @@ export default function AdminPanel() {
       <div className="admin-header">
         <h2><Shield size={20} /> Panou Administrator</h2>
         <button className="admin-refresh-btn" onClick={load}>Refresh</button>
+      </div>
+
+      <div className="admin-section">
+        <div className="admin-section-head">
+          <h3 className="admin-section-title">Profesori platformă</h3>
+          <button className="admin-add-teacher-btn" onClick={() => setShowNewTeacher(v => !v)}>
+            <UserPlus size={15} />
+            {showNewTeacher ? 'Anulează' : 'Adaugă profesor'}
+          </button>
+        </div>
+
+        {showNewTeacher && (
+          <form className="admin-new-teacher-form" onSubmit={handleCreateTeacher}>
+            <div className="admin-nt-fields">
+              <input
+                placeholder="Nume complet"
+                value={newTeacher.full_name}
+                onChange={e => setNewTeacher({ ...newTeacher, full_name: e.target.value })}
+                required
+              />
+              <input
+                type="email"
+                placeholder="Email"
+                value={newTeacher.email}
+                onChange={e => setNewTeacher({ ...newTeacher, email: e.target.value })}
+                required
+              />
+              <input
+                type="password"
+                placeholder="Parolă temporară"
+                value={newTeacher.password}
+                onChange={e => setNewTeacher({ ...newTeacher, password: e.target.value })}
+                required
+                minLength={6}
+              />
+              <button type="submit" className="admin-premium-btn" disabled={creatingTeacher}>
+                {creatingTeacher ? '...' : 'Creează cont'}
+              </button>
+            </div>
+            {teacherMsg && (
+              <span className={`admin-msg ${teacherMsg.ok ? 'ok' : 'err'}`}>{teacherMsg.text}</span>
+            )}
+          </form>
+        )}
       </div>
 
       <div className="admin-section">

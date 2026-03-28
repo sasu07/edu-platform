@@ -85,8 +85,7 @@ export default function Register() {
             <label>Tip cont</label>
             <select name="role" value={form.role} onChange={handleChange}>
               <option value="student">Student</option>
-              <option value="school_teacher">Profesor (generare variante/fișe)</option>
-              <option value="teacher">Profesor platforma (tutoring)</option>
+              <option value="school_teacher">Profesor de școală</option>
             </select>
           </div>
 
