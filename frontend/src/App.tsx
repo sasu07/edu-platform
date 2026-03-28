@@ -23,6 +23,7 @@ import AdminPanel from "./components/AdminPanel";
 import MyRequests from "./components/MyRequests";
 
 import { AuthProvider, useAuth } from "./AuthContext";
+import NotificationBell from "./components/NotificationBell";
 import "./App.css";
 
 // --- Route guard pentru utilizatori autentificați ---
@@ -254,6 +255,7 @@ function NavbarUser() {
 
   return (
     <div className="navbar-user">
+      <NotificationBell />
       <span className="navbar-user-name">{user.full_name}</span>
       <span className={`navbar-user-badge badge-${user.role}`}>{user.role}</span>
       <button onClick={handleLogout} className="navbar-logout-btn">

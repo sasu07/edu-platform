@@ -4,7 +4,7 @@ import os
 import shutil
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File, Form, Request
+from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException, status, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg import Connection
 from psycopg.rows import dict_row
@@ -36,6 +36,7 @@ from import_json import JSONImporter
 from variant_generator import get_variant_generator
 from pdf_generator import get_pdf_generator
 from html_generator import get_html_generator
+from email_service import send_new_request_to_teacher, send_response_to_student
 from auth import (
     hash_password, verify_password, create_access_token,
     get_current_user, require_role, require_premium,
@@ -2179,12 +2180,11 @@ def list_users(
 @app.post("/help-requests/", response_model=HelpRequestDB, tags=["Help"])
 def create_help_request(
     body: HelpRequestCreate,
+    background_tasks: BackgroundTasks,
     current_user: UserDB = Depends(require_premium),
     conn: Connection = Depends(get_db_conn),
 ):
-    """Student: trimite un flag pe un exercițiu (necesită Premium)."""
     with conn.cursor(row_factory=dict_row) as cur:
-        # Verifică că exercițiul există
         cur.execute("SELECT id FROM exercises WHERE id = %s", (str(body.exercise_id),))
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="Exercițiu negăsit")
@@ -2199,6 +2199,33 @@ def create_help_request(
             (str(current_user.id), str(body.exercise_id), body.flag_type.value, body.notes),
         )
         row = cur.fetchone()
+        request_id = str(row["id"])
+
+        flag_labels = {"WRITTEN": "Rezolvare scrisă", "VIDEO": "Rezolvare video", "LIVE": "Sesiune live"}
+        flag_label = flag_labels.get(body.flag_type.value, body.flag_type.value)
+
+        # Notificări în-platformă + email pentru toți profesorii activi
+        cur.execute("SELECT id, full_name, email FROM users WHERE role = 'teacher' AND is_active = TRUE")
+        teachers = cur.fetchall()
+        for t in teachers:
+            cur.execute(
+                """
+                INSERT INTO notifications (user_id, type, title, body, related_id)
+                VALUES (%s, 'new_request', %s, %s, %s)
+                """,
+                (
+                    str(t["id"]),
+                    f"Cerere nouă: {flag_label}",
+                    f"{current_user.full_name} a solicitat ajutor pentru un exercițiu.",
+                    request_id,
+                ),
+            )
+            background_tasks.add_task(
+                send_new_request_to_teacher,
+                t["email"], t["full_name"],
+                current_user.full_name, body.flag_type.value, request_id,
+            )
+
         conn.commit()
     return HelpRequestDB(**row)
 
@@ -2272,10 +2299,10 @@ def assign_help_request(
 def respond_to_help_request(
     request_id: uuid.UUID,
     body: HelpResponseCreate,
+    background_tasks: BackgroundTasks,
     current_user: UserDB = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
     conn: Connection = Depends(get_db_conn),
 ):
-    """Profesor: trimite răspuns scris sau link Zoom la un request."""
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("SELECT id, flag_type FROM help_requests WHERE id = %s", (str(request_id),))
         req = cur.fetchone()
@@ -2288,36 +2315,43 @@ def respond_to_help_request(
             VALUES (%s, %s, %s, %s, %s)
             RETURNING id, request_id, teacher_id, content_text, video_path, zoom_link, scheduled_at, created_at
             """,
-            (
-                str(request_id), str(current_user.id),
-                body.content_text, body.zoom_link, body.scheduled_at,
-            ),
+            (str(request_id), str(current_user.id), body.content_text, body.zoom_link, body.scheduled_at),
         )
         response_row = cur.fetchone()
 
-        # Marchează request-ul ca resolved
         cur.execute(
             "UPDATE help_requests SET status = 'resolved', updated_at = NOW() WHERE id = %s",
             (str(request_id),),
         )
-        # Obține student_id pentru notificare
-        cur.execute("SELECT student_id FROM help_requests WHERE id = %s", (str(request_id),))
-        student_row = cur.fetchone()
 
-        flag_label = {"WRITTEN": "Rezolvare scrisă", "VIDEO": "Rezolvare video", "LIVE": "Sesiune live"}.get(req["flag_type"], req["flag_type"])
-        if student_row:
+        cur.execute(
+            "SELECT hr.student_id, u.email, u.full_name FROM help_requests hr JOIN users u ON u.id = hr.student_id WHERE hr.id = %s",
+            (str(request_id),),
+        )
+        student = cur.fetchone()
+
+        flag_labels = {"WRITTEN": "Rezolvare scrisă", "VIDEO": "Rezolvare video", "LIVE": "Sesiune live"}
+        flag_label = flag_labels.get(req["flag_type"], req["flag_type"])
+
+        if student:
             cur.execute(
                 """
                 INSERT INTO notifications (user_id, type, title, body, related_id)
                 VALUES (%s, 'help_response', %s, %s, %s)
                 """,
                 (
-                    str(student_row["student_id"]),
+                    str(student["student_id"]),
                     f"Ai primit un răspuns: {flag_label}",
                     f"Profesorul {current_user.full_name} a răspuns la cererea ta.",
                     str(request_id),
                 ),
             )
+            background_tasks.add_task(
+                send_response_to_student,
+                student["email"], student["full_name"],
+                current_user.full_name, req["flag_type"],
+            )
+
         conn.commit()
     return HelpResponseDB(**response_row)
 
