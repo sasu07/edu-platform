@@ -119,6 +119,7 @@ export const authRegister = (data: { email: string; password: string; full_name:
   api.post<AuthToken>('/auth/register', data);
 export const getMyVariants = () => api.get<any[]>('/variants/my');
 export const getNotifications = () => api.get<any[]>('/notifications/');
+export const markNotificationRead = (id: string) => api.put(`/notifications/${id}/read`);
 export const markAllNotificationsRead = () => api.put('/notifications/read-all');
 export const authLogin = (data: { email: string; password: string }) =>
   api.post<AuthToken>('/auth/login', data);

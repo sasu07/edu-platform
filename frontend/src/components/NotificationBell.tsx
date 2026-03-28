@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Bell } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getNotifications, markAllNotificationsRead } from '../api';
+import { getNotifications, markNotificationRead, markAllNotificationsRead } from '../api';
 import './NotificationBell.css';
 
 interface Notif {
@@ -59,8 +59,12 @@ export default function NotificationBell() {
     setNotifs(notifs.map(n => ({ ...n, is_read: true })));
   };
 
-  const handleClick = (n: Notif) => {
+  const handleClick = async (n: Notif) => {
     setOpen(false);
+    if (!n.is_read) {
+      markNotificationRead(n.id).catch(() => {});
+      setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x));
+    }
     const route = TYPE_ROUTES[n.type];
     if (route) navigate(route);
   };
