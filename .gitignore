@@ -1,0 +1,88 @@
+# =============================================
+# Python
+# =============================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env.local
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# =============================================
+# Variabile de mediu — NU le publica niciodata
+# =============================================
+.env
+*.env
+.env.*
+!.env.example
+
+# =============================================
+# Node.js / React
+# =============================================
+node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+
+# Logs npm/yarn
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =============================================
+# Fișiere uploadate de utilizatori
+# =============================================
+uploaded_files/
+edu_content_api/uploaded_files/
+
+# =============================================
+# macOS
+# =============================================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# =============================================
+# IDE-uri
+# =============================================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =============================================
+# Docker
+# =============================================
+.docker/
+
+# ML models
+*.pt
+*.pth
+*.bin
+*.onnx
+~/.pix2text/
+
+# Planning docs
+plan.md
+*.draft.md
+
+# Local scripts
+create_admin.py
+seed_*.py

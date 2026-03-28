@@ -1,0 +1,549 @@
+/* Variant Builder (Pro UI) - uses the same CSS variables from your global styles.css */
+
+.vx-page {
+  padding: var(--spacing-5);
+}
+
+.vx-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+}
+
+.vx-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.vx-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--color-white);
+  background: linear-gradient(135deg, var(--color-primary), #0ea5e9);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.vx-title h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 1000;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+.vx-title p {
+  margin: 6px 0 0;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
+.vx-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.vx-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-radius: 999px;
+  padding: 10px 14px;
+  font-weight: 800;
+  font-size: 0.875rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+
+.vx-btn:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+  box-shadow: var(--shadow-sm);
+}
+
+.vx-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.vx-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.vx-btn-primary {
+  background: var(--color-primary);
+  color: var(--color-white);
+  border-color: transparent;
+}
+
+.vx-btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+}
+
+.vx-btn-secondary {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(8px);
+}
+
+.vx-btn-full {
+  width: 100%;
+  justify-content: center;
+}
+
+.vx-btn-locked {
+  background: rgba(255, 255, 255, 0.5);
+  color: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.vx-pdf-lock-notice {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: #ef4444;
+  font-weight: 500;
+  padding: 4px 8px;
+  background: rgba(239, 68, 68, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.vx-icon-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.08);
+  color: rgba(185, 28, 28, 1);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.vx-icon-btn:hover:not(:disabled) {
+  border-color: rgba(239, 68, 68, 0.35);
+  box-shadow: var(--shadow-sm);
+}
+
+.vx-icon-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.vx-icon-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Message banner */
+.vx-msg {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.75);
+  padding: 12px 14px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-4);
+}
+
+.vx-msg .vx-msg-text {
+  color: var(--color-text);
+  font-weight: 700;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.vx-msg.info {
+  border-color: rgba(14, 165, 233, 0.25);
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.vx-msg.success {
+  border-color: rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.vx-msg.error {
+  border-color: rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.vx-spin {
+  animation: vx-spin 900ms linear infinite;
+}
+
+@keyframes vx-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Grid & Cards */
+.vx-grid {
+  display: grid;
+  grid-template-columns: 340px 1fr 360px;
+  gap: var(--spacing-5);
+  align-items: start;
+}
+
+.vx-grid-auto {
+  grid-template-columns: 380px 1fr;
+}
+
+.vx-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  min-width: 0;
+}
+
+.vx-card-wide {
+  min-width: 0;
+}
+
+.vx-card-head {
+  padding: var(--spacing-4);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.vx-card-title {
+  font-weight: 1000;
+  color: var(--color-text);
+}
+
+.vx-card-sub {
+  margin-top: 2px;
+  font-size: 0.86rem;
+  color: var(--color-muted);
+}
+
+.vx-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 900;
+  font-size: 0.85rem;
+  color: var(--color-text);
+  border: 1px solid rgba(79, 70, 229, 0.18);
+  background: rgba(79, 70, 229, 0.10);
+}
+
+/* Download toolbar (below card head) */
+.vx-toolbar {
+  padding: 8px 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.vx-toolbar .vx-btn {
+  padding: 7px 12px;
+  font-size: 0.82rem;
+}
+
+/* Form */
+.vx-form {
+  padding: var(--spacing-4);
+  display: grid;
+  gap: 12px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.vx-form-title {
+  font-weight: 1000;
+  color: var(--color-text);
+}
+
+.vx-field label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 900;
+  color: var(--color-muted);
+  margin-bottom: 6px;
+}
+
+.vx-field input,
+.vx-field select,
+.vx-field textarea {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  outline: none;
+  transition: box-shadow 120ms ease, border-color 120ms ease;
+}
+
+.vx-field textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.vx-field input:focus,
+.vx-field select:focus,
+.vx-field textarea:focus {
+  border-color: rgba(79, 70, 229, 0.45);
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.10);
+}
+
+.vx-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+/* Lists */
+.vx-list {
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.vx-list-scroll {
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.vx-empty {
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px dashed var(--color-border-strong);
+  background: rgba(255, 255, 255, 0.65);
+  color: var(--color-muted);
+  text-align: center;
+  font-weight: 700;
+}
+
+/* Variant item */
+.vx-item {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 16px;
+  padding: 12px 12px;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+.vx-item:hover {
+  border-color: rgba(79, 70, 229, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+
+.vx-item.selected {
+  background: rgba(79, 70, 229, 0.08);
+  border-color: rgba(79, 70, 229, 0.28);
+}
+
+.vx-item-title {
+  font-weight: 1000;
+  color: var(--color-text);
+}
+
+.vx-item-sub {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: var(--color-muted);
+}
+
+/* Exercise picker item */
+.vx-ex {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 16px;
+  padding: 12px 12px;
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.vx-ex:hover {
+  border-color: rgba(79, 70, 229, 0.20);
+  box-shadow: var(--shadow-sm);
+}
+
+.vx-ex.selected {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.28);
+}
+
+.vx-ex-main {
+  min-width: 0;
+}
+
+.vx-ex-title {
+  font-weight: 900;
+  color: var(--color-text);
+  line-height: 1.35;
+}
+
+.vx-ex-sub {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: var(--color-muted);
+}
+
+.vx-check input {
+  width: 18px;
+  height: 18px;
+  margin-top: 2px;
+  accent-color: var(--color-primary);
+}
+
+/* Tools row */
+.vx-tools {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.vx-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  padding: 8px 12px;
+}
+
+.vx-search input {
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 220px;
+  font-size: 0.9rem;
+}
+
+.vx-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  padding: 8px 12px;
+}
+
+.vx-select select {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 0.9rem;
+}
+
+/* Footer actions */
+.vx-footer {
+  border-top: 1px solid var(--color-border);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.vx-footer-left {
+  color: var(--color-muted);
+  font-size: 0.88rem;
+}
+
+.vx-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Variant exercise item */
+.vx-ve {
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 16px;
+  padding: 12px 12px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.vx-ve-n {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(79, 70, 229, 0.10);
+  border: 1px solid rgba(79, 70, 229, 0.18);
+  font-weight: 1000;
+  color: var(--color-text);
+  flex-shrink: 0;
+}
+
+.vx-ve-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.vx-ve-title {
+  font-weight: 900;
+  color: var(--color-text);
+  line-height: 1.35;
+}
+
+.vx-ve-sub {
+  margin-top: 6px;
+  font-size: 0.82rem;
+  color: var(--color-muted);
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .vx-grid {
+    grid-template-columns: 1fr;
+  }
+  .vx-list-scroll {
+    max-height: 420px;
+  }
+}
+
+@media (max-width: 560px) {
+  .vx-page { padding: var(--spacing-4); }
+  .vx-header { flex-direction: column; align-items: stretch; }
+  .vx-header-actions { justify-content: flex-start; flex-wrap: wrap; }
+  .vx-tools { flex-direction: column; align-items: stretch; }
+  .vx-search input { width: 100%; }
+  .vx-row { grid-template-columns: 1fr; }
+  .vx-footer { flex-direction: column; align-items: stretch; }
+  .vx-footer-actions { width: 100%; justify-content: stretch; }
+  .vx-footer-actions .vx-btn { width: 100%; justify-content: center; }
+}

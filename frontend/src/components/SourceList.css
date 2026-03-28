@@ -1,0 +1,207 @@
+.source-list-card {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.source-list-header {
+  padding: var(--spacing-4);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-4);
+  border-bottom: 1px solid var(--color-border);
+  flex-wrap: wrap;
+}
+
+.header-title h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 1000;
+  color: var(--color-text);
+}
+
+.source-count {
+  margin-left: 10px;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(79, 70, 229, 0.18);
+  background: rgba(79, 70, 229, 0.10);
+  font-weight: 900;
+  font-size: 0.82rem;
+}
+
+.filters {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.search-box input {
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  padding: 10px 12px;
+  outline: none;
+  width: 260px;
+}
+
+.type-filter {
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  padding: 10px 12px;
+  outline: none;
+}
+
+.table-container {
+  overflow: auto;
+}
+
+.source-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 980px;
+}
+
+.source-table th,
+.source-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.source-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  color: var(--color-muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.source-table tr:hover td {
+  background: rgba(79, 70, 229, 0.04);
+}
+
+.source-name {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.source-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--color-primary), #0ea5e9);
+  flex-shrink: 0;
+}
+
+.source-name-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name-primary {
+  font-weight: 1000;
+  color: var(--color-text);
+}
+
+.name-secondary {
+  font-size: 0.82rem;
+  color: var(--color-muted);
+}
+
+.type-badge {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 900;
+  font-size: 0.82rem;
+  border: 1px solid rgba(17, 24, 39, 0.08);
+  background: rgba(17, 24, 39, 0.04);
+}
+
+.type-pdf { border-color: rgba(79, 70, 229, 0.25); background: rgba(79, 70, 229, 0.10); }
+.type-oficial { border-color: rgba(16, 185, 129, 0.25); background: rgba(16, 185, 129, 0.10); }
+.type-culegere { border-color: rgba(245, 158, 11, 0.28); background: rgba(245, 158, 11, 0.12); }
+.type-default { }
+
+.kpi {
+  font-weight: 1000;
+  color: var(--color-text);
+}
+
+.details-btn {
+  border: 1px solid rgba(79, 70, 229, 0.22);
+  background: rgba(79, 70, 229, 0.10);
+  color: var(--color-primary);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.details-btn:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.loading-state,
+.error-state,
+.empty-state {
+  padding: 22px;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.loading-spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 3px solid rgba(79, 70, 229, 0.20);
+  border-top-color: rgba(79, 70, 229, 0.85);
+  margin: 0 auto 12px;
+  animation: spin 900ms linear infinite;
+}
+
+.retry-button {
+  margin-top: 12px;
+  border: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  padding: 10px 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.table-footer {
+  padding: 12px 14px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 980px) {
+  .filters { width: 100%; }
+  .search-box input { width: 100%; }
+}

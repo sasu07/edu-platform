@@ -1,0 +1,292 @@
+{
+  "source": {
+    "external_id": "BAC_2024_MI_IUNIE_TEST",
+    "name": "BAC 2024 Matematica-Informatica Iunie (Test)",
+    "year": 2024,
+    "type": "BAC",
+    "profile": "mate-info",
+    "session": "iunie",
+    "page_count": 4
+  },
+  "exercises": [
+    {
+      "external_id": "T2024-S1-1",
+      "subiect": 1,
+      "exercise_num": 1,
+      "exam_type": "BAC",
+      "profile": "mate-info",
+      "statement_latex": "Rezultatul calculului $3 \\cdot 2 - 4$ este egal cu ...",
+      "statement_text": "Rezultatul calculului 3 * 2 - 4 este egal cu ...",
+      "answer_latex": "$2$",
+      "difficulty": 2,
+      "points": 5,
+      "status": "READY",
+      "tags": [
+        {"namespace": "topic", "key": "algebra", "label": "Algebra", "weight": 1.0},
+        {"namespace": "skill", "key": "calcul-algebric", "label": "Calcul algebric", "weight": 1.0}
+      ],
+      "source_ref": {"page_start": 1, "page_end": 1}
+    },
+    {
+      "external_id": "T2024-S1-2",
+      "subiect": 1,
+      "exercise_num": 2,
+      "exam_type": "BAC",
+      "profile": "mate-info",
+      "statement_latex": "Numarul real $x$ pentru care $2x + 3 = 7$ este $x = $ ...",
+      "statement_text": "Numarul real x pentru care 2x + 3 = 7 este x = ...",
+      "answer_latex": "$x = 2$",
+      "difficulty": 3,
+      "points": 5,
+      "status": "READY",
+      "tags": [
+        {"namespace": "topic", "key": "algebra", "label": "Algebra", "weight": 1.0},
+        {"namespace": "subtopic", "key": "ecuatii-grad-1", "label": "Ecuatii de gradul I", "weight": 1.0},
+        {"namespace": "skill", "key": "rezolvare-ecuatii", "label": "Rezolvarea ecuatiilor", "weight": 1.0}
+      ],
+      "source_ref": {"page_start": 1, "page_end": 1}
+    },
+    {
+      "external_id": "T2024-S1-3",
+      "subiect": 1,
+      "exercise_num": 3,
+      "exam_type": "BAC",
+      "profile": "mate-info",
+      "statement_latex": "Daca $f: \\mathbb{R} \\to \\mathbb{R}$, $f(x) = x^2 + 1$, atunci $f(3) = $ ...",
+      "difficulty": 3,
+      "points": 5,
+      "status": "READY",
+      "tags": [
+        {"namespace": "topic", "key": "analiza", "label": "Analiza matematica", "weight": 1.0},
+        {"namespace": "subtopic", "key": "functii", "label": "Functii", "weight": 1.0}
+      ],
+      "source_ref": {"page_start": 1, "page_end": 1}
+    },
+    {
+      "external_id": "T2024-S1-4",
+      "subiect": 1,
+      "exercise_num": 4,
+      "exam_type": "BAC",
+      "profile": "mate-info",
+      "statement_latex": "Determinantul matricei $A = \\begin{pmatrix} 1 & 2 \\\\ 3 & 4 \\end{pmatrix}$ este egal cu ...",
+      "difficulty": 4,
+      "points": 5,
+      "status": "READY",
+      "tags": [
+        {"namespace": "topic", "key": "algebra", "label": "Algebra", "weight": 1.0},
+        {"namespace": "subtopic", "key": "matrice-determinanti", "label": "Matrice si determinanti", "weight": 1.0}
+      ],
+      "source_ref": {"page_start": 1, "page_end": 1}
+    },
+    {
+      "external_id": "T2024-S1-5",
+      "subiect": 1,
+      "exercise_num": 5,
+      "exam_type": "BAC",
+      "profile": "mate-info",
+      "statement_latex": "Suma primilor $100$ de termeni ai progresiei aritmetice $1, 2, 3, \\ldots$ este egala cu ...",
+      "difficulty": 4,
+      "points": 5,
+      "status": "READY",
+      "tags": [
+        {"namespace": "topic", "key": "algebra", "label": "Algebra", "weight": 1.0},
+        {"namespace": "subtopic", "key": "progresii", "label": "Progresii", "weight": 1.0}
+      ],
+      "source_ref": {"page_start": 1, "page_end": 1}
+    },
+    {
+      "external_id": "T2024-S1-6",
+      "subiect": 1,
+      "exercise_num": 6,
+      "exam_type": "BAC",
+      "profile": "mate-info",
+      "statement_latex": "Probabilitatea ca, alegand un numar din multimea $\\{1, 2, 3, 4, 5, 6\\}$, acesta sa fie par, este egala cu ...",
+      "difficulty": 3,
+      "points": 5,
+      "status": "READY",
+      "tags": [
+        {"namespace": "topic", "key": "probabilitati", "label": "Probabilitati", "weight": 1.0}
+      ],
+      "source_ref": {"page_start": 2, "page_end": 2}
+    },
+    {
+      "external_id": "T2024-S2-1",
+      "subiect": 2,
+      "exercise_num": 1,
+      "exam_type": "BAC",
+      "profile": "mate-info",
+      "statement_latex": "Se considera matricea $A = \\begin{pmatrix} 1 & 1 \\\\ 0 & 1 \\end{pmatrix}$.",
+      "difficulty": 6,
+      "points": 15,
+      "status": "READY",
+      "subpoints": [
+        {
+          "subpoint": "a",
+          "statement_latex": "Aratati ca $\\det(A) = 1$.",
+          "solution_latex": "$\\det(A) = 1 \\cdot 1 - 1 \\cdot 0 = 1$",
+          "scoring_guide_latex": "Se calculeaza corect determinantul ... 5p",
+          "points": 5,
+          "difficulty": 5
+        },
+        {
+          "subpoint": "b",
+          "statement_latex": "Demonstrati ca $A^n = \\begin{pmatrix} 1 & n \\\\ 0 & 1 \\end{pmatrix}$, pentru orice $n \\in \\mathbb{N}^*$.",
+          "solution_latex": "Demonstram prin inductie matematica...",
+          "scoring_guide_latex": "Baza inductiei ... 1p; Pasul inductiv ... 4p",
+          "points": 5,
+          "difficulty": 7
+        },
+        {
+          "subpoint": "c",
+          "statement_latex": "Calculati $A + A^2 + A^3 + \\ldots + A^{100}$.",
+          "solution_latex": "Folosind formula de la b)...",
+          "scoring_guide_latex": "Folosirea formulei ... 2p; Calcul suma ... 3p",
+          "points": 5,
+          "difficulty": 7
+        }
+      ],
+      "tags": [
+        {"namespace": "topic", "key": "algebra", "label": "Algebra", "weight": 1.0},
+        {"namespace": "subtopic", "key": "matrice", "label": "Matrice", "weight": 1.0},
+        {"namespace": "skill", "key": "inductie", "label": "Inductie matematica", "weight": 0.8},
+        {"namespace": "method", "key": "inductie-completa", "label": "Inductie completa", "weight": 0.8}
+      ],
+      "source_ref": {"page_start": 2, "page_end": 3}
+    },
+    {
+      "external_id": "T2024-S2-2",
+      "subiect": 2,
+      "exercise_num": 2,
+      "exam_type": "BAC",
+      "profile": "mate-info",
+      "statement_latex": "Se considera functia $f: \\mathbb{R} \\to \\mathbb{R}$, $f(x) = e^x - x - 1$.",
+      "difficulty": 7,
+      "points": 15,
+      "status": "READY",
+      "subpoints": [
+        {
+          "subpoint": "a",
+          "statement_latex": "Aratati ca $f'(x) = e^x - 1$.",
+          "solution_latex": "$(e^x - x - 1)' = e^x - 1$",
+          "scoring_guide_latex": "Derivare corecta ... 5p",
+          "points": 5,
+          "difficulty": 5
+        },
+        {
+          "subpoint": "b",
+          "statement_latex": "Demonstrati ca $f(x) \\ge 0$, pentru orice $x \\in \\mathbb{R}$.",
+          "solution_latex": "Studiem monotonia: $f'(x) = 0 \\Leftrightarrow x = 0$...",
+          "scoring_guide_latex": "Studiu monotonie ... 3p; Concluzie ... 2p",
+          "points": 5,
+          "difficulty": 7
+        },
+        {
+          "subpoint": "c",
+          "statement_latex": "Calculati $\\lim_{n \\to \\infty} n \\left( e^{1/n} - 1 - \\frac{1}{n} \\right)$.",
+          "solution_latex": "Folosind L'Hopital sau dezvoltare Taylor...",
+          "scoring_guide_latex": "Transformare limita ... 2p; Calcul ... 3p",
+          "points": 5,
+          "difficulty": 8
+        }
+      ],
+      "tags": [
+        {"namespace": "topic", "key": "analiza", "label": "Analiza matematica", "weight": 1.0},
+        {"namespace": "subtopic", "key": "derivate", "label": "Derivate", "weight": 1.0},
+        {"namespace": "subtopic", "key": "limite", "label": "Limite de siruri", "weight": 0.7},
+        {"namespace": "skill", "key": "studiu-functie", "label": "Studiul functiei", "weight": 0.9},
+        {"namespace": "method", "key": "monotonie", "label": "Metoda monotoniei", "weight": 0.8}
+      ],
+      "source_ref": {"page_start": 3, "page_end": 3}
+    },
+    {
+      "external_id": "T2024-S3-1",
+      "subiect": 3,
+      "exercise_num": 1,
+      "exam_type": "BAC",
+      "profile": "mate-info",
+      "statement_latex": "Se considera functia $f: (0, \\infty) \\to \\mathbb{R}$, $f(x) = x \\ln x$.",
+      "difficulty": 7,
+      "points": 15,
+      "status": "READY",
+      "subpoints": [
+        {
+          "subpoint": "a",
+          "statement_latex": "Aratati ca $f'(x) = \\ln x + 1$.",
+          "solution_latex": "$(x \\ln x)' = \\ln x + x \\cdot \\frac{1}{x} = \\ln x + 1$",
+          "scoring_guide_latex": "Derivare produs ... 5p",
+          "points": 5,
+          "difficulty": 5
+        },
+        {
+          "subpoint": "b",
+          "statement_latex": "Determinati ecuatia tangentei la graficul functiei $f$ in punctul de abscisa $x = 1$.",
+          "solution_latex": "$f(1) = 0$, $f'(1) = 1$, deci tangenta: $y = x - 1$",
+          "scoring_guide_latex": "Calculare f(1), f'(1) ... 3p; Ecuatia tangentei ... 2p",
+          "points": 5,
+          "difficulty": 6
+        },
+        {
+          "subpoint": "c",
+          "statement_latex": "Calculati $\\int_1^e x \\ln x \\, dx$.",
+          "solution_latex": "Integrare prin parti: $u = \\ln x$, $dv = x \\, dx$...",
+          "scoring_guide_latex": "Integrare prin parti ... 3p; Calcul ... 2p",
+          "points": 5,
+          "difficulty": 7
+        }
+      ],
+      "tags": [
+        {"namespace": "topic", "key": "analiza", "label": "Analiza matematica", "weight": 1.0},
+        {"namespace": "subtopic", "key": "integrale", "label": "Integrale", "weight": 0.9},
+        {"namespace": "subtopic", "key": "derivate", "label": "Derivate", "weight": 0.8},
+        {"namespace": "skill", "key": "integrare-parti", "label": "Integrare prin parti", "weight": 0.9},
+        {"namespace": "method", "key": "integrare-parti", "label": "Integrare prin parti", "weight": 0.9}
+      ],
+      "source_ref": {"page_start": 3, "page_end": 4}
+    },
+    {
+      "external_id": "T2024-S3-2",
+      "subiect": 3,
+      "exercise_num": 2,
+      "exam_type": "BAC",
+      "profile": "mate-info",
+      "statement_latex": "Se considera sirul $(a_n)_{n \\ge 1}$ definit prin $a_1 = 1$ si $a_{n+1} = a_n + \\frac{1}{n(n+1)}$.",
+      "difficulty": 8,
+      "points": 15,
+      "status": "READY",
+      "subpoints": [
+        {
+          "subpoint": "a",
+          "statement_latex": "Aratati ca $a_2 = \\frac{3}{2}$.",
+          "solution_latex": "$a_2 = a_1 + \\frac{1}{1 \\cdot 2} = 1 + \\frac{1}{2} = \\frac{3}{2}$",
+          "scoring_guide_latex": "Calcul direct ... 5p",
+          "points": 5,
+          "difficulty": 4
+        },
+        {
+          "subpoint": "b",
+          "statement_latex": "Demonstrati ca $a_n = 2 - \\frac{1}{n}$, pentru orice $n \\ge 1$.",
+          "solution_latex": "Prin inductie sau sumarea telescopica...",
+          "scoring_guide_latex": "Demonstratie completa ... 5p",
+          "points": 5,
+          "difficulty": 8
+        },
+        {
+          "subpoint": "c",
+          "statement_latex": "Calculati $\\lim_{n \\to \\infty} n(2 - a_n)$.",
+          "solution_latex": "$\\lim n \\cdot \\frac{1}{n} = 1$",
+          "scoring_guide_latex": "Inlocuire formula ... 2p; Calcul limita ... 3p",
+          "points": 5,
+          "difficulty": 7
+        }
+      ],
+      "tags": [
+        {"namespace": "topic", "key": "analiza", "label": "Analiza matematica", "weight": 1.0},
+        {"namespace": "subtopic", "key": "siruri", "label": "Siruri de numere reale", "weight": 1.0},
+        {"namespace": "subtopic", "key": "limite", "label": "Limite de siruri", "weight": 0.8},
+        {"namespace": "skill", "key": "inductie", "label": "Inductie matematica", "weight": 0.8},
+        {"namespace": "method", "key": "sumare-telescopica", "label": "Sumare telescopica", "weight": 0.7}
+      ],
+      "source_ref": {"page_start": 4, "page_end": 4}
+    }
+  ]
+}

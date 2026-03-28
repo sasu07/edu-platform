@@ -1,0 +1,76 @@
+import { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { authLogin } from '../api';
+import { useAuth } from '../AuthContext';
+
+export default function Login() {
+  const { login } = useAuth();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await authLogin({ email, password });
+      login(res.data.access_token, res.data.user);
+      navigate('/app');
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Email sau parolă incorectă');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-page">
+      <div className="auth-card">
+        <div className="auth-logo">EX</div>
+        <h1 className="auth-title">Intră în cont</h1>
+        <p className="auth-subtitle">EtoX Platform</p>
+
+        <form onSubmit={handleSubmit} className="auth-form">
+          <div className="auth-field">
+            <label>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="email@exemplu.com"
+              required
+              autoFocus
+            />
+          </div>
+
+          <div className="auth-field">
+            <label>Parolă</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Parola ta"
+              required
+            />
+          </div>
+
+          {error && <div className="auth-error">{error}</div>}
+
+          <button type="submit" className="auth-btn" disabled={loading}>
+            {loading ? 'Se conectează...' : 'Intră în cont'}
+          </button>
+        </form>
+
+        <p className="auth-footer">
+          Nu ai cont?{' '}
+          <Link to="/register" className="auth-link">
+            Înregistrează-te
+          </Link>
+        </p>
+      </div>
+    </div>
+  );
+}
