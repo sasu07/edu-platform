@@ -8,8 +8,9 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
+  Zap,
 } from "lucide-react";
-import { getMyVariants, getMyAccess } from "../api";
+import { getMyVariants, getMyAccess, getMyLimits, type GenLimits } from "../api";
 import "./VariantBuilder.css";
 
 interface Variant {
@@ -61,6 +62,7 @@ export default function VariantBuilderAuto() {
   const [showCreate, setShowCreate] = useState(false);
   const [msg, setMsg] = useState<UiMsg | null>(null);
   const [canDownloadPdf, setCanDownloadPdf] = useState(false);
+  const [limits, setLimits] = useState<GenLimits | null>(null);
 
   const [newVariant, setNewVariant] = useState({
     name: "",
@@ -108,9 +110,14 @@ export default function VariantBuilderAuto() {
     setLoading(true);
     setInfo("Se reîncarcă…");
     try {
-      const [v, access] = await Promise.all([fetchVariants(), getMyAccess().then(r => r.data)]);
+      const [v, access, lim] = await Promise.all([
+        fetchVariants(),
+        getMyAccess().then(r => r.data),
+        getMyLimits().then(r => r.data).catch(() => null),
+      ]);
       setVariants(v);
       setCanDownloadPdf(access.can_download_pdf);
+      setLimits(lim);
       setMsg(null);
     } catch (err: any) {
       setError(err?.message ?? "Eroare la refresh.");
@@ -157,6 +164,7 @@ export default function VariantBuilderAuto() {
       setSelectedVariantId(created.id);
       setShowCreate(false);
       setSuccess("Variantă creată.");
+      getMyLimits().then(r => setLimits(r.data)).catch(() => {});
     } catch (err: any) {
       setError(err?.message ?? "Eroare la crearea variantei.");
     } finally {
@@ -179,11 +187,15 @@ export default function VariantBuilderAuto() {
         body: JSON.stringify({ variant_id: selectedVariantId }),
       });
 
-      if (!r.ok) throw new Error("Eroare la generare.");
+      if (!r.ok) {
+        const errData = await r.json().catch(() => ({}));
+        throw new Error(errData.detail || "Eroare la generare.");
+      }
 
       const ve = await fetchVariantExercises(selectedVariantId);
       setVariantExercises(ve);
       setSuccess("Generare completă.");
+      getMyLimits().then(r => setLimits(r.data)).catch(() => {});
     } catch (err: any) {
       setError(err?.message ?? "Eroare la generare.");
     } finally {
@@ -263,13 +275,24 @@ export default function VariantBuilderAuto() {
                 className="vx-btn vx-btn-primary"
                 type="button"
                 onClick={generateExercises}
-                disabled={loading || !selectedVariantId}
+                disabled={loading || !selectedVariantId || (limits !== null && !limits.has_unlimited_gen && limits.variant_gen_limit !== null && limits.variant_gen_used >= limits.variant_gen_limit)}
+                title={limits && !limits.has_unlimited_gen && limits.variant_gen_limit !== null && limits.variant_gen_used >= limits.variant_gen_limit ? 'Limita de 1 variantă/lună atinsă. Upgrade la Premium Gen.' : undefined}
               >
                 {loading ? <Loader2 size={16} className="vx-spin" /> : <Sparkles size={16} />}
                 Generează
               </button>
             </div>
           </div>
+
+          {limits && !limits.has_unlimited_gen && limits.variant_gen_limit !== null && (
+            <div className={`vx-gen-limit ${limits.variant_gen_used >= limits.variant_gen_limit ? 'vx-gen-limit--full' : ''}`}>
+              <Zap size={14} />
+              <span>
+                Variante generate luna aceasta: <strong>{limits.variant_gen_used}/{limits.variant_gen_limit}</strong>
+                {limits.variant_gen_used >= limits.variant_gen_limit && ' — Upgrade la Premium Gen pentru generare nelimitată.'}
+              </span>
+            </div>
+          )}
 
           <div className="vx-toolbar">
             <button

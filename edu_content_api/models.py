@@ -518,7 +518,8 @@ class SubscriptionPlan(str, Enum):
     FREE = "free"
     PREMIUM_HELP = "premium_help"   # Acces cereri de ajutor (tutoring)
     PREMIUM_PDF = "premium_pdf"     # Acces download PDF variante BAC
-    PREMIUM = "premium"             # Acces complet (help + PDF)
+    PREMIUM_GEN = "premium_gen"     # Generare nelimitată exerciții + variante BAC
+    PREMIUM = "premium"             # Acces complet (help + PDF + generare)
 
 
 class SubscriptionStatus(str, Enum):

@@ -121,6 +121,25 @@
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
+.vx-gen-limit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin: 8px 0 4px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  color: #0369a1;
+}
+
+.vx-gen-limit--full {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
 .vx-icon-btn {
   width: 38px;
   height: 38px;

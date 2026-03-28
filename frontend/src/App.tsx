@@ -24,6 +24,7 @@ import MyRequests from "./components/MyRequests";
 
 import { AuthProvider, useAuth } from "./AuthContext";
 import NotificationBell from "./components/NotificationBell";
+import LandingPage from "./components/LandingPage";
 import "./App.css";
 
 // --- Route guard pentru utilizatori autentificați ---
@@ -34,79 +35,6 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
   return children;
 }
 
-function LandingPage() {
-  const { user } = useAuth();
-  return (
-    <div className="landing">
-      <div className="landing-top">
-        <div className="landing-brand">
-          <div className="landing-logo" aria-hidden>
-            EX
-          </div>
-          <div className="landing-brand-text">
-            <div className="landing-brand-title">EtoX Platform</div>
-            <div className="landing-brand-sub">
-              Platforma de Generare Subiecte BAC
-            </div>
-          </div>
-        </div>
-
-        <div className="landing-actions">
-          {user ? (
-            <Link to="/app" className="landing-btn landing-btn-primary">
-              Intră în platformă
-            </Link>
-          ) : (
-            <>
-              <Link to="/login" className="landing-btn landing-btn-primary">
-                Intră în cont
-              </Link>
-              <Link to="/register" className="landing-btn landing-btn-ghost">
-                Creează cont
-              </Link>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="landing-hero">
-        <div className="landing-hero-content">
-          <h1 className="landing-title">
-            Construiește, verifică și generează subiecte – rapid și curat.
-          </h1>
-          <p className="landing-subtitle">
-            Import JSON OCR, verificare exerciții, generare variante și export PDF.
-          </p>
-
-          <div className="landing-cta">
-            <Link
-              to={user ? "/app" : "/login"}
-              className="landing-btn landing-btn-primary landing-btn-lg"
-            >
-              Începe acum
-            </Link>
-          </div>
-        </div>
-
-        <div className="landing-panel">
-          <div className="landing-panel-card">
-            <div className="landing-panel-title">Flux recomandat</div>
-            <ul className="landing-list">
-              <li>1) Import JSON (OCR) + tag-uri + soluții/barem</li>
-              <li>2) Verificare și editare exerciții</li>
-              <li>3) Generare variante + export PDF</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="landing-footer">
-        <div className="landing-footer-left">© 2026 EtoX Academy</div>
-        <div className="landing-footer-right">EtoXPlatform • Admin UI</div>
-      </div>
-    </div>
-  );
-}
 
 function AppHub() {
   const { user, isTeacher, isAdmin } = useAuth();

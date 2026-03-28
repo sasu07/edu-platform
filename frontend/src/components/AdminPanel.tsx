@@ -18,6 +18,7 @@ const PLAN_LABELS: Record<string, string> = {
   premium:      '👑 Full',
   premium_help: '✍️ Help',
   premium_pdf:  '📄 PDF',
+  premium_gen:  '⚡ Gen',
   free:         'Free',
 };
 
@@ -31,6 +32,7 @@ const ROLE_BADGE: Record<string, string> = {
 const PLANS = [
   { key: 'premium_help', label: '✍️ Help', title: 'Activează Premium Help (cereri ajutor)' },
   { key: 'premium_pdf',  label: '📄 PDF',  title: 'Activează Premium PDF (descărcare PDF)' },
+  { key: 'premium_gen',  label: '⚡ Gen',  title: 'Activează Premium Gen (generare nelimitată exerciții + variante BAC)' },
   { key: 'premium',      label: '👑 Full',  title: 'Activează Premium Full (toate facilitățile)' },
 ];
 

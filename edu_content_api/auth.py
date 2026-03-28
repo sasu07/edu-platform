@@ -102,13 +102,30 @@ def _has_help_access(user_id: str, conn: Connection) -> bool:
 
 
 def _has_active_premium(user_id: str, conn: Connection) -> bool:
-    """Returnează True dacă userul are orice plan premium activ (help, pdf sau full)."""
+    """Returnează True dacă userul are orice plan premium activ."""
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
             SELECT id FROM subscriptions
             WHERE user_id = %s
-              AND plan_type IN ('premium', 'premium_help', 'premium_pdf')
+              AND plan_type IN ('premium', 'premium_help', 'premium_pdf', 'premium_gen')
+              AND status = 'active'
+              AND (expires_at IS NULL OR expires_at > NOW())
+            LIMIT 1
+            """,
+            (user_id,),
+        )
+        return cur.fetchone() is not None
+
+
+def _has_gen_access(user_id: str, conn: Connection) -> bool:
+    """Returnează True dacă userul are acces la generare nelimitată (premium_gen sau premium)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT id FROM subscriptions
+            WHERE user_id = %s
+              AND plan_type IN ('premium', 'premium_gen')
               AND status = 'active'
               AND (expires_at IS NULL OR expires_at > NOW())
             LIMIT 1
@@ -165,13 +182,13 @@ def require_pdf_premium(
     )
 
 
-def check_school_teacher_limit(user_id: str, conn: Connection) -> None:
+def check_variant_gen_limit(user_id: str, conn: Connection) -> None:
     """
-    Verifică limita lunară de variante pentru school_teacher free (max 5/lună).
+    Verifică limita lunară de variante BAC pentru utilizatorii fără Premium Gen (max 1/lună).
     Ridică 403 dacă limita e depășită.
     """
-    if _has_active_premium(user_id, conn):
-        return  # premium — fără limită
+    if _has_gen_access(user_id, conn):
+        return  # premium_gen sau premium full — fără limită
 
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
@@ -184,8 +201,12 @@ def check_school_teacher_limit(user_id: str, conn: Connection) -> None:
         )
         row = cur.fetchone()
 
-    if row and row["cnt"] >= 5:
+    if row and row["cnt"] >= 1:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Limita de 5 variante/lună (plan Free) a fost atinsă. Upgrade la Premium pentru variante nelimitate.",
+            detail="Limita de 1 variantă BAC/lună (plan Free) a fost atinsă. Upgrade la Premium Gen pentru generare nelimitată.",
         )
+
+
+# Keep old name as alias for backwards compatibility
+check_school_teacher_limit = check_variant_gen_limit

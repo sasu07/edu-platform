@@ -146,7 +146,17 @@ export const cancelSubscription = (userId: string) =>
   api.delete(`/admin/subscriptions/${userId}`);
 export const createTeacher = (data: { email: string; password: string; full_name: string }) =>
   api.post('/admin/teachers', { ...data, role: 'teacher' });
-export const getMyAccess = () => api.get<{ can_help_requests: boolean; can_download_pdf: boolean }>('/auth/me/access');
+export const getMyAccess = () => api.get<{ can_help_requests: boolean; can_download_pdf: boolean; can_unlimited_gen: boolean }>('/auth/me/access');
+
+export interface GenLimits {
+  exercise_gen_used: number;
+  exercise_gen_limit: number | null;
+  variant_gen_used: number;
+  variant_gen_limit: number | null;
+  has_unlimited_gen: boolean;
+}
+export const getMyLimits = () => api.get<GenLimits>('/auth/me/limits');
+export const logExerciseGeneration = () => api.post('/exercise-generations/log');
 
 export const getSources = () => api.get<Source[]>('/sources/');
 export const getExercises = (params?: {

@@ -81,6 +81,7 @@ edu_content_api/uploaded_files/
 
 # Planning docs
 plan.md
+start.command
 *.draft.md
 
 # Local scripts

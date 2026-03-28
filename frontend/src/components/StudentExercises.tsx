@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Eye, EyeOff, Flag, ChevronDown, ChevronUp, BookOpen, Zap } from 'lucide-react';
-import { getExercises, getExerciseChildren, getTags, createHelpRequest, type Exercise, type Tag } from '../api';
+import { getExercises, getExerciseChildren, getTags, createHelpRequest, getMyLimits, logExerciseGeneration, type Exercise, type Tag, type GenLimits } from '../api';
 import { useAuth } from '../AuthContext';
 import LatexRenderer from './LatexRenderer';
 import './StudentExercises.css';
@@ -301,6 +301,8 @@ export default function StudentExercises() {
   const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(true);
   const [generated, setGenerated] = useState(false);
+  const [limits, setLimits] = useState<GenLimits | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
 
   // Filters
   const [examType, setExamType] = useState('all');
@@ -311,15 +313,31 @@ export default function StudentExercises() {
   const [hasSolution, setHasSolution] = useState(false);
   const [count, setCount] = useState(10);
 
+  const refreshLimits = () => {
+    getMyLimits()
+      .then((res) => setLimits(res.data))
+      .catch(() => {});
+  };
+
   useEffect(() => {
     getTags('topic')
       .then((res) => setTopics(Array.isArray(res.data) ? res.data : []))
       .catch(() => {});
+    refreshLimits();
   }, []);
 
   const loadExercises = async () => {
+    setGenError(null);
     setLoading(true);
     setGroups([]);
+    try {
+      await logExerciseGeneration();
+    } catch (err: any) {
+      setLoading(false);
+      setGenError(err.response?.data?.detail || 'Limita de generări a fost atinsă.');
+      refreshLimits();
+      return;
+    }
     try {
       const params: Parameters<typeof getExercises>[0] = {
         only_roots: true,
@@ -367,6 +385,7 @@ export default function StudentExercises() {
       result.sort(() => Math.random() - 0.5);
       setGroups(result);
       setGenerated(true);
+      refreshLimits();
     } catch {
       setGroups([]);
     } finally {
@@ -458,7 +477,25 @@ export default function StudentExercises() {
         </div>
       )}
 
-      <button className="student-generate-btn" onClick={loadExercises} disabled={loading}>
+      {limits && !limits.has_unlimited_gen && limits.exercise_gen_limit !== null && (
+        <div className={`gen-limit-bar ${limits.exercise_gen_used >= limits.exercise_gen_limit ? 'gen-limit-bar--full' : ''}`}>
+          <Zap size={14} />
+          <span>
+            Generări exerciții luna aceasta: <strong>{limits.exercise_gen_used}/{limits.exercise_gen_limit}</strong>
+            {limits.exercise_gen_used >= limits.exercise_gen_limit && ' — Limită atinsă. Upgrade la Premium Gen pentru generare nelimitată.'}
+          </span>
+        </div>
+      )}
+
+      {genError && (
+        <div className="gen-limit-bar gen-limit-bar--full">{genError}</div>
+      )}
+
+      <button
+        className="student-generate-btn"
+        onClick={loadExercises}
+        disabled={loading || (limits !== null && !limits.has_unlimited_gen && limits.exercise_gen_limit !== null && limits.exercise_gen_used >= limits.exercise_gen_limit)}
+      >
         <Zap size={18} />
         {loading ? 'Se generează...' : generated ? 'Generează din nou' : 'Generează exerciții'}
       </button>

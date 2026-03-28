@@ -167,6 +167,25 @@
   cursor: not-allowed;
 }
 
+/* Generation limit bar */
+.gen-limit-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: #0369a1;
+}
+
+.gen-limit-bar--full {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #c2410c;
+}
+
 /* Premium banner */
 .student-premium-banner {
   display: flex;

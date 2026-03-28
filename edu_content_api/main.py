@@ -40,8 +40,8 @@ from email_service import send_new_request_to_teacher, send_response_to_student
 from auth import (
     hash_password, verify_password, create_access_token,
     get_current_user, require_role, require_premium,
-    require_pdf_premium, check_school_teacher_limit,
-    _has_active_premium, _has_pdf_access, _has_help_access,
+    require_pdf_premium, check_school_teacher_limit, check_variant_gen_limit,
+    _has_active_premium, _has_pdf_access, _has_help_access, _has_gen_access,
 )
 
 app = FastAPI(
@@ -73,6 +73,27 @@ app.add_middleware(
 # --- File Storage Setup ---
 UPLOAD_DIR = "uploaded_files"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.on_event("startup")
+def startup_event():
+    """Rulează migrările SQL pendinte la pornirea aplicației."""
+    import glob as glob_mod
+    from database import conn_pool
+    if conn_pool is None:
+        return
+    migrations_dir = os.path.join(os.path.dirname(__file__), "migrations")
+    sql_files = sorted(glob_mod.glob(os.path.join(migrations_dir, "*.sql")))
+    with conn_pool.connection() as conn:
+        for sql_file in sql_files:
+            with open(sql_file, "r") as f:
+                sql = f.read()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(sql)
+                conn.commit()
+            except Exception:
+                conn.rollback()
+
 
 @app.on_event("shutdown")
 def shutdown_event():
@@ -1662,9 +1683,9 @@ async def generate_variant_auto(
     import json as json_mod
     import hashlib
 
-    # School teacher: verifică limita lunară (free = max 5/lună)
-    if current_user.role == UserRole.SCHOOL_TEACHER:
-        check_school_teacher_limit(str(current_user.id), conn)
+    # Verifică limita lunară de variante pentru utilizatorii fără Premium Gen
+    if current_user.role in (UserRole.SCHOOL_TEACHER, UserRole.STUDENT):
+        check_variant_gen_limit(str(current_user.id), conn)
 
     try:
         generator = get_variant_generator(conn)
@@ -2071,7 +2092,86 @@ def my_access(
     return {
         "can_help_requests": is_staff or _has_help_access(str(current_user.id), conn),
         "can_download_pdf": is_staff or _has_pdf_access(str(current_user.id), conn),
+        "can_unlimited_gen": is_staff or _has_gen_access(str(current_user.id), conn),
     }
+
+
+@app.get("/auth/me/limits", tags=["Auth"])
+def my_limits(
+    current_user: UserDB = Depends(get_current_user),
+    conn: Connection = Depends(get_db_conn),
+):
+    """Returnează utilizarea și limitele lunare de generare pentru utilizatorul curent."""
+    is_staff = current_user.role in ("teacher", "school_teacher", "admin")
+    has_gen = is_staff or _has_gen_access(str(current_user.id), conn)
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*) as cnt FROM exercise_generation_logs
+            WHERE user_id = %s
+              AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', NOW())
+            """,
+            (str(current_user.id),),
+        )
+        ex_row = cur.fetchone()
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT COUNT(*) as cnt FROM variants
+            WHERE created_by_user_id_fk = %s
+              AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', NOW())
+            """,
+            (str(current_user.id),),
+        )
+        var_row = cur.fetchone()
+
+    ex_used = ex_row["cnt"] if ex_row else 0
+    var_used = var_row["cnt"] if var_row else 0
+
+    return {
+        "exercise_gen_used": ex_used,
+        "exercise_gen_limit": None if has_gen else 3,
+        "variant_gen_used": var_used,
+        "variant_gen_limit": None if has_gen else 1,
+        "has_unlimited_gen": has_gen,
+    }
+
+
+@app.post("/exercise-generations/log", tags=["Exercises"])
+def log_exercise_generation(
+    current_user: UserDB = Depends(get_current_user),
+    conn: Connection = Depends(get_db_conn),
+):
+    """Înregistrează o generare de exerciții. Returnează 403 dacă limita lunară a fost atinsă."""
+    is_staff = current_user.role in ("teacher", "school_teacher", "admin")
+
+    if not is_staff and not _has_gen_access(str(current_user.id), conn):
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT COUNT(*) as cnt FROM exercise_generation_logs
+                WHERE user_id = %s
+                  AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', NOW())
+                """,
+                (str(current_user.id),),
+            )
+            row = cur.fetchone()
+
+        if row and row["cnt"] >= 3:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Limita de 3 generări de exerciții/lună (plan Free) a fost atinsă. Upgrade la Premium Gen pentru generare nelimitată.",
+            )
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO exercise_generation_logs (user_id) VALUES (%s)",
+            (str(current_user.id),),
+        )
+    conn.commit()
+    return {"ok": True}
 
 @app.get("/auth/me/subscription", response_model=SubscriptionDB, tags=["Auth"])
 def my_subscription(
