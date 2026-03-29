@@ -1,6 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff, Flag, ChevronDown, ChevronUp, BookOpen, Zap } from 'lucide-react';
-import { getExercises, getExerciseChildren, getTags, createHelpRequest, getMyLimits, logExerciseGeneration, type Exercise, type Tag, type GenLimits } from '../api';
+import { Eye, EyeOff, Flag, ChevronDown, ChevronUp, BookOpen, Zap, Layers, Trash2, ChevronRight } from 'lucide-react';
+import {
+  getExercises, getExerciseChildren, getTags, createHelpRequest,
+  getMyLimits, logExerciseGeneration, saveExerciseSet, getExerciseSets,
+  getExerciseSet, deleteExerciseSet,
+  type Exercise, type Tag, type GenLimits, type ExerciseSet, type ExerciseSetDetail,
+} from '../api';
 import { useAuth } from '../AuthContext';
 import LatexRenderer from './LatexRenderer';
 import './StudentExercises.css';
@@ -203,14 +208,12 @@ function GroupedExerciseCard({ parent, children, index, isPremium }: GroupedCard
   const toggleSolution = (id: string) =>
     setShowSolutions((prev) => ({ ...prev, [id]: !prev[id] }));
 
-  // Sortează subpunctele după litera subpunctului (a, b, c)
   const sorted = [...children].sort((a, b) =>
     (a.metadata?.subpoint || '').localeCompare(b.metadata?.subpoint || '')
   );
 
   return (
     <div className="student-exercise-card grouped-card">
-      {/* Header problemă */}
       <div className="student-ex-header grouped-header">
         <div className="student-ex-meta">
           <span className="student-ex-index">{index}</span>
@@ -220,14 +223,12 @@ function GroupedExerciseCard({ parent, children, index, isPremium }: GroupedCard
         <span className="grouped-badge">Problemă cu subpuncte</span>
       </div>
 
-      {/* Enunț problemă (dacă există) */}
       {parent.statement_latex && (
         <div className="student-ex-statement grouped-parent-statement">
           <LatexRenderer text={parent.statement_latex} />
         </div>
       )}
 
-      {/* Subpuncte */}
       <div className="subpoints-list">
         {sorted.map((child) => {
           const subpoint = child.metadata?.subpoint || '';
@@ -294,8 +295,134 @@ const DIFFICULTY_LABELS: Record<number, string> = {
   6: 'Mediu-greu', 7: 'Greu', 8: 'Greu', 9: 'Foarte greu', 10: 'Expert',
 };
 
+// --- Saved Sets Components ---
+
+function SetCard({ set, onOpen, onDelete }: {
+  set: ExerciseSet;
+  onOpen: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm('Ștergi acest set de exerciții?')) return;
+    setDeleting(true);
+    try {
+      await deleteExerciseSet(set.id);
+      onDelete(set.id);
+    } catch {
+      setDeleting(false);
+    }
+  };
+
+  const date = new Date(set.created_at).toLocaleDateString('ro-RO', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+
+  const filterSummary = set.filters
+    ? Object.entries(set.filters)
+        .filter(([, v]) => v && v !== 'all')
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(' · ')
+    : null;
+
+  return (
+    <div className="saved-set-card" onClick={() => onOpen(set.id)}>
+      <div className="saved-set-info">
+        <div className="saved-set-name">{set.name}</div>
+        <div className="saved-set-meta">
+          <span>{set.exercise_count} exerciții</span>
+          {filterSummary && <span className="saved-set-filters">{filterSummary}</span>}
+          <span className="saved-set-date">{date}</span>
+        </div>
+      </div>
+      <div className="saved-set-actions">
+        <ChevronRight size={18} className="saved-set-arrow" />
+        <button
+          className="saved-set-delete"
+          onClick={handleDelete}
+          disabled={deleting}
+          title="Șterge setul"
+        >
+          <Trash2 size={15} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SavedSetsTab({ canHelpRequests }: { canHelpRequests: boolean }) {
+  const [sets, setSets] = useState<ExerciseSet[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [openSet, setOpenSet] = useState<ExerciseSetDetail | null>(null);
+  const [loadingSet, setLoadingSet] = useState(false);
+
+  useEffect(() => {
+    getExerciseSets()
+      .then((res) => setSets(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setSets([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleOpen = async (id: string) => {
+    if (openSet?.id === id) { setOpenSet(null); return; }
+    setLoadingSet(true);
+    try {
+      const res = await getExerciseSet(id);
+      setOpenSet(res.data);
+    } catch {
+      setOpenSet(null);
+    } finally {
+      setLoadingSet(false);
+    }
+  };
+
+  const handleDelete = (id: string) => {
+    setSets((prev) => prev.filter((s) => s.id !== id));
+    if (openSet?.id === id) setOpenSet(null);
+  };
+
+  if (loading) return <div className="student-empty">Se încarcă seturile...</div>;
+  if (sets.length === 0) return (
+    <div className="student-empty">
+      Nu ai seturi salvate. Generează un set de exerciții și acesta va fi salvat automat.
+    </div>
+  );
+
+  return (
+    <div className="saved-sets-container">
+      <div className="saved-sets-list">
+        {sets.map((s) => (
+          <SetCard key={s.id} set={s} onOpen={handleOpen} onDelete={handleDelete} />
+        ))}
+      </div>
+
+      {loadingSet && <div className="student-empty">Se încarcă exercițiile...</div>}
+
+      {openSet && !loadingSet && (
+        <div className="saved-set-exercises">
+          <div className="saved-set-exercises-header">
+            <h3>{openSet.name}</h3>
+            <button className="saved-set-close" onClick={() => setOpenSet(null)}>Închide ×</button>
+          </div>
+          <div className="student-exercises-list">
+            {openSet.exercises.map((ex, i) => (
+              ex.metadata?.is_container ? null :
+              <SimpleExerciseCard key={ex.id} exercise={ex} index={i + 1} isPremium={canHelpRequests} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Main Component ---
+
 export default function StudentExercises() {
-  const { canHelpRequests } = useAuth();
+  const { canHelpRequests, canUnlimitedGen } = useAuth();
+  const [activeTab, setActiveTab] = useState<'generate' | 'sets'>('generate');
   const [groups, setGroups] = useState<ExerciseGroup[]>([]);
   const [topics, setTopics] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(false);
@@ -303,6 +430,7 @@ export default function StudentExercises() {
   const [generated, setGenerated] = useState(false);
   const [limits, setLimits] = useState<GenLimits | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
+  const [savedSetId, setSavedSetId] = useState<string | null>(null);
 
   // Filters
   const [examType, setExamType] = useState('all');
@@ -328,6 +456,7 @@ export default function StudentExercises() {
 
   const loadExercises = async () => {
     setGenError(null);
+    setSavedSetId(null);
     setLoading(true);
     setGroups([]);
 
@@ -335,19 +464,20 @@ export default function StudentExercises() {
     try {
       await logExerciseGeneration();
     } catch (err: any) {
-      const status = err.response?.status;
-      if (status === 403) {
+      const s = err.response?.status;
+      if (s === 403) {
         setLoading(false);
         setGenError(err.response?.data?.detail || 'Limita de generări a fost atinsă.');
         refreshLimits();
         return;
       }
-      // 404 / 500 / rețea — continuăm generarea fără a bloca
+      // 404 / 500 / rețea — continuăm fără a bloca
     }
 
     try {
       const params: Parameters<typeof getExercises>[0] = {
         only_roots: true,
+        exclude_seen: true,
       };
       if (examType !== 'all') params.exam_type = examType;
       if (subiectTag !== 'all') params.subiect_tag = subiectTag;
@@ -359,11 +489,9 @@ export default function StudentExercises() {
       const res = await getExercises(params);
       let all: Exercise[] = Array.isArray(res.data) ? res.data : [];
 
-      // Separă containerele de exercițiile simple
       const containers = all.filter((ex) => ex.metadata?.is_container === true);
       const simples = all.filter((ex) => !ex.metadata?.is_container);
 
-      // Alege random N (containere = max 1/3 din total)
       const maxContainers = Math.max(1, Math.floor(count / 3));
       const pickSimples = simples.sort(() => Math.random() - 0.5).slice(0, count - Math.min(maxContainers, containers.length));
       const pickContainers = containers.sort(() => Math.random() - 0.5).slice(0, Math.min(maxContainers, containers.length));
@@ -393,12 +521,32 @@ export default function StudentExercises() {
       setGroups(result);
       setGenerated(true);
       refreshLimits();
+
+      // Salvează setul în backend
+      const allIds = result.map((g) => g.exercise.id);
+      if (allIds.length > 0) {
+        const filters: Record<string, any> = {};
+        if (examType !== 'all') filters.exam_type = examType;
+        if (subiectTag !== 'all') filters.subiect_tag = subiectTag;
+        if (topicTag !== 'all') filters.topic_tag = topicTag;
+        if (diffMin > 1) filters.difficulty_min = diffMin;
+        if (diffMax < 10) filters.difficulty_max = diffMax;
+        if (hasSolution) filters.has_solution = true;
+
+        const linked_plan = canUnlimitedGen ? 'premium_gen' : null;
+
+        saveExerciseSet({ exercise_ids: allIds, filters, linked_plan })
+          .then((r) => setSavedSetId(r.data.id))
+          .catch(() => {});
+      }
     } catch {
       setGroups([]);
     } finally {
       setLoading(false);
     }
   };
+
+  const atLimit = limits !== null && !limits.has_unlimited_gen && limits.exercise_gen_limit !== null && limits.exercise_gen_used >= limits.exercise_gen_limit;
 
   return (
     <div className="student-exercises">
@@ -409,130 +557,163 @@ export default function StudentExercises() {
           </h2>
           <p className="student-ex-sub">Selectează filtrele și generează exerciții personalizate</p>
         </div>
-        <button className="student-filters-toggle" onClick={() => setShowFilters((v) => !v)}>
-          Filtre {showFilters ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        {activeTab === 'generate' && (
+          <button className="student-filters-toggle" onClick={() => setShowFilters((v) => !v)}>
+            Filtre {showFilters ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div className="student-tabs">
+        <button
+          className={`student-tab ${activeTab === 'generate' ? 'active' : ''}`}
+          onClick={() => setActiveTab('generate')}
+        >
+          <Zap size={15} /> Generează
+        </button>
+        <button
+          className={`student-tab ${activeTab === 'sets' ? 'active' : ''}`}
+          onClick={() => setActiveTab('sets')}
+        >
+          <Layers size={15} /> Seturile mele
         </button>
       </div>
 
-      {showFilters && (
-        <div className="student-filters">
-          <div className="student-filters-row">
-            <div className="student-filter-group">
-              <label>Tip examen</label>
-              <select value={examType} onChange={(e) => setExamType(e.target.value)}>
-                {EXAM_TYPES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div className="student-filter-group">
-              <label>Subiect BAC</label>
-              <select value={subiectTag} onChange={(e) => setSubiectTag(e.target.value)}>
-                {SUBIECT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div className="student-filter-group">
-              <label>Domeniu / Topic</label>
-              <select value={topicTag} onChange={(e) => setTopicTag(e.target.value)}>
-                <option value="all">Toate domeniile</option>
-                {topics.map((t) => (
-                  <option key={t.id} value={t.key}>{t.label || t.key}</option>
-                ))}
-              </select>
-            </div>
-            <div className="student-filter-group">
-              <label>Număr exerciții</label>
-              <select value={count} onChange={(e) => setCount(Number(e.target.value))}>
-                <option value={5}>5</option>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-              </select>
-            </div>
-          </div>
+      {activeTab === 'sets' && <SavedSetsTab canHelpRequests={canHelpRequests} />}
 
-          <div className="student-filters-row">
-            <div className="student-filter-group student-filter-difficulty">
-              <label>
-                Dificultate: <strong>{DIFFICULTY_LABELS[diffMin] || diffMin}</strong> → <strong>{DIFFICULTY_LABELS[diffMax] || diffMax}</strong>
-              </label>
-              <div className="difficulty-range">
-                <span className="diff-label">1</span>
-                <input
-                  type="range" min={1} max={10} value={diffMin}
-                  onChange={(e) => setDiffMin(Math.min(Number(e.target.value), diffMax))}
-                  className="diff-slider"
-                />
-                <input
-                  type="range" min={1} max={10} value={diffMax}
-                  onChange={(e) => setDiffMax(Math.max(Number(e.target.value), diffMin))}
-                  className="diff-slider"
-                />
-                <span className="diff-label">10</span>
+      {activeTab === 'generate' && (
+        <>
+          {showFilters && (
+            <div className="student-filters">
+              <div className="student-filters-row">
+                <div className="student-filter-group">
+                  <label>Tip examen</label>
+                  <select value={examType} onChange={(e) => setExamType(e.target.value)}>
+                    {EXAM_TYPES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div className="student-filter-group">
+                  <label>Subiect BAC</label>
+                  <select value={subiectTag} onChange={(e) => setSubiectTag(e.target.value)}>
+                    {SUBIECT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
+                </div>
+                <div className="student-filter-group">
+                  <label>Domeniu / Topic</label>
+                  <select value={topicTag} onChange={(e) => setTopicTag(e.target.value)}>
+                    <option value="all">Toate domeniile</option>
+                    {topics.map((t) => (
+                      <option key={t.id} value={t.key}>{t.label || t.key}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="student-filter-group">
+                  <label>Număr exerciții</label>
+                  <select value={count} onChange={(e) => setCount(Number(e.target.value))}>
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="student-filters-row">
+                <div className="student-filter-group student-filter-difficulty">
+                  <label>
+                    Dificultate: <strong>{DIFFICULTY_LABELS[diffMin] || diffMin}</strong> → <strong>{DIFFICULTY_LABELS[diffMax] || diffMax}</strong>
+                  </label>
+                  <div className="difficulty-range">
+                    <span className="diff-label">1</span>
+                    <input
+                      type="range" min={1} max={10} value={diffMin}
+                      onChange={(e) => setDiffMin(Math.min(Number(e.target.value), diffMax))}
+                      className="diff-slider"
+                    />
+                    <input
+                      type="range" min={1} max={10} value={diffMax}
+                      onChange={(e) => setDiffMax(Math.max(Number(e.target.value), diffMin))}
+                      className="diff-slider"
+                    />
+                    <span className="diff-label">10</span>
+                  </div>
+                </div>
+
+                <div className="student-filter-group student-filter-checkbox">
+                  <label className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={hasSolution}
+                      onChange={(e) => setHasSolution(e.target.checked)}
+                    />
+                    Doar cu rezolvare disponibilă
+                  </label>
+                </div>
               </div>
             </div>
+          )}
 
-            <div className="student-filter-group student-filter-checkbox">
-              <label className="checkbox-label">
-                <input
-                  type="checkbox"
-                  checked={hasSolution}
-                  onChange={(e) => setHasSolution(e.target.checked)}
-                />
-                Doar cu rezolvare disponibilă
-              </label>
+          {limits && !limits.has_unlimited_gen && limits.exercise_gen_limit !== null && (
+            <div className={`gen-limit-bar ${atLimit ? 'gen-limit-bar--full' : ''}`}>
+              <Zap size={14} />
+              <span>
+                Generări exerciții luna aceasta: <strong>{limits.exercise_gen_used}/{limits.exercise_gen_limit}</strong>
+                {atLimit && ' — Limită atinsă. Upgrade la Premium Gen pentru generare nelimitată.'}
+              </span>
             </div>
+          )}
+
+          {genError && (
+            <div className="gen-limit-bar gen-limit-bar--full">{genError}</div>
+          )}
+
+          <button
+            className="student-generate-btn"
+            onClick={loadExercises}
+            disabled={loading || atLimit}
+          >
+            <Zap size={18} />
+            {loading ? 'Se generează...' : generated ? 'Generează din nou' : 'Generează exerciții'}
+          </button>
+
+          {savedSetId && generated && (
+            <div className="saved-set-notice">
+              Set salvat automat.{' '}
+              <button className="saved-set-notice-link" onClick={() => setActiveTab('sets')}>
+                Vezi seturile mele
+              </button>
+            </div>
+          )}
+
+          {!canHelpRequests && generated && (
+            <div className="student-premium-banner">
+              <Flag size={16} />
+              <span>
+                <strong>Premium Help</strong> — Activează pentru a cere ajutor de la profesori
+                (rezolvare scrisă, video sau sesiune live).
+              </span>
+            </div>
+          )}
+
+          <div className="student-exercises-list">
+            {!generated && !loading && (
+              <div className="student-empty">Configurează filtrele și apasă „Generează exerciții".</div>
+            )}
+            {loading && <div className="student-empty">Se încarcă exercițiile...</div>}
+            {!loading && generated && groups.length === 0 && (
+              <div className="student-empty">Nu s-au găsit exerciții cu filtrele selectate. Încearcă să relaxezi criteriile sau ai parcurs deja toate exercițiile disponibile.</div>
+            )}
+            {!loading && groups.map((g, i) =>
+              g.type === 'simple' ? (
+                <SimpleExerciseCard key={g.exercise.id} exercise={g.exercise} index={i + 1} isPremium={canHelpRequests} />
+              ) : (
+                <GroupedExerciseCard key={g.exercise.id} parent={g.exercise} children={g.children || []} index={i + 1} isPremium={canHelpRequests} />
+              )
+            )}
           </div>
-        </div>
+        </>
       )}
-
-      {limits && !limits.has_unlimited_gen && limits.exercise_gen_limit !== null && (
-        <div className={`gen-limit-bar ${limits.exercise_gen_used >= limits.exercise_gen_limit ? 'gen-limit-bar--full' : ''}`}>
-          <Zap size={14} />
-          <span>
-            Generări exerciții luna aceasta: <strong>{limits.exercise_gen_used}/{limits.exercise_gen_limit}</strong>
-            {limits.exercise_gen_used >= limits.exercise_gen_limit && ' — Limită atinsă. Upgrade la Premium Gen pentru generare nelimitată.'}
-          </span>
-        </div>
-      )}
-
-      {genError && (
-        <div className="gen-limit-bar gen-limit-bar--full">{genError}</div>
-      )}
-
-      <button
-        className="student-generate-btn"
-        onClick={loadExercises}
-        disabled={loading || (limits !== null && !limits.has_unlimited_gen && limits.exercise_gen_limit !== null && limits.exercise_gen_used >= limits.exercise_gen_limit)}
-      >
-        <Zap size={18} />
-        {loading ? 'Se generează...' : generated ? 'Generează din nou' : 'Generează exerciții'}
-      </button>
-
-      {!canHelpRequests && generated && (
-        <div className="student-premium-banner">
-          <Flag size={16} />
-          <span>
-            <strong>Premium Help</strong> — Activează pentru a cere ajutor de la profesori
-            (rezolvare scrisă, video sau sesiune live).
-          </span>
-        </div>
-      )}
-
-      <div className="student-exercises-list">
-        {!generated && !loading && (
-          <div className="student-empty">Configurează filtrele și apasă „Generează exerciții".</div>
-        )}
-        {loading && <div className="student-empty">Se încarcă exercițiile...</div>}
-        {!loading && generated && groups.length === 0 && (
-          <div className="student-empty">Nu s-au găsit exerciții cu filtrele selectate. Încearcă să relaxezi criteriile.</div>
-        )}
-        {!loading && groups.map((g, i) =>
-          g.type === 'simple' ? (
-            <SimpleExerciseCard key={g.exercise.id} exercise={g.exercise} index={i + 1} isPremium={canHelpRequests} />
-          ) : (
-            <GroupedExerciseCard key={g.exercise.id} parent={g.exercise} children={g.children || []} index={i + 1} isPremium={canHelpRequests} />
-          )
-        )}
-      </div>
     </div>
   );
 }

@@ -44,6 +44,31 @@ def decode_token(token: str) -> dict:
         )
 
 
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+    conn: Connection = Depends(get_db_conn),
+) -> Optional[UserDB]:
+    """Like get_current_user but returns None instead of raising 401 when unauthenticated."""
+    if not credentials:
+        return None
+    try:
+        payload = decode_token(credentials.credentials)
+    except HTTPException:
+        return None
+    user_id = payload.get("sub")
+    if not user_id:
+        return None
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT id, email, full_name, role, is_active, created_at FROM users WHERE id = %s",
+            (user_id,),
+        )
+        row = cur.fetchone()
+    if not row or not row["is_active"]:
+        return None
+    return UserDB(**row)
+
+
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     conn: Connection = Depends(get_db_conn),

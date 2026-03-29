@@ -172,6 +172,30 @@ export interface GenLimits {
 export const getMyLimits = () => api.get<GenLimits>('/auth/me/limits');
 export const logExerciseGeneration = () => api.post('/exercise-generations/log');
 
+export interface ExerciseSet {
+  id: string;
+  name: string;
+  linked_plan: string | null;
+  filters: Record<string, any> | null;
+  exercise_count: number;
+  created_at: string;
+}
+
+export interface ExerciseSetDetail extends Omit<ExerciseSet, 'exercise_count'> {
+  exercises: Exercise[];
+}
+
+export const saveExerciseSet = (data: {
+  exercise_ids: string[];
+  filters: Record<string, any>;
+  name?: string;
+  linked_plan?: string | null;
+}) => api.post<{ id: string; name: string; exercise_count: number }>('/exercise-sets/', data);
+
+export const getExerciseSets = () => api.get<ExerciseSet[]>('/exercise-sets/');
+export const getExerciseSet = (id: string) => api.get<ExerciseSetDetail>(`/exercise-sets/${id}`);
+export const deleteExerciseSet = (id: string) => api.delete(`/exercise-sets/${id}`);
+
 export const getSources = () => api.get<Source[]>('/sources/');
 export const getExercises = (params?: {
   exam_type?: string;
@@ -183,6 +207,7 @@ export const getExercises = (params?: {
   has_solution?: boolean;
   subject_part?: string;
   only_roots?: boolean;
+  exclude_seen?: boolean;
 }) => api.get<Exercise[]>('/exercises/', { params });
 export const getExercise = (id: string) => api.get<Exercise>(`/exercises/${id}`);
 export const updateExercise = (id: string, data: Partial<Exercise>) => api.put<Exercise>(`/exercises/${id}`, data);

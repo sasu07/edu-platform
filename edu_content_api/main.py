@@ -39,7 +39,7 @@ from html_generator import get_html_generator
 from email_service import send_new_request_to_teacher, send_response_to_student
 from auth import (
     hash_password, verify_password, create_access_token,
-    get_current_user, require_role, require_premium,
+    get_current_user, get_optional_user, require_role, require_premium,
     require_pdf_premium, check_school_teacher_limit, check_variant_gen_limit,
     _has_active_premium, _has_pdf_access, _has_help_access, _has_gen_access,
 )
@@ -757,7 +757,9 @@ def read_exercises(
     has_solution: Optional[bool] = None,      # True = doar cu soluție
     subject_part: Optional[str] = None,       # S1, S2, S3
     only_roots: Optional[bool] = None,        # True = nu include copii (parent_external_id IS NULL)
-    conn: Connection = Depends(get_db_conn)
+    exclude_seen: Optional[bool] = None,      # True = exclude exercises already seen by user
+    conn: Connection = Depends(get_db_conn),
+    current_user: Optional[UserDB] = Depends(get_optional_user),
 ):
     """Retrieve exercises, optionally filtered by multiple criteria."""
     conditions = []
@@ -793,6 +795,14 @@ def read_exercises(
 
     if only_roots:
         conditions.append("e.metadata::jsonb->>'parent_external_id' IS NULL")
+
+    if exclude_seen and current_user:
+        conditions.append("""
+            e.id NOT IN (
+                SELECT exercise_id FROM user_seen_exercises WHERE user_id = %s
+            )
+        """)
+        params.append(str(current_user.id))
 
     if subiect_tag:
         conditions.append("""
@@ -2197,6 +2207,160 @@ def log_exercise_generation(
     conn.commit()
     return {"ok": True}
 
+
+# --- Exercise Sets ---
+
+@app.post("/exercise-sets/", tags=["ExerciseSets"])
+def save_exercise_set(
+    body: Dict[str, Any],
+    current_user: UserDB = Depends(get_current_user),
+    conn: Connection = Depends(get_db_conn),
+):
+    """
+    Salvează un set generat de exerciții pentru utilizatorul curent.
+    body: { exercise_ids: [uuid, ...], filters: {...}, name: str, linked_plan: str|null }
+    Marchează automat exercițiile ca văzute.
+    """
+    import json as json_mod
+    exercise_ids: list = body.get("exercise_ids", [])
+    filters = body.get("filters", {})
+    name = body.get("name", f"Set {__import__('datetime').datetime.now().strftime('%d.%m.%Y %H:%M')}")
+    linked_plan = body.get("linked_plan", None)
+
+    if not exercise_ids:
+        raise HTTPException(status_code=400, detail="exercise_ids este obligatoriu")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        # Creează setul
+        cur.execute(
+            """
+            INSERT INTO user_exercise_sets (user_id, name, linked_plan, filters)
+            VALUES (%s, %s, %s, %s)
+            RETURNING id, user_id, name, linked_plan, filters, created_at
+            """,
+            (str(current_user.id), name, linked_plan, json_mod.dumps(filters)),
+        )
+        new_set = cur.fetchone()
+        set_id = new_set["id"]
+
+        # Inserează itemii
+        for idx, ex_id in enumerate(exercise_ids):
+            cur.execute(
+                "INSERT INTO user_exercise_set_items (set_id, exercise_id, sort_order) VALUES (%s, %s, %s)",
+                (str(set_id), str(ex_id), idx),
+            )
+
+        # Marchează exercițiile ca văzute (INSERT OR IGNORE)
+        for ex_id in exercise_ids:
+            cur.execute(
+                """
+                INSERT INTO user_seen_exercises (user_id, exercise_id)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (str(current_user.id), str(ex_id)),
+            )
+
+        conn.commit()
+
+    return {"id": str(set_id), "name": name, "exercise_count": len(exercise_ids)}
+
+
+@app.get("/exercise-sets/", tags=["ExerciseSets"])
+def list_exercise_sets(
+    current_user: UserDB = Depends(get_current_user),
+    conn: Connection = Depends(get_db_conn),
+):
+    """Listează seturile salvate ale utilizatorului curent, în ordine cronologică inversă."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT s.id, s.name, s.linked_plan, s.filters, s.created_at,
+                   COUNT(i.id) AS exercise_count
+            FROM user_exercise_sets s
+            LEFT JOIN user_exercise_set_items i ON i.set_id = s.id
+            WHERE s.user_id = %s
+            GROUP BY s.id
+            ORDER BY s.created_at DESC
+            """,
+            (str(current_user.id),),
+        )
+        rows = cur.fetchall()
+    return [
+        {
+            "id": str(r["id"]),
+            "name": r["name"],
+            "linked_plan": r["linked_plan"],
+            "filters": r["filters"],
+            "exercise_count": r["exercise_count"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        }
+        for r in rows
+    ]
+
+
+@app.get("/exercise-sets/{set_id}", tags=["ExerciseSets"])
+def get_exercise_set(
+    set_id: uuid.UUID,
+    current_user: UserDB = Depends(get_current_user),
+    conn: Connection = Depends(get_db_conn),
+):
+    """Returnează un set salvat cu exercițiile complete."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT id, name, linked_plan, filters, created_at FROM user_exercise_sets WHERE id = %s AND user_id = %s",
+            (str(set_id), str(current_user.id)),
+        )
+        s = cur.fetchone()
+    if not s:
+        raise HTTPException(status_code=404, detail="Set negăsit")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT e.id, e.exam_type, e.profile, e.subject_part, e.item_type,
+                   e.statement_latex, e.statement_text,
+                   e.answer_latex, e.solution_latex, e.scoring_guide_latex, e.scoring_guide_text,
+                   e.difficulty, e.estimated_time_sec, e.points, e.metadata, e.status,
+                   e.created_by_user_id, e.created_at, e.updated_at
+            FROM user_exercise_set_items i
+            JOIN exercises e ON e.id = i.exercise_id
+            WHERE i.set_id = %s
+            ORDER BY i.sort_order
+            """,
+            (str(set_id),),
+        )
+        exercises = cur.fetchall()
+
+    return {
+        "id": str(s["id"]),
+        "name": s["name"],
+        "linked_plan": s["linked_plan"],
+        "filters": s["filters"],
+        "created_at": s["created_at"].isoformat() if s["created_at"] else None,
+        "exercises": exercises,
+    }
+
+
+@app.delete("/exercise-sets/{set_id}", tags=["ExerciseSets"])
+def delete_exercise_set(
+    set_id: uuid.UUID,
+    current_user: UserDB = Depends(get_current_user),
+    conn: Connection = Depends(get_db_conn),
+):
+    """Șterge un set salvat al utilizatorului curent."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM user_exercise_sets WHERE id = %s AND user_id = %s RETURNING id",
+            (str(set_id), str(current_user.id)),
+        )
+        deleted = cur.fetchone()
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Set negăsit sau nu îți aparține")
+    conn.commit()
+    return {"deleted": True}
+
+
 @app.get("/auth/me/subscription", response_model=SubscriptionDB, tags=["Auth"])
 def my_subscription(
     current_user: UserDB = Depends(get_current_user),
@@ -2266,8 +2430,16 @@ def cancel_subscription(
     _admin: UserDB = Depends(require_role(UserRole.ADMIN)),
     conn: Connection = Depends(get_db_conn),
 ):
-    """Admin: dezactivează toate abonamentele active ale unui utilizator."""
+    """Admin: dezactivează toate abonamentele active ale unui utilizator și șterge seturile asociate."""
     with conn.cursor(row_factory=dict_row) as cur:
+        # Obține planurile active înainte de anulare (pentru a știi ce seturi să ștergem)
+        cur.execute(
+            "SELECT plan_type FROM subscriptions WHERE user_id = %s AND status = 'active'",
+            (str(user_id),),
+        )
+        active_plans = [r["plan_type"] for r in cur.fetchall()]
+
+        # Anulează toate abonamentele
         cur.execute(
             """
             UPDATE subscriptions
@@ -2278,6 +2450,14 @@ def cancel_subscription(
             (str(user_id),),
         )
         cancelled = cur.fetchall()
+
+        # Șterge seturile de exerciții legate de planurile anulate
+        if active_plans:
+            cur.execute(
+                "DELETE FROM user_exercise_sets WHERE user_id = %s AND linked_plan = ANY(%s)",
+                (str(user_id), active_plans),
+            )
+
         conn.commit()
     return {"cancelled": len(cancelled)}
 

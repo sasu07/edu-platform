@@ -203,6 +203,164 @@
   font-weight: 600;
 }
 
+/* Tabs */
+.student-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0;
+}
+
+.student-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.student-tab:hover { color: #374151; }
+.student-tab.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+
+/* Saved set notice */
+.saved-set-notice {
+  font-size: 0.82rem;
+  color: #16a34a;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 8px 14px;
+}
+.saved-set-notice-link {
+  background: none;
+  border: none;
+  color: #15803d;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+/* Saved sets */
+.saved-sets-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.saved-sets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.saved-set-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.saved-set-card:hover { background: #f9fafb; border-color: #d1d5db; }
+
+.saved-set-info { flex: 1; min-width: 0; }
+
+.saved-set-name {
+  font-weight: 600;
+  color: #111827;
+  font-size: 0.92rem;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.saved-set-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.78rem;
+  color: #6b7280;
+  flex-wrap: wrap;
+}
+
+.saved-set-filters {
+  color: #9ca3af;
+  font-size: 0.75rem;
+}
+
+.saved-set-date { color: #9ca3af; }
+
+.saved-set-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.saved-set-arrow { color: #9ca3af; }
+
+.saved-set-delete {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  transition: color 0.12s, background 0.12s;
+}
+.saved-set-delete:hover { color: #dc2626; background: #fee2e2; }
+.saved-set-delete:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.saved-set-exercises {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.saved-set-exercises-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.saved-set-exercises-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.saved-set-close {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  font-size: 0.88rem;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+.saved-set-close:hover { background: #e5e7eb; color: #111827; }
+
 /* Exercises list */
 .student-exercises-list {
   display: flex;

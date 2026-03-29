@@ -10,7 +10,8 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { getMyVariants, getMyAccess, getMyLimits, type GenLimits } from "../api";
+import { getMyVariants, getMyLimits, type GenLimits } from "../api";
+import { useAuth } from "../AuthContext";
 import LatexRenderer from "./LatexRenderer";
 import "./VariantBuilder.css";
 
@@ -49,6 +50,7 @@ const DEFAULT_API_BASE = "http://localhost:8000";
 
 export default function VariantBuilderAuto() {
   const apiBase = (import.meta as any).env?.VITE_API_URL ?? DEFAULT_API_BASE;
+  const { canDownloadPdf } = useAuth();
 
   const [variants, setVariants] = useState<Variant[]>([]);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
@@ -57,7 +59,6 @@ export default function VariantBuilderAuto() {
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [msg, setMsg] = useState<UiMsg | null>(null);
-  const [canDownloadPdf, setCanDownloadPdf] = useState(false);
   const [limits, setLimits] = useState<GenLimits | null>(null);
 
   const [newVariant, setNewVariant] = useState({
@@ -106,13 +107,11 @@ export default function VariantBuilderAuto() {
     setLoading(true);
     setInfo("Se reîncarcă…");
     try {
-      const [v, access, lim] = await Promise.all([
+      const [v, lim] = await Promise.all([
         fetchVariants(),
-        getMyAccess().then(r => r.data),
         getMyLimits().then(r => r.data).catch(() => null),
       ]);
       setVariants(v);
-      setCanDownloadPdf(access.can_download_pdf);
       setLimits(lim);
       setMsg(null);
     } catch (err: any) {

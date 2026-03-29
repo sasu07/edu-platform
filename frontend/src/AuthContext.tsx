@@ -1,14 +1,15 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { authMe, authMySubscription, type User, type Subscription } from './api';
+import { authMe, getMyAccess, type User } from './api';
 
 interface AuthContextType {
   user: User | null;
-  subscription: Subscription | null;
   token: string | null;
   login: (token: string, user: User) => void;
   logout: () => void;
-  isPremium: boolean;       // are orice plan activ (help, pdf sau full)
-  canHelpRequests: boolean; // poate trimite cereri de ajutor (premium_help sau full)
+  isPremium: boolean;
+  canHelpRequests: boolean;
+  canDownloadPdf: boolean;
+  canUnlimitedGen: boolean;
   isTeacher: boolean;
   isAdmin: boolean;
   loading: boolean;
@@ -18,24 +19,27 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [access, setAccess] = useState({ can_help_requests: false, can_download_pdf: false, can_unlimited_gen: false });
   const [token, setToken] = useState<string | null>(localStorage.getItem('access_token'));
   const [loading, setLoading] = useState(true);
+
+  const loadAccess = () => {
+    getMyAccess()
+      .then((res) => setAccess(res.data))
+      .catch(() => {});
+  };
 
   useEffect(() => {
     if (!token) {
       setLoading(false);
       return;
     }
-    // Verifică token-ul și încarcă datele utilizatorului
     authMe()
       .then((userRes) => {
         setUser(userRes.data);
-        // Abonamentul e opțional — profesorii/adminii nu au subscription
-        return authMySubscription().then((subRes) => setSubscription(subRes.data)).catch(() => {});
+        loadAccess();
       })
       .catch(() => {
-        // Doar authMe() eșuat înseamnă token invalid
         localStorage.removeItem('access_token');
         setToken(null);
       })
@@ -46,38 +50,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('access_token', newToken);
     setToken(newToken);
     setUser(newUser);
-    // Încarcă abonamentul
-    authMySubscription()
-      .then((res) => setSubscription(res.data))
-      .catch(() => setSubscription(null));
+    getMyAccess().then((res) => setAccess(res.data)).catch(() => {});
   };
 
   const logout = () => {
     localStorage.removeItem('access_token');
     setToken(null);
     setUser(null);
-    setSubscription(null);
+    setAccess({ can_help_requests: false, can_download_pdf: false, can_unlimited_gen: false });
   };
 
   const isStaff = !!user && (user.role === 'teacher' || user.role === 'school_teacher' || user.role === 'admin');
-  const activePlan = subscription?.status === 'active' ? subscription.plan_type : null;
-
-  // are orice plan premium activ
-  const isPremium = isStaff || ['premium', 'premium_help', 'premium_pdf', 'premium_gen'].includes(activePlan ?? '');
-
-  // poate trimite cereri de ajutor
-  const canHelpRequests = isStaff || ['premium', 'premium_help'].includes(activePlan ?? '');
 
   return (
     <AuthContext.Provider
       value={{
         user,
-        subscription,
         token,
         login,
         logout,
-        isPremium,
-        canHelpRequests,
+        isPremium: isStaff || access.can_help_requests || access.can_download_pdf || access.can_unlimited_gen,
+        canHelpRequests: access.can_help_requests,
+        canDownloadPdf: access.can_download_pdf,
+        canUnlimitedGen: access.can_unlimited_gen,
         isTeacher: user?.role === 'teacher' || user?.role === 'admin',
         isAdmin: user?.role === 'admin',
         loading,
