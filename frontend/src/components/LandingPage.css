@@ -593,8 +593,8 @@
 /* ── Plans ── */
 .lp-plans-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
   align-items: start;
 }
 
@@ -842,7 +842,7 @@
   }
 
   .lp-plans-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .lp-features-grid {
@@ -878,7 +878,7 @@
   }
 
   .lp-plans-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .lp-hero-stats {

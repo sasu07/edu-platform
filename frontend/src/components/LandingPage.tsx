@@ -89,6 +89,23 @@ const PLANS = [
     highlight: false,
   },
   {
+    key: 'premium_pdf',
+    name: 'Premium PDF',
+    price: 'Contact',
+    period: '',
+    badge: '',
+    color: 'plan-pdf',
+    features: [
+      'Generare nelimitată exerciții',
+      'Variante BAC nelimitate / lună',
+      'Export PDF — subiect, rezolvare, barem',
+      'Tipărești și studiezi offline',
+    ],
+    cta: 'Activează',
+    ctaTo: '/login',
+    highlight: false,
+  },
+  {
     key: 'premium_gen',
     name: 'Premium Gen',
     price: 'Contact',

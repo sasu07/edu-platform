@@ -62,7 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const activePlan = subscription?.status === 'active' ? subscription.plan_type : null;
 
   // are orice plan premium activ
-  const isPremium = isStaff || ['premium', 'premium_help', 'premium_pdf'].includes(activePlan ?? '');
+  const isPremium = isStaff || ['premium', 'premium_help', 'premium_pdf', 'premium_gen'].includes(activePlan ?? '');
 
   // poate trimite cereri de ajutor
   const canHelpRequests = isStaff || ['premium', 'premium_help'].includes(activePlan ?? '');

@@ -100,7 +100,7 @@ export default function Register() {
                 placeholder="Ex: Colegiul Național Mihai Eminescu"
               />
               <span style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 2 }}>
-                Plan Free: 5 variante/lună · Premium: nelimitat
+                Plan Free: 3 generări exerciții/lună · 1 variantă BAC/lună · Premium Gen: nelimitat
               </span>
             </div>
           )}

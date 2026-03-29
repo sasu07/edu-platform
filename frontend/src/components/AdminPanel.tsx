@@ -10,8 +10,7 @@ interface UserRow {
   role: string;
   is_active: boolean;
   created_at: string;
-  active_plan?: string;
-  plan_expires_at?: string;
+  active_plans: string[];
 }
 
 const PLAN_LABELS: Record<string, string> = {
@@ -186,32 +185,32 @@ export default function AdminPanel() {
                 {new Date(u.created_at).toLocaleDateString('ro-RO')}
               </span>
               <div className="admin-user-actions">
-                {u.active_plan && (
-                  <span className="admin-active-plan-badge" title={u.plan_expires_at ? `Expiră: ${new Date(u.plan_expires_at).toLocaleDateString('ro-RO')}` : 'Fără expirare'}>
-                    {PLAN_LABELS[u.active_plan] ?? u.active_plan}
+                {u.active_plans?.length > 0 && u.active_plans.map((plan) => (
+                  <span key={plan} className="admin-active-plan-badge">
+                    {PLAN_LABELS[plan] ?? plan}
                   </span>
-                )}
+                ))}
                 {(u.role === 'student' || u.role === 'school_teacher') && PLANS.map((plan) => (
                   <button
                     key={plan.key}
-                    className="admin-premium-btn"
+                    className={`admin-premium-btn ${u.active_plans?.includes(plan.key) ? 'admin-premium-btn--active' : ''}`}
                     onClick={() => handleUpgrade(u.id, plan.key)}
                     disabled={upgrading === `${u.id}:${plan.key}`}
-                    title={plan.title}
+                    title={u.active_plans?.includes(plan.key) ? `${plan.title} (deja activ)` : plan.title}
                   >
                     <Crown size={14} />
                     {upgrading === `${u.id}:${plan.key}` ? '...' : plan.label}
                   </button>
                 ))}
-                {u.active_plan && u.active_plan !== 'free' && (u.role === 'student' || u.role === 'school_teacher') && (
+                {u.active_plans?.length > 0 && (u.role === 'student' || u.role === 'school_teacher') && (
                   <button
                     className="admin-cancel-btn"
                     onClick={() => handleCancel(u.id)}
                     disabled={cancelling === u.id}
-                    title="Dezactivează abonamentul activ"
+                    title="Dezactivează toate abonamentele active"
                   >
                     <XCircle size={14} />
-                    {cancelling === u.id ? '...' : 'Dezactivează'}
+                    {cancelling === u.id ? '...' : 'Dezactivează tot'}
                   </button>
                 )}
                 {msg?.id === u.id && (
@@ -230,11 +229,12 @@ export default function AdminPanel() {
       <div className="admin-section admin-info">
         <h3 className="admin-section-title"><UserCheck size={16} /> Planuri de abonament</h3>
         <ul>
-          <li><strong>Free</strong> — acces la exerciții + vizualizare rezolvări</li>
-          <li><strong>✍️ Premium Help</strong> — cereri de ajutor profesorilor (scris, video, live Zoom)</li>
-          <li><strong>📄 Premium PDF</strong> — descărcare PDF variante BAC</li>
-          <li><strong>👑 Premium Full</strong> — toate facilitățile de mai sus</li>
-          <li>Profesorii și adminii au implicit acces complet</li>
+          <li><strong>Free</strong> — 3 generări exerciții/lună · 1 variantă BAC/lună · vizualizare rezolvări</li>
+          <li><strong>✍️ Premium Help</strong> — generare nelimitată + cereri de ajutor (scris, video, live Zoom)</li>
+          <li><strong>📄 Premium PDF</strong> — generare nelimitată + descărcare PDF variante BAC</li>
+          <li><strong>⚡ Premium Gen</strong> — generare nelimitată exerciții + variante BAC nelimitate + PDF</li>
+          <li><strong>👑 Premium Full</strong> — toate facilitățile: generare, PDF, ajutor profesori, sesiuni live</li>
+          <li>Profesorii platformă și adminii au implicit acces complet</li>
         </ul>
       </div>
     </div>

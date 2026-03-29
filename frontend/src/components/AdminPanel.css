@@ -130,6 +130,8 @@
 }
 .admin-premium-btn:hover:not(:disabled) { background: #fef3c7; }
 .admin-premium-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.admin-premium-btn--active { background: #d1fae5; border-color: #6ee7b7; color: #065f46; }
+.admin-premium-btn--active:hover:not(:disabled) { background: #a7f3d0; }
 
 .admin-section-head {
   display: flex;

@@ -2228,18 +2228,26 @@ def upgrade_subscription(
     _admin: UserDB = Depends(require_role(UserRole.ADMIN)),
     conn: Connection = Depends(get_db_conn),
 ):
-    """Admin: activează abonament pentru un utilizator. plan_type: premium | premium_help | premium_pdf"""
+    """Admin: activează abonament pentru un utilizator. plan_type: premium | premium_help | premium_pdf | premium_gen"""
     from datetime import datetime as dt
-    valid_plans = ("premium", "premium_help", "premium_pdf", "free")
+    valid_plans = ("premium", "premium_help", "premium_pdf", "premium_gen", "free")
     if plan_type not in valid_plans:
         raise HTTPException(status_code=400, detail=f"Plan invalid. Valori acceptate: {valid_plans}")
     exp = dt.fromisoformat(expires_at) if expires_at else None
 
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(
-            "UPDATE subscriptions SET status = 'cancelled', updated_at = NOW() WHERE user_id = %s AND status = 'active'",
-            (str(user_id),),
-        )
+        # Dacă se activează premium full, anulează toate celelalte (le include pe toate)
+        # Dacă se activează un plan specific, anulează doar același plan (dacă există deja activ)
+        if plan_type == "premium":
+            cur.execute(
+                "UPDATE subscriptions SET status = 'cancelled', updated_at = NOW() WHERE user_id = %s AND status = 'active'",
+                (str(user_id),),
+            )
+        else:
+            cur.execute(
+                "UPDATE subscriptions SET status = 'cancelled', updated_at = NOW() WHERE user_id = %s AND plan_type = %s AND status = 'active'",
+                (str(user_id), plan_type),
+            )
         cur.execute(
             """
             INSERT INTO subscriptions (user_id, plan_type, status, expires_at)
@@ -2283,17 +2291,16 @@ def list_users(
         cur.execute(
             """
             SELECT u.id, u.email, u.full_name, u.role, u.is_active, u.created_at,
-                   s.plan_type AS active_plan, s.expires_at AS plan_expires_at
+                   COALESCE(
+                       (SELECT json_agg(plan_type ORDER BY created_at DESC)
+                        FROM subscriptions
+                        WHERE user_id = u.id
+                          AND status = 'active'
+                          AND (expires_at IS NULL OR expires_at > NOW())
+                          AND plan_type != 'free'),
+                       '[]'::json
+                   ) AS active_plans
             FROM users u
-            LEFT JOIN LATERAL (
-                SELECT plan_type, expires_at
-                FROM subscriptions
-                WHERE user_id = u.id
-                  AND status = 'active'
-                  AND (expires_at IS NULL OR expires_at > NOW())
-                ORDER BY created_at DESC
-                LIMIT 1
-            ) s ON TRUE
             ORDER BY u.created_at DESC
             """
         )

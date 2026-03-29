@@ -11,6 +11,7 @@ import {
   Zap,
 } from "lucide-react";
 import { getMyVariants, getMyAccess, getMyLimits, type GenLimits } from "../api";
+import LatexRenderer from "./LatexRenderer";
 import "./VariantBuilder.css";
 
 interface Variant {
@@ -45,11 +46,6 @@ type UiMsg = { type: MsgType; text: string };
 
 const DEFAULT_API_BASE = "http://localhost:8000";
 
-function previewText(ex: Pick<VariantExercise, "statement_text" | "statement_latex">) {
-  const raw = (ex.statement_text || ex.statement_latex || "").trim();
-  if (!raw) return "(fără enunț)";
-  return raw.length > 160 ? `${raw.slice(0, 160)}…` : raw;
-}
 
 export default function VariantBuilderAuto() {
   const apiBase = (import.meta as any).env?.VITE_API_URL ?? DEFAULT_API_BASE;
@@ -462,7 +458,9 @@ export default function VariantBuilderAuto() {
                   <div key={ex.id} className="vx-ve">
                     <div className="vx-ve-n">{(ex.order_index ?? 0) + 1}</div>
                     <div className="vx-ve-main">
-                      <div className="vx-ve-title">{previewText(ex)}</div>
+                      <div className="vx-ve-title">
+                        <LatexRenderer text={ex.statement_latex || ex.statement_text || "(fără enunț)"} />
+                      </div>
                       <div className="vx-ve-sub">
                         {ex.item_type} • {ex.subject_part} • {ex.points || 0}p
                       </div>
