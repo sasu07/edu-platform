@@ -18,13 +18,15 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// La 401 — șterge token-ul și redirecționează la login
+// La 401 pe /auth/me — token expirat, logout automat
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    if (error.response?.status === 401 && error.config?.url?.includes('/auth/me')) {
       localStorage.removeItem('access_token');
-      window.location.href = '/login';
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }

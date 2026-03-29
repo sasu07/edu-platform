@@ -28,13 +28,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     // Verifică token-ul și încarcă datele utilizatorului
-    Promise.all([authMe(), authMySubscription()])
-      .then(([userRes, subRes]) => {
+    authMe()
+      .then((userRes) => {
         setUser(userRes.data);
-        setSubscription(subRes.data);
+        // Abonamentul e opțional — profesorii/adminii nu au subscription
+        return authMySubscription().then((subRes) => setSubscription(subRes.data)).catch(() => {});
       })
       .catch(() => {
-        // Token invalid/expirat
+        // Doar authMe() eșuat înseamnă token invalid
         localStorage.removeItem('access_token');
         setToken(null);
       })
