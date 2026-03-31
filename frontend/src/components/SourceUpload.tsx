@@ -9,12 +9,22 @@ interface SourceUploadProps {
 
 type MessageType = 'info' | 'success' | 'error';
 
+const PROFILE_OPTIONS = [
+  { value: '', label: 'Fără profil specificat' },
+  { value: 'mate-info', label: 'Matematică-Informatică' },
+  { value: 'stiinte-natura', label: 'Științe ale Naturii' },
+  { value: 'tehnologic', label: 'Tehnologic' },
+  { value: 'uman', label: 'Uman' },
+];
+
 const SourceUpload: React.FC<SourceUploadProps> = ({ onUploadSuccess }) => {
   const [file, setFile] = useState<File | null>(null);
+  const [baremFile, setBaremFile] = useState<File | null>(null);
   const [name, setName] = useState('');
   const [year, setYear] = useState('');
   const [sourceType, setSourceType] = useState('pdf');
   const [session, setSession] = useState('');
+  const [profile, setProfile] = useState('');
   const [notes, setNotes] = useState('');
   const [jsonImport, setJsonImport] = useState('');
   const [loading, setLoading] = useState(false);
@@ -23,22 +33,19 @@ const SourceUpload: React.FC<SourceUploadProps> = ({ onUploadSuccess }) => {
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const baremInputRef = useRef<HTMLInputElement>(null);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
+    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
+    else if (e.type === 'dragleave') setDragActive(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
       if (droppedFile.type === 'application/pdf') {
@@ -56,6 +63,12 @@ const SourceUpload: React.FC<SourceUploadProps> = ({ onUploadSuccess }) => {
       setFile(e.target.files[0]);
       setName(e.target.files[0].name.replace(/\.pdf$/i, ''));
       setMessage('');
+    }
+  };
+
+  const handleBaremChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setBaremFile(e.target.files[0]);
     }
   };
 
@@ -78,8 +91,10 @@ const SourceUpload: React.FC<SourceUploadProps> = ({ onUploadSuccess }) => {
     formData.append('source_type', sourceType);
     if (year) formData.append('source_year', year);
     if (session) formData.append('source_session', session);
+    if (profile) formData.append('source_profile', profile);
     if (notes) formData.append('source_notes', notes);
     if (jsonImport) formData.append('json_data', jsonImport);
+    if (baremFile) formData.append('barem_file', baremFile);
 
     try {
       const endpoint = jsonImport ? '/upload-with-json/' : '/upload-and-process/';
@@ -98,14 +113,17 @@ const SourceUpload: React.FC<SourceUploadProps> = ({ onUploadSuccess }) => {
       onUploadSuccess();
 
       setFile(null);
+      setBaremFile(null);
       setName('');
       setYear('');
       setSession('');
+      setProfile('');
       setNotes('');
       setJsonImport('');
       setSourceType('pdf');
       setUploadProgress(0);
       if (fileInputRef.current) fileInputRef.current.value = '';
+      if (baremInputRef.current) baremInputRef.current.value = '';
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       const errorMsg = axiosError.response?.data?.detail || 'Eroare la încărcarea fișierului.';
@@ -147,6 +165,8 @@ const SourceUpload: React.FC<SourceUploadProps> = ({ onUploadSuccess }) => {
       </div>
 
       <form onSubmit={handleSubmit} className="upload-form">
+        {/* Varianta originală */}
+        <div className="upload-section-label">Varianta originală <span className="required">*</span></div>
         <div
           className={`drop-zone ${dragActive ? 'active' : ''} ${file ? 'has-file' : ''}`}
           onDragEnter={handleDrag}
@@ -182,10 +202,7 @@ const SourceUpload: React.FC<SourceUploadProps> = ({ onUploadSuccess }) => {
               <button
                 type="button"
                 className="file-remove"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  removeFile();
-                }}
+                onClick={(e) => { e.stopPropagation(); removeFile(); }}
                 disabled={loading}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -210,6 +227,55 @@ const SourceUpload: React.FC<SourceUploadProps> = ({ onUploadSuccess }) => {
           )}
         </div>
 
+        {/* Barem */}
+        <div className="upload-section-label">Barem de corectare <span className="upload-optional">(opțional)</span></div>
+        <div
+          className={`drop-zone drop-zone--barem ${baremFile ? 'has-file' : ''}`}
+          onClick={() => !baremFile && baremInputRef.current?.click()}
+        >
+          <input
+            ref={baremInputRef}
+            type="file"
+            accept=".pdf"
+            onChange={handleBaremChange}
+            disabled={loading}
+            className="file-input-hidden"
+          />
+          {baremFile ? (
+            <div className="file-preview">
+              <div className="file-icon file-icon--barem">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <polyline points="9 11 7 13 9 15" />
+                  <polyline points="15 11 17 13 15 15" />
+                </svg>
+              </div>
+              <div className="file-info">
+                <span className="file-name">{baremFile.name}</span>
+                <span className="file-size">{formatFileSize(baremFile.size)}</span>
+              </div>
+              <button
+                type="button"
+                className="file-remove"
+                onClick={(e) => { e.stopPropagation(); setBaremFile(null); if (baremInputRef.current) baremInputRef.current.value = ''; }}
+                disabled={loading}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+          ) : (
+            <div className="drop-zone-content drop-zone-content--compact">
+              <p className="drop-zone-text">
+                <span className="drop-zone-highlight">Adaugă barem</span> — PDF barem de corectare
+              </p>
+            </div>
+          )}
+        </div>
+
         <div className="form-group">
           <label className="form-label" htmlFor="name">
             Nume Sursă <span className="required">*</span>
@@ -220,7 +286,7 @@ const SourceUpload: React.FC<SourceUploadProps> = ({ onUploadSuccess }) => {
             className="form-input"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="ex: Manual Matematică Clasa X"
+            placeholder="ex: BAC Matematică 2024 Sesiunea 1"
             required
             disabled={loading}
           />
@@ -258,17 +324,34 @@ const SourceUpload: React.FC<SourceUploadProps> = ({ onUploadSuccess }) => {
           </div>
         </div>
 
-        <div className="form-group">
-          <label className="form-label" htmlFor="session">Sesiune</label>
-          <input
-            id="session"
-            type="text"
-            className="form-input"
-            value={session}
-            onChange={(e) => setSession(e.target.value)}
-            placeholder="ex: Sesiunea Iunie"
-            disabled={loading}
-          />
+        <div className="form-row">
+          <div className="form-group">
+            <label className="form-label" htmlFor="session">Sesiune</label>
+            <input
+              id="session"
+              type="text"
+              className="form-input"
+              value={session}
+              onChange={(e) => setSession(e.target.value)}
+              placeholder="ex: Sesiunea 1"
+              disabled={loading}
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="profile">Profil</label>
+            <select
+              id="profile"
+              className="form-select"
+              value={profile}
+              onChange={(e) => setProfile(e.target.value)}
+              disabled={loading}
+            >
+              {PROFILE_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="form-group">

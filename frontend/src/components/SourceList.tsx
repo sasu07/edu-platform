@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Download, FileText, BookOpen, ChevronDown, ChevronRight } from "lucide-react";
 import api from "../api";
 import "./SourceList.css";
 
@@ -9,6 +10,9 @@ interface Source {
   type: string;
   year: number | null;
   session: string | null;
+  profile: string | null;
+  url_file_path: string | null;
+  url_barem_path: string | null;
   created_at: string;
   notes?: string | null;
 }
@@ -24,137 +28,200 @@ interface SourceListProps {
   refreshKey: number;
 }
 
-type SortField = "name" | "type" | "year" | "created_at" | "segments" | "exercises" | "tags";
-type SortOrder = "asc" | "desc";
+const PROFILE_LABELS: Record<string, string> = {
+  "mate-info": "Mate-Info",
+  "stiinte-natura": "Științe ale Naturii",
+  "tehnologic": "Tehnologic",
+  "uman": "Uman",
+};
+
+function downloadFile(url: string, label: string) {
+  const a = document.createElement("a");
+  const token = localStorage.getItem("access_token");
+  // Use fetch with auth header then create object URL
+  fetch(url, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    .then((res) => {
+      if (!res.ok) throw new Error("Fișier indisponibil");
+      return res.blob();
+    })
+    .then((blob) => {
+      const objUrl = URL.createObjectURL(blob);
+      a.href = objUrl;
+      a.download = label + ".pdf";
+      a.click();
+      URL.revokeObjectURL(objUrl);
+    })
+    .catch(() => alert("Fișierul nu este disponibil pe server."));
+}
+
+function SourceRow({ source, stats }: { source: Source; stats: SourceStats | undefined }) {
+  const navigate = useNavigate();
+  const [dlLoading, setDlLoading] = useState<"varianta" | "barem" | null>(null);
+
+  const handleDownload = async (type: "varianta" | "barem") => {
+    setDlLoading(type);
+    const url =
+      type === "varianta"
+        ? `http://localhost:8000/sources/${source.id}/download`
+        : `http://localhost:8000/sources/${source.id}/download-barem`;
+    const label =
+      type === "varianta"
+        ? `Varianta_${source.name}`
+        : `Barem_${source.name}`;
+    downloadFile(url, label);
+    setTimeout(() => setDlLoading(null), 2000);
+  };
+
+  const st = stats ?? { segments_count: 0, exercises_count: 0, tags_count: 0 };
+
+  return (
+    <div className="source-row">
+      <div className="source-row-main">
+        <div className="source-row-name">
+          <span className="source-row-title">{source.name}</span>
+          {source.session && <span className="source-row-session">{source.session}</span>}
+        </div>
+        <div className="source-row-meta">
+          <span className="source-kpi" title="Exerciții">{st.exercises_count} ex.</span>
+          <span className="source-kpi source-kpi--muted" title="Segmente">{st.segments_count} seg.</span>
+        </div>
+        <div className="source-row-actions">
+          <button
+            className={`source-dl-btn source-dl-btn--varianta ${!source.url_file_path ? 'source-dl-btn--disabled' : ''}`}
+            onClick={() => source.url_file_path && handleDownload("varianta")}
+            disabled={!source.url_file_path || dlLoading === "varianta"}
+            title={source.url_file_path ? "Descarcă varianta originală" : "Fișier indisponibil"}
+          >
+            <Download size={13} />
+            {dlLoading === "varianta" ? "..." : "Variantă"}
+          </button>
+          <button
+            className={`source-dl-btn source-dl-btn--barem ${!source.url_barem_path ? 'source-dl-btn--disabled' : ''}`}
+            onClick={() => source.url_barem_path && handleDownload("barem")}
+            disabled={!source.url_barem_path || dlLoading === "barem"}
+            title={source.url_barem_path ? "Descarcă baremul" : "Barem indisponibil"}
+          >
+            <BookOpen size={13} />
+            {dlLoading === "barem" ? "..." : "Barem"}
+          </button>
+          <button
+            className="details-btn"
+            onClick={() => navigate(`/app/content/sources/${source.id}`)}
+          >
+            Vezi
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface YearGroup {
+  year: number | null;
+  profileGroups: { profile: string | null; sources: Source[] }[];
+}
+
+function buildGroups(sources: Source[]): YearGroup[] {
+  const byYear = new Map<string, Map<string, Source[]>>();
+
+  for (const s of sources) {
+    const yearKey = s.year !== null ? String(s.year) : "__none__";
+    const profileKey = s.profile || "__none__";
+
+    if (!byYear.has(yearKey)) byYear.set(yearKey, new Map());
+    const profiles = byYear.get(yearKey)!;
+    if (!profiles.has(profileKey)) profiles.set(profileKey, []);
+    profiles.get(profileKey)!.push(s);
+  }
+
+  // Sort years descending (nulls last)
+  const sortedYears = [...byYear.keys()].sort((a, b) => {
+    if (a === "__none__") return 1;
+    if (b === "__none__") return -1;
+    return Number(b) - Number(a);
+  });
+
+  return sortedYears.map((yearKey) => {
+    const profileMap = byYear.get(yearKey)!;
+    const profileKeys = [...profileMap.keys()].sort((a, b) => {
+      if (a === "__none__") return 1;
+      if (b === "__none__") return -1;
+      return a.localeCompare(b);
+    });
+
+    return {
+      year: yearKey === "__none__" ? null : Number(yearKey),
+      profileGroups: profileKeys.map((pk) => ({
+        profile: pk === "__none__" ? null : pk,
+        sources: profileMap.get(pk)!,
+      })),
+    };
+  });
+}
 
 const SourceList: React.FC<SourceListProps> = ({ refreshKey }) => {
-  const navigate = useNavigate();
-
   const [sources, setSources] = useState<Source[]>([]);
   const [statsById, setStatsById] = useState<Record<string, SourceStats>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortField, setSortField] = useState<SortField>("created_at");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [selectedType, setSelectedType] = useState<string>("all");
+  const [collapsedYears, setCollapsedYears] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
       setError(null);
-
       try {
         const response = await api.get<Source[]>("/sources/");
         const src = Array.isArray(response.data) ? response.data : [];
         setSources(src);
 
-        // fetch stats in parallel
         const statsResults = await Promise.all(
           src.map(async (s) => {
             try {
               const r = await api.get<SourceStats>(`/sources/${s.id}/stats`);
               return r.data;
             } catch {
-              return {
-                source_id: s.id,
-                segments_count: 0,
-                exercises_count: 0,
-                tags_count: 0,
-              } as SourceStats;
+              return { source_id: s.id, segments_count: 0, exercises_count: 0, tags_count: 0 } as SourceStats;
             }
           })
         );
-
         const map: Record<string, SourceStats> = {};
         for (const st of statsResults) map[st.source_id] = st;
         setStatsById(map);
       } catch (err) {
-        setError("Eroare la preluarea surselor. Verificați conexiunea la server.");
-        console.error(err);
+        setError("Eroare la preluarea surselor.");
       } finally {
         setLoading(false);
       }
     };
-
     fetchAll();
   }, [refreshKey]);
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    else {
-      setSortField(field);
-      setSortOrder("asc");
-    }
-  };
-
   const uniqueTypes = useMemo(
-    () => (Array.isArray(sources) ? [...new Set(sources.map((s) => s.type))] : []),
+    () => [...new Set(sources.map((s) => s.type))],
     [sources]
   );
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("ro-RO", { day: "2-digit", month: "short", year: "numeric" });
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type.toLowerCase()) {
-      case "pdf":
-        return "type-pdf";
-      case "oficial":
-        return "type-oficial";
-      case "culegere":
-        return "type-culegere";
-      default:
-        return "type-default";
-    }
-  };
-
-  const filteredAndSortedSources = useMemo(() => {
-    const list = Array.isArray(sources) ? sources : [];
-    const filtered = list.filter((source) => {
-      const matchesSearch = source.name.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesType = selectedType === "all" || source.type === selectedType;
-      return matchesSearch && matchesType;
+  const filtered = useMemo(() => {
+    return sources.filter((s) => {
+      const matchSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchType = selectedType === "all" || s.type === selectedType;
+      return matchSearch && matchType;
     });
+  }, [sources, searchTerm, selectedType]);
 
-    const getStat = (id: string) => statsById[id] ?? { segments_count: 0, exercises_count: 0, tags_count: 0 };
+  const groups = useMemo(() => buildGroups(filtered), [filtered]);
 
-    const sorted = filtered.sort((a, b) => {
-      const sa = getStat(a.id);
-      const sb = getStat(b.id);
-      let cmp = 0;
-
-      switch (sortField) {
-        case "name":
-          cmp = a.name.localeCompare(b.name);
-          break;
-        case "type":
-          cmp = a.type.localeCompare(b.type);
-          break;
-        case "year":
-          cmp = (a.year || 0) - (b.year || 0);
-          break;
-        case "created_at":
-          cmp = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-          break;
-        case "segments":
-          cmp = sa.segments_count - sb.segments_count;
-          break;
-        case "exercises":
-          cmp = sa.exercises_count - sb.exercises_count;
-          break;
-        case "tags":
-          cmp = sa.tags_count - sb.tags_count;
-          break;
-      }
-      return sortOrder === "asc" ? cmp : -cmp;
+  const toggleYear = (yearKey: string) => {
+    setCollapsedYears((prev) => {
+      const next = new Set(prev);
+      if (next.has(yearKey)) next.delete(yearKey);
+      else next.add(yearKey);
+      return next;
     });
-
-    return sorted;
-  }, [sources, statsById, searchTerm, selectedType, sortField, sortOrder]);
+  };
 
   if (loading) {
     return (
@@ -173,9 +240,7 @@ const SourceList: React.FC<SourceListProps> = ({ refreshKey }) => {
         <div className="error-state">
           <h3>Eroare de conexiune</h3>
           <p>{error}</p>
-          <button className="retry-button" onClick={() => window.location.reload()}>
-            Reîncearcă
-          </button>
+          <button className="retry-button" onClick={() => window.location.reload()}>Reîncearcă</button>
         </div>
       </div>
     );
@@ -198,83 +263,67 @@ const SourceList: React.FC<SourceListProps> = ({ refreshKey }) => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-
           <select className="type-filter" value={selectedType} onChange={(e) => setSelectedType(e.target.value)}>
             <option value="all">Toate tipurile</option>
             {uniqueTypes.map((type) => (
-              <option key={type} value={type}>
-                {type.charAt(0).toUpperCase() + type.slice(1)}
-              </option>
+              <option key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</option>
             ))}
           </select>
         </div>
       </div>
 
-      {filteredAndSortedSources.length === 0 ? (
+      {filtered.length === 0 ? (
         <div className="empty-state">
           <h3>{searchTerm || selectedType !== "all" ? "Niciun rezultat găsit" : "Nu există surse încă"}</h3>
           <p>{searchTerm || selectedType !== "all" ? "Schimbă criteriile de căutare." : "Importă/încarcă o sursă ca să apară aici."}</p>
         </div>
       ) : (
-        <div className="table-container">
-          <table className="source-table">
-            <thead>
-              <tr>
-                <th onClick={() => handleSort("name")} className="sortable">Nume</th>
-                <th onClick={() => handleSort("type")} className="sortable">Tip</th>
-                <th onClick={() => handleSort("year")} className="sortable">An</th>
-                <th onClick={() => handleSort("segments")} className="sortable">Segmente</th>
-                <th onClick={() => handleSort("exercises")} className="sortable">Exerciții</th>
-                <th onClick={() => handleSort("tags")} className="sortable">Tag-uri</th>
-                <th onClick={() => handleSort("created_at")} className="sortable">Creat</th>
-                <th>Detalii</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAndSortedSources.map((source) => {
-                const st = statsById[source.id] ?? { segments_count: 0, exercises_count: 0, tags_count: 0 };
-                return (
-                  <tr key={source.id}>
-                    <td>
-                      <div className="source-name">
-                        <div className="source-avatar">{source.name.charAt(0).toUpperCase()}</div>
-                        <div className="source-name-text">
-                          <span className="name-primary">{source.name}</span>
-                          <span className="name-secondary">ID: {source.id.substring(0, 8)}…</span>
+        <div className="source-groups">
+          {groups.map((yg) => {
+            const yearKey = yg.year !== null ? String(yg.year) : "__none__";
+            const isCollapsed = collapsedYears.has(yearKey);
+            const totalInYear = yg.profileGroups.reduce((acc, pg) => acc + pg.sources.length, 0);
+
+            return (
+              <div key={yearKey} className="year-group">
+                <button className="year-group-header" onClick={() => toggleYear(yearKey)}>
+                  <div className="year-group-left">
+                    {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                    <span className="year-group-title">
+                      {yg.year !== null ? yg.year : "An nespecificat"}
+                    </span>
+                    <span className="year-group-count">{totalInYear} surse</span>
+                  </div>
+                </button>
+
+                {!isCollapsed && (
+                  <div className="year-group-body">
+                    {yg.profileGroups.map((pg) => (
+                      <div key={pg.profile ?? "__none__"} className="profile-group">
+                        {pg.profile && (
+                          <div className="profile-group-label">
+                            <FileText size={13} />
+                            {PROFILE_LABELS[pg.profile] ?? pg.profile}
+                          </div>
+                        )}
+                        <div className="profile-group-sources">
+                          {pg.sources.map((s) => (
+                            <SourceRow key={s.id} source={s} stats={statsById[s.id]} />
+                          ))}
                         </div>
                       </div>
-                    </td>
-                    <td>
-                      <span className={`type-badge ${getTypeColor(source.type)}`}>{source.type}</span>
-                    </td>
-                    <td><span className="year-text">{source.year || "—"}</span></td>
-                    <td><span className="kpi">{st.segments_count}</span></td>
-                    <td><span className="kpi">{st.exercises_count}</span></td>
-                    <td><span className="kpi">{st.tags_count}</span></td>
-                    <td><span className="date-text">{formatDate(source.created_at)}</span></td>
-                    <td>
-                      <button
-                        className="details-btn"
-                        onClick={() => navigate(`/app/content/sources/${source.id}`)}
-                      >
-                        Vezi
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {filteredAndSortedSources.length > 0 && (
-        <div className="table-footer">
-          <span>
-            Afișate {filteredAndSortedSources.length} din {sources.length}
-          </span>
-        </div>
-      )}
+      <div className="table-footer">
+        <span>Afișate {filtered.length} din {sources.length}</span>
+      </div>
     </div>
   );
 };

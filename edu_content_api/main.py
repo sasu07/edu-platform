@@ -128,16 +128,15 @@ def shutdown_event():
 def _create_source_in_db(source: SourceCreate, conn: Connection) -> dict:
     """Internal function to create source entry in database."""
     query = """
-    INSERT INTO sources (name, type, year, session, url_file_path, notes)
-    VALUES (%s, %s, %s, %s, %s, %s)
-    RETURNING id, name, type, year, session, url_file_path, notes, created_at;
+    INSERT INTO sources (name, type, year, session, profile, url_file_path, url_barem_path, notes)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    RETURNING id, name, type, year, session, profile, url_file_path, url_barem_path, notes, created_at;
     """
     with conn.cursor(row_factory=dict_row) as cur:
-        # Convert SourceType enum to its value for database
         type_value = source.type.value if isinstance(source.type, SourceType) else source.type
         cur.execute(query, (
             source.name, type_value, source.year, source.session,
-            source.url_file_path, source.notes
+            source.profile, source.url_file_path, source.url_barem_path, source.notes
         ))
         new_source = cur.fetchone()
         conn.commit()
@@ -269,7 +268,7 @@ def create_source(source: SourceCreate, conn: Connection = Depends(get_db_conn))
 @app.get("/sources/", response_model=List[SourceDB])
 def read_sources(conn: Connection = Depends(get_db_conn)):
     """Retrieve a list of all sources."""
-    query = "SELECT id, name, type, year, session, url_file_path, notes, created_at FROM sources ORDER BY created_at DESC;"
+    query = "SELECT id, name, type, year, session, profile, url_file_path, url_barem_path, notes, created_at FROM sources ORDER BY year DESC NULLS LAST, created_at DESC;"
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(query)
         sources = cur.fetchall()
@@ -278,13 +277,45 @@ def read_sources(conn: Connection = Depends(get_db_conn)):
 @app.get("/sources/{source_id}", response_model=SourceDB)
 def read_source(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
     """Retrieve a single source by ID."""
-    query = "SELECT id, name, type, year, session, url_file_path, notes, created_at FROM sources WHERE id = %s;"
+    query = "SELECT id, name, type, year, session, profile, url_file_path, url_barem_path, notes, created_at FROM sources WHERE id = %s;"
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(query, (source_id,))
         source = cur.fetchone()
         if source is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
         return source
+
+@app.get("/sources/{source_id}/download")
+def download_source_file(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+    """Descarcă fișierul original al sursei (varianta)."""
+    from fastapi.responses import FileResponse
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT name, url_file_path FROM sources WHERE id = %s", (source_id,))
+        row = cur.fetchone()
+    if not row or not row["url_file_path"]:
+        raise HTTPException(status_code=404, detail="Fișier negăsit")
+    path = row["url_file_path"]
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Fișierul nu există pe server")
+    filename = os.path.basename(path)
+    return FileResponse(path, media_type="application/pdf", filename=filename)
+
+
+@app.get("/sources/{source_id}/download-barem")
+def download_barem_file(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+    """Descarcă baremul sursei."""
+    from fastapi.responses import FileResponse
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT name, url_barem_path FROM sources WHERE id = %s", (source_id,))
+        row = cur.fetchone()
+    if not row or not row["url_barem_path"]:
+        raise HTTPException(status_code=404, detail="Baremul nu este disponibil")
+    path = row["url_barem_path"]
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="Fișierul nu există pe server")
+    filename = os.path.basename(path)
+    return FileResponse(path, media_type="application/pdf", filename=filename)
+
 
 @app.get("/sources/{source_id}/stats")
 def read_source_stats(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn)) -> Dict[str, Any]:
@@ -393,7 +424,7 @@ def update_source(source_id: uuid.UUID, source: SourceUpdate, conn: Connection =
     query = f"""
     UPDATE sources SET {', '.join(updates)}
     WHERE id = %s
-    RETURNING id, name, type, year, session, url_file_path, notes, created_at;
+    RETURNING id, name, type, year, session, profile, url_file_path, url_barem_path, notes, created_at;
     """
 
     try:
@@ -432,7 +463,9 @@ async def upload_and_process(
     source_type: str = Form("pdf"),
     source_year: Optional[int] = Form(None),
     source_session: Optional[str] = Form(None),
+    source_profile: Optional[str] = Form(None),
     source_notes: Optional[str] = Form(None),
+    barem_file: Optional[UploadFile] = File(None),
     conn: Connection = Depends(get_db_conn)
 ):
     """
@@ -450,20 +483,32 @@ async def upload_and_process(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not save file: {e}")
 
-    # 2. Convert source_type string to SourceType enum
+    # 2. Save barem file if provided
+    barem_path = None
+    if barem_file and barem_file.filename:
+        barem_path = os.path.join(UPLOAD_DIR, f"barem_{barem_file.filename}")
+        try:
+            with open(barem_path, "wb") as buf:
+                shutil.copyfileobj(barem_file.file, buf)
+        except Exception as e:
+            barem_path = None
+
+    # 3. Convert source_type string to SourceType enum
     try:
         type_enum = SourceType(source_type)
     except ValueError:
         type_enum = SourceType.PDF  # Default to PDF if invalid
 
-    # 3. Create Source entry in DB with all fields
+    # 4. Create Source entry in DB with all fields
     source_data = SourceCreate(
         name=source_name,
         type=type_enum,
         year=source_year,
         session=source_session,
+        profile=source_profile,
         notes=source_notes,
-        url_file_path=file_path
+        url_file_path=file_path,
+        url_barem_path=barem_path,
     )
 
     try:
@@ -472,7 +517,7 @@ async def upload_and_process(
         conn.rollback()
         raise HTTPException(status_code=500, detail=f"Database error: {e}")
 
-    # 4. Process PDF with pix2text
+    # 5. Process PDF with pix2text
     try:
         processor = get_pix2text_processor()
 
@@ -569,7 +614,9 @@ async def upload_with_json(
     source_type: str = Form("pdf"),
     source_year: Optional[int] = Form(None),
     source_session: Optional[str] = Form(None),
+    source_profile: Optional[str] = Form(None),
     source_notes: Optional[str] = Form(None),
+    barem_file: Optional[UploadFile] = File(None),
     conn: Connection = Depends(get_db_conn)
 ):
     """
@@ -590,6 +637,16 @@ async def upload_with_json(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Could not save file: {e}")
 
+    # 1b. Save barem file if provided
+    barem_path = None
+    if barem_file and barem_file.filename:
+        barem_path = os.path.join(UPLOAD_DIR, f"barem_{barem_file.filename}")
+        try:
+            with open(barem_path, "wb") as buf:
+                shutil.copyfileobj(barem_file.file, buf)
+        except Exception:
+            barem_path = None
+
     # 2. Create Source entry
     try:
         type_enum = SourceType(source_type)
@@ -601,8 +658,10 @@ async def upload_with_json(
         type=type_enum,
         year=source_year,
         session=source_session,
+        profile=source_profile,
         notes=source_notes,
-        url_file_path=file_path
+        url_file_path=file_path,
+        url_barem_path=barem_path,
     )
 
     try:
@@ -758,6 +817,8 @@ def read_exercises(
     subject_part: Optional[str] = None,       # S1, S2, S3
     only_roots: Optional[bool] = None,        # True = nu include copii (parent_external_id IS NULL)
     exclude_seen: Optional[bool] = None,      # True = exclude exercises already seen by user
+    is_container: Optional[bool] = None,      # True = doar containere, False = doar simple
+    limit: Optional[int] = None,              # Limită număr rezultate (cu ORDER BY RANDOM())
     conn: Connection = Depends(get_db_conn),
     current_user: Optional[UserDB] = Depends(get_optional_user),
 ):
@@ -796,6 +857,11 @@ def read_exercises(
     if only_roots:
         conditions.append("e.metadata::jsonb->>'parent_external_id' IS NULL")
 
+    if is_container is True:
+        conditions.append("(e.metadata::jsonb->>'is_container')::boolean = true")
+    elif is_container is False:
+        conditions.append("(e.metadata::jsonb->>'is_container' IS NULL OR (e.metadata::jsonb->>'is_container')::boolean = false)")
+
     if exclude_seen and current_user:
         conditions.append("""
             e.id NOT IN (
@@ -830,6 +896,11 @@ def read_exercises(
 
     where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
+    if limit:
+        order_clause = f"ORDER BY RANDOM() LIMIT {int(limit)}"
+    else:
+        order_clause = "ORDER BY e.created_at DESC"
+
     query = f"""
     SELECT DISTINCT e.id, e.exam_type, e.profile, e.subject_part, e.item_type,
            e.statement_latex, e.statement_text,
@@ -837,7 +908,7 @@ def read_exercises(
            e.difficulty, e.estimated_time_sec, e.points, e.metadata, e.status,
            e.created_by_user_id, e.created_at, e.updated_at
     FROM exercises e{where_clause}
-    ORDER BY e.created_at DESC;
+    {order_clause};
     """
 
     with conn.cursor(row_factory=dict_row) as cur:
@@ -1182,6 +1253,8 @@ async def process_existing_pdf(
 async def import_json_endpoint(
     json_file: UploadFile = File(...),
     include_containers: bool = Form(True),
+    varianta_file: Optional[UploadFile] = File(None),
+    barem_file: Optional[UploadFile] = File(None),
     conn: Connection = Depends(get_db_conn)
 ):
     """
@@ -1191,7 +1264,7 @@ async def import_json_endpoint(
     - LEGACY: exercises[] plate cu tag_catalog[]
     - IERARHIC: exercises[] grupate cu subpoints[] nested
 
-    Detectarea formatului e automată.
+    Opțional: varianta_file și barem_file — PDF-uri atașate sursei create.
     """
     import json as json_mod
 
@@ -1210,6 +1283,26 @@ async def import_json_endpoint(
         if 'exercises' not in data:
             raise HTTPException(status_code=400, detail="JSON lipsește cheia: exercises")
 
+        # Salvează PDF-urile dacă au fost trimise
+        varianta_path = None
+        barem_path = None
+
+        if varianta_file and varianta_file.filename:
+            varianta_path = os.path.join(UPLOAD_DIR, varianta_file.filename)
+            with open(varianta_path, "wb") as f:
+                shutil.copyfileobj(varianta_file.file, f)
+
+        if barem_file and barem_file.filename:
+            barem_path = os.path.join(UPLOAD_DIR, f"barem_{barem_file.filename}")
+            with open(barem_path, "wb") as f:
+                shutil.copyfileobj(barem_file.file, f)
+
+        # Dacă avem varianta PDF, suprascrie url_file_path din JSON
+        if varianta_path:
+            data['source']['url_file_path'] = varianta_path
+        if barem_path:
+            data['source']['url_barem_path'] = barem_path
+
         # Folosește noul importer unificat (detectează automat formatul)
         importer = JSONImporter(json_data=data, include_containers=include_containers, conn=conn)
 
@@ -1219,7 +1312,9 @@ async def import_json_endpoint(
             return {
                 "status": "success",
                 "message": f"Import finalizat pentru {json_file.filename}",
-                "statistics": stats
+                "statistics": stats,
+                "has_varianta": varianta_path is not None,
+                "has_barem": barem_path is not None,
             }
         except Exception as e:
             conn.rollback()
@@ -1324,6 +1419,58 @@ def get_exercise_children(exercise_id: uuid.UUID, conn: Connection = Depends(get
         """, (parent_ext_id,))
         children = cur.fetchall()
         return children
+
+@app.get("/exercises/batch-children")
+def get_exercises_batch_children(ids: str, conn: Connection = Depends(get_db_conn)):
+    """
+    Returnează copiii pentru mai mulți părinți dintr-o singură cerere.
+    ids = comma-separated UUIDs ale exercițiilor container.
+    Răspuns: { parent_id: [children] }
+    """
+    id_list = [i.strip() for i in ids.split(",") if i.strip()]
+    if not id_list:
+        return {}
+    try:
+        parsed_ids = [str(uuid.UUID(i)) for i in id_list]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="IDs invalide")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        placeholders = ",".join(["%s"] * len(parsed_ids))
+        cur.execute(
+            f"SELECT id, metadata::jsonb->>'external_id' as ext_id FROM exercises WHERE id IN ({placeholders})",
+            tuple(parsed_ids)
+        )
+        parents = cur.fetchall()
+        ext_to_parent_id = {p['ext_id']: str(p['id']) for p in parents if p['ext_id']}
+
+        if not ext_to_parent_id:
+            return {pid: [] for pid in parsed_ids}
+
+        ext_ids = list(ext_to_parent_id.keys())
+        ext_placeholders = ",".join(["%s"] * len(ext_ids))
+        cur.execute(
+            f"""SELECT id, exam_type, profile, subject_part, item_type,
+                       statement_latex, statement_text, answer_latex, solution_latex,
+                       scoring_guide_latex, scoring_guide_text,
+                       difficulty, estimated_time_sec, points, metadata, status,
+                       created_at, updated_at
+                FROM exercises
+                WHERE metadata::jsonb->>'parent_external_id' IN ({ext_placeholders})
+                ORDER BY metadata::jsonb->>'subpoint' ASC""",
+            tuple(ext_ids)
+        )
+        all_children = cur.fetchall()
+
+    result: dict = {pid: [] for pid in parsed_ids}
+    for child in all_children:
+        parent_ext = child['metadata'].get('parent_external_id') if child['metadata'] else None
+        if parent_ext and parent_ext in ext_to_parent_id:
+            parent_id = ext_to_parent_id[parent_ext]
+            result[parent_id].append(child)
+
+    return result
+
 
 @app.get("/exercises/by-path/{path:path}")
 def get_exercises_by_path(path: str, conn: Connection = Depends(get_db_conn)):

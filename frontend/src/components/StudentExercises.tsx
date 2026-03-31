@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Eye, EyeOff, Flag, ChevronDown, ChevronUp, BookOpen, Zap, Layers, Trash2, ChevronRight } from 'lucide-react';
 import {
-  getExercises, getExerciseChildren, getTags, createHelpRequest,
+  getExercises, getBatchChildren, getTags, createHelpRequest,
   getMyLimits, logExerciseGeneration, saveExerciseSet, getExerciseSets,
   getExerciseSet, deleteExerciseSet,
   type Exercise, type Tag, type GenLimits, type ExerciseSet, type ExerciseSetDetail,
@@ -475,26 +475,31 @@ export default function StudentExercises() {
     }
 
     try {
-      const params: Parameters<typeof getExercises>[0] = {
+      const maxContainers = Math.max(1, Math.floor(count / 3));
+      const simpleLimit = count * 4;
+      const containerLimit = maxContainers * 4;
+
+      const baseParams = {
         only_roots: true,
         exclude_seen: true,
+        ...(examType !== 'all' && { exam_type: examType }),
+        ...(subiectTag !== 'all' && { subiect_tag: subiectTag }),
+        ...(topicTag !== 'all' && { topic_tag: topicTag }),
+        ...(diffMin > 1 && { difficulty_min: diffMin }),
+        ...(diffMax < 10 && { difficulty_max: diffMax }),
+        ...(hasSolution && { has_solution: true }),
       };
-      if (examType !== 'all') params.exam_type = examType;
-      if (subiectTag !== 'all') params.subiect_tag = subiectTag;
-      if (topicTag !== 'all') params.topic_tag = topicTag;
-      if (diffMin > 1) params.difficulty_min = diffMin;
-      if (diffMax < 10) params.difficulty_max = diffMax;
-      if (hasSolution) params.has_solution = true;
 
-      const res = await getExercises(params);
-      let all: Exercise[] = Array.isArray(res.data) ? res.data : [];
+      const [simplesRes, containersRes] = await Promise.all([
+        getExercises({ ...baseParams, is_container: false, limit: simpleLimit }),
+        getExercises({ ...baseParams, is_container: true, limit: containerLimit }),
+      ]);
 
-      const containers = all.filter((ex) => ex.metadata?.is_container === true);
-      const simples = all.filter((ex) => !ex.metadata?.is_container);
+      const simples: Exercise[] = Array.isArray(simplesRes.data) ? simplesRes.data : [];
+      const containers: Exercise[] = Array.isArray(containersRes.data) ? containersRes.data : [];
 
-      const maxContainers = Math.max(1, Math.floor(count / 3));
-      const pickSimples = simples.sort(() => Math.random() - 0.5).slice(0, count - Math.min(maxContainers, containers.length));
-      const pickContainers = containers.sort(() => Math.random() - 0.5).slice(0, Math.min(maxContainers, containers.length));
+      const pickSimples = simples.slice(0, count - Math.min(maxContainers, containers.length));
+      const pickContainers = containers.slice(0, Math.min(maxContainers, containers.length));
 
       const result: ExerciseGroup[] = [];
 
@@ -502,19 +507,14 @@ export default function StudentExercises() {
         result.push({ type: 'simple', exercise: ex });
       }
 
-      const containerGroups = await Promise.all(
-        pickContainers.map(async (parent) => {
-          try {
-            const childRes = await getExerciseChildren(parent.id);
-            const children = Array.isArray(childRes.data) ? childRes.data : [];
-            if (children.length > 0) return { type: 'grouped' as const, exercise: parent, children };
-          } catch {}
-          return null;
-        })
-      );
-
-      for (const g of containerGroups) {
-        if (g) result.push(g);
+      if (pickContainers.length > 0) {
+        const batchRes = await getBatchChildren(pickContainers.map((p) => p.id));
+        const childrenMap: Record<string, Exercise[]> = batchRes.data || {};
+        for (const parent of pickContainers) {
+          const children = childrenMap[parent.id] || [];
+          if (children.length > 0) result.push({ type: 'grouped', exercise: parent, children });
+          else result.push({ type: 'simple', exercise: parent });
+        }
       }
 
       result.sort(() => Math.random() - 0.5);

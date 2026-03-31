@@ -597,8 +597,8 @@ class JSONImporter:
         })
 
         query = """
-        INSERT INTO sources (id, name, type, year, session, url_file_path, notes, created_at)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+        INSERT INTO sources (id, name, type, year, session, profile, url_file_path, url_barem_path, notes, created_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
         """
         with self.conn.cursor() as cur:
             cur.execute(query, (
@@ -607,7 +607,9 @@ class JSONImporter:
                 'pdf',
                 source_data.get('year'),
                 source_data.get('session'),
-                file_path,
+                source_data.get('profile') or None,
+                source_data.get('url_file_path') or file_path or None,
+                source_data.get('url_barem_path') or None,
                 notes,
                 datetime.now(timezone.utc)
             ))

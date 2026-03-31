@@ -208,8 +208,12 @@ export const getExercises = (params?: {
   subject_part?: string;
   only_roots?: boolean;
   exclude_seen?: boolean;
+  is_container?: boolean;
+  limit?: number;
 }) => api.get<Exercise[]>('/exercises/', { params });
 export const getExercise = (id: string) => api.get<Exercise>(`/exercises/${id}`);
+export const getBatchChildren = (ids: string[]) =>
+  api.get<Record<string, Exercise[]>>('/exercises/batch-children', { params: { ids: ids.join(',') } });
 export const updateExercise = (id: string, data: Partial<Exercise>) => api.put<Exercise>(`/exercises/${id}`, data);
 export const deleteExercise = (id: string) => api.delete(`/exercises/${id}`);
 

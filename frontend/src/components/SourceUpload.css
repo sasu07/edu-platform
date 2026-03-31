@@ -326,3 +326,39 @@
   color: var(--color-gray-500);
   margin-top: 2px;
 }
+
+.upload-section-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: -6px;
+}
+
+.upload-optional {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-muted);
+}
+
+.drop-zone--barem {
+  border-style: dashed;
+  background: rgba(16, 185, 129, 0.03);
+  border-color: rgba(16, 185, 129, 0.30);
+  min-height: 60px;
+}
+
+.drop-zone--barem:hover {
+  border-color: rgba(16, 185, 129, 0.6);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.drop-zone-content--compact {
+  padding: 8px 0;
+}
+
+.file-icon--barem {
+  color: #059669;
+}

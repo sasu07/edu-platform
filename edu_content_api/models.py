@@ -72,7 +72,9 @@ class SourceBase(BaseModel):
     type: SourceType
     year: Optional[int] = None
     session: Optional[str] = Field(None, max_length=50)
+    profile: Optional[str] = Field(None, max_length=100)
     url_file_path: Optional[str] = Field(None, max_length=512)
+    url_barem_path: Optional[str] = Field(None, max_length=512)
     notes: Optional[str] = None
 
 
@@ -85,7 +87,9 @@ class SourceUpdate(BaseModel):
     type: Optional[SourceType] = None
     year: Optional[int] = None
     session: Optional[str] = Field(None, max_length=50)
+    profile: Optional[str] = Field(None, max_length=100)
     url_file_path: Optional[str] = Field(None, max_length=512)
+    url_barem_path: Optional[str] = Field(None, max_length=512)
     notes: Optional[str] = None
 
 

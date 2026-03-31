@@ -456,6 +456,73 @@
   }
 }
 
+/* PDF upload fields */
+.jx-pdf-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.jx-pdf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.jx-pdf-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.jx-optional {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.jx-pdf-drop {
+  border: 1.5px dashed rgba(79, 70, 229, 0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  background: rgba(79, 70, 229, 0.03);
+  transition: border-color 0.12s, background 0.12s;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+.jx-pdf-drop:hover { border-color: rgba(79, 70, 229, 0.55); background: rgba(79, 70, 229, 0.06); }
+.jx-pdf-drop.has-file { border-style: solid; border-color: rgba(79, 70, 229, 0.4); }
+
+.jx-pdf-drop--barem { border-color: rgba(16, 185, 129, 0.3); background: rgba(16, 185, 129, 0.03); }
+.jx-pdf-drop--barem:hover { border-color: rgba(16, 185, 129, 0.55); background: rgba(16, 185, 129, 0.06); }
+.jx-pdf-drop--barem.has-file { border-color: rgba(16, 185, 129, 0.4); }
+
+.jx-pdf-hint {
+  font-size: 0.78rem;
+  color: #9ca3af;
+}
+
+.jx-pdf-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.jx-pdf-name {
+  flex: 1;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 980px) {
   .jx-grid {
     grid-template-columns: 1fr;
@@ -463,6 +530,10 @@
 
   .jx-stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .jx-pdf-row {
+    grid-template-columns: 1fr;
   }
 }
 

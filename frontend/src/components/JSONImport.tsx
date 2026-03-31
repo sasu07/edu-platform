@@ -56,8 +56,12 @@ function iconForMessage(type: MessageType) {
 
 const JSONImport: React.FC<JSONImportProps> = ({ onImportSuccess }) => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const variantaRef = useRef<HTMLInputElement | null>(null);
+  const baremRef = useRef<HTMLInputElement | null>(null);
 
   const [jsonFile, setJsonFile] = useState<File | null>(null);
+  const [variantaFile, setVariantaFile] = useState<File | null>(null);
+  const [baremFile, setBaremFile] = useState<File | null>(null);
   const [includeContainers, setIncludeContainers] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -107,9 +111,13 @@ const JSONImport: React.FC<JSONImportProps> = ({ onImportSuccess }) => {
   const clearSelectedFile = () => {
     if (loading) return;
     setJsonFile(null);
+    setVariantaFile(null);
+    setBaremFile(null);
     setStatistics(null);
     setMessage(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (variantaRef.current) variantaRef.current.value = "";
+    if (baremRef.current) baremRef.current.value = "";
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -146,19 +154,29 @@ const JSONImport: React.FC<JSONImportProps> = ({ onImportSuccess }) => {
     const formData = new FormData();
     formData.append("json_file", jsonFile);
     formData.append("include_containers", includeContainers.toString());
+    if (variantaFile) formData.append("varianta_file", variantaFile);
+    if (baremFile) formData.append("barem_file", baremFile);
 
     try {
       const response = await api.post("/import-json/", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      setSuccess(`Import reușit: ${response.data.message}`);
+      const extras = [];
+      if (response.data.has_varianta) extras.push("variantă PDF");
+      if (response.data.has_barem) extras.push("barem PDF");
+      const extraMsg = extras.length > 0 ? ` (+ ${extras.join(", ")})` : "";
+      setSuccess(`Import reușit: ${response.data.message}${extraMsg}`);
       setStatistics(response.data.statistics);
       onImportSuccess();
 
       setJsonFile(null);
+      setVariantaFile(null);
+      setBaremFile(null);
       setIncludeContainers(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+      if (variantaRef.current) variantaRef.current.value = "";
+      if (baremRef.current) baremRef.current.value = "";
     } catch (error: unknown) {
       const axiosError = error as { response?: { data?: { detail?: string } } };
       const errorMsg =
@@ -282,6 +300,63 @@ const JSONImport: React.FC<JSONImportProps> = ({ onImportSuccess }) => {
                   </button>
                 </div>
               )}
+            </div>
+
+            {/* PDF-uri opționale */}
+            <div className="jx-pdf-row">
+              <div className="jx-pdf-field">
+                <label className="jx-pdf-label">
+                  PDF Variantă <span className="jx-optional">(opțional)</span>
+                </label>
+                <div
+                  className={`jx-pdf-drop ${variantaFile ? 'has-file' : ''}`}
+                  onClick={() => !variantaFile && variantaRef.current?.click()}
+                >
+                  <input
+                    ref={variantaRef}
+                    type="file"
+                    accept=".pdf"
+                    className="jx-file-hidden"
+                    onChange={(e) => setVariantaFile(e.target.files?.[0] ?? null)}
+                    disabled={loading}
+                  />
+                  {variantaFile ? (
+                    <div className="jx-pdf-preview">
+                      <span className="jx-pdf-name">{variantaFile.name}</span>
+                      <button type="button" className="jx-icon-btn" onClick={(e) => { e.stopPropagation(); setVariantaFile(null); if (variantaRef.current) variantaRef.current.value = ""; }} disabled={loading}><Trash2 size={14} /></button>
+                    </div>
+                  ) : (
+                    <span className="jx-pdf-hint">Click pentru a selecta PDF-ul variantei</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="jx-pdf-field">
+                <label className="jx-pdf-label">
+                  PDF Barem <span className="jx-optional">(opțional)</span>
+                </label>
+                <div
+                  className={`jx-pdf-drop jx-pdf-drop--barem ${baremFile ? 'has-file' : ''}`}
+                  onClick={() => !baremFile && baremRef.current?.click()}
+                >
+                  <input
+                    ref={baremRef}
+                    type="file"
+                    accept=".pdf"
+                    className="jx-file-hidden"
+                    onChange={(e) => setBaremFile(e.target.files?.[0] ?? null)}
+                    disabled={loading}
+                  />
+                  {baremFile ? (
+                    <div className="jx-pdf-preview">
+                      <span className="jx-pdf-name">{baremFile.name}</span>
+                      <button type="button" className="jx-icon-btn" onClick={(e) => { e.stopPropagation(); setBaremFile(null); if (baremRef.current) baremRef.current.value = ""; }} disabled={loading}><Trash2 size={14} /></button>
+                    </div>
+                  ) : (
+                    <span className="jx-pdf-hint">Click pentru a selecta PDF-ul baremului</span>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="jx-option">
