@@ -221,3 +221,174 @@
   font-size: 0.875rem;
   color: #1e40af;
 }
+
+.my-req-loading {
+  padding: 40px 20px;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.9rem;
+}
+
+/* ─── Tabs ─── */
+.my-req-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 0;
+}
+
+.my-req-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.my-req-tab-btn:hover { color: #111827; }
+.my-req-tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+
+/* ─── Solutions tab cards ─── */
+.sol-card { border-left: 4px solid #d1d5db; }
+.sol-has-feedback { border-left-color: #22c55e; }
+.sol-incorrect { border-left-color: #ef4444; }
+
+.sol-statement-preview {
+  font-size: 0.88rem;
+  max-width: 340px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sol-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.sol-eval-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.eval-failed  { background: #fee2e2; color: #dc2626; }
+.eval-partial { background: #fef3c7; color: #d97706; }
+.eval-complete { background: #dcfce7; color: #16a34a; }
+
+.sol-xp-badge {
+  margin-left: 6px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+
+/* Teacher status badges in solutions list */
+.ts-pending   { background: #fef3c7; color: #92400e; }
+.ts-correct   { background: #dcfce7; color: #166534; }
+.ts-incorrect { background: #fee2e2; color: #991b1b; }
+
+/* Solution file button */
+.sol-file-row { display: flex; flex-direction: column; gap: 6px; }
+
+.sol-file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 7px;
+  color: #2563eb;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-decoration: none;
+  width: fit-content;
+  transition: background 0.15s;
+}
+.sol-file-btn:hover { background: #dbeafe; }
+
+.sol-file-teacher {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #16a34a;
+}
+.sol-file-teacher:hover { background: #dcfce7; }
+
+/* Feedback block */
+.sol-feedback-block {
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.feedback-correct  { background: #f0fdf4; border: 1.5px solid #bbf7d0; }
+.feedback-incorrect { background: #fef2f2; border: 1.5px solid #fecaca; }
+.feedback-pending  { background: #fffbeb; border: 1.5px solid #fde68a; }
+
+.sol-feedback-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 0;
+}
+
+.feedback-correct  .sol-feedback-label { color: #16a34a; }
+.feedback-incorrect .sol-feedback-label { color: #dc2626; }
+.feedback-pending  .sol-feedback-label { color: #d97706; }
+
+.sol-teacher-note {
+  font-size: 0.875rem;
+  color: #374151;
+  line-height: 1.6;
+  padding: 8px 12px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 6px;
+}
+
+.sol-xp-row {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  padding: 4px 10px;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+/* XP breakdown footer */
+.sol-xp-breakdown {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  border-top: 1px dashed #e5e7eb;
+  margin-top: 4px;
+}
+
+.sol-xp-breakdown span {
+  font-size: 0.72rem;
+  color: #9ca3af;
+}

@@ -12,6 +12,7 @@ interface AuthContextType {
   canUnlimitedGen: boolean;
   isTeacher: boolean;
   isAdmin: boolean;
+  isParent: boolean;
   loading: boolean;
 }
 
@@ -75,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canUnlimitedGen: access.can_unlimited_gen,
         isTeacher: user?.role === 'teacher' || user?.role === 'admin',
         isAdmin: user?.role === 'admin',
+        isParent: user?.role === 'parent',
         loading,
       }}
     >

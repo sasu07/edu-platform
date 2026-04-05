@@ -477,6 +477,7 @@ class UserRole(str, Enum):
     STUDENT = "student"
     TEACHER = "teacher"            # Profesor al platformei — răspunde la cereri de ajutor
     SCHOOL_TEACHER = "school_teacher"  # Profesor de școală — generează variante/fișe
+    PARENT = "parent"              # Părinte — urmărește progresul elevului
     ADMIN = "admin"
 
 
@@ -645,3 +646,170 @@ class SchoolTeacherUsage(BaseModel):
     variants_this_month: int
     variant_limit: Optional[int]   # None = nelimitat (premium)
     is_premium: bool
+
+
+# --- Parent Models ---
+
+class ParentLinkRequest(BaseModel):
+    parent_email: str = Field(..., max_length=255)
+    parent_name: Optional[str] = Field(None, max_length=255)
+
+class ParentStudentDB(BaseModel):
+    id: uuid.UUID
+    parent_id: uuid.UUID
+    student_id: uuid.UUID
+    parent_email: str
+    parent_name: str
+    student_name: str
+    linked_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_encoders = {uuid.UUID: str, datetime: lambda dt: dt.isoformat()}
+
+class StudentActivityDay(BaseModel):
+    date: str          # YYYY-MM-DD
+    exercises_seen: int
+    exercises_completed: int
+    variants_generated: int
+    flags_sent: int
+
+class ParentStudentStats(BaseModel):
+    student_id: str
+    student_name: str
+    student_email: str
+    total_exercises_seen: int
+    total_exercises_completed: int
+    total_variants_generated: int
+    total_flags_sent: int
+    last_active_at: Optional[str]
+    activity_last_30_days: List[StudentActivityDay]
+    completion_by_subiect: Dict[str, int]   # {"1": 12, "2": 5, "3": 3}
+
+# --- Gamification Models ---
+
+LEVELS = [
+    (0,    "Debutant",    "⭐"),
+    (500,  "Aspirant",   "🔥"),
+    (1500, "Competitor", "⚡"),
+    (4000, "Elite",      "💎"),
+    (8000, "BAC Ready",  "🏆"),
+]
+
+BADGES = {
+    "first_exercise":   {"label": "Primul exercițiu",       "icon": "🎯", "desc": "Ai rezolvat primul exercițiu"},
+    "streak_3":         {"label": "3 zile consecutive",     "icon": "🔥", "desc": "Activ 3 zile la rând"},
+    "streak_7":         {"label": "O săptămână",            "icon": "📅", "desc": "Activ 7 zile la rând"},
+    "streak_14":        {"label": "Două săptămâni",         "icon": "🌟", "desc": "Activ 14 zile la rând"},
+    "streak_30":        {"label": "Luna de foc",            "icon": "🌙", "desc": "Activ 30 zile la rând"},
+    "exercises_10":     {"label": "10 exerciții",           "icon": "📚", "desc": "Ai rezolvat 10 exerciții"},
+    "exercises_50":     {"label": "50 exerciții",           "icon": "📖", "desc": "Ai rezolvat 50 de exerciții"},
+    "exercises_100":    {"label": "100 exerciții",          "icon": "🎓", "desc": "Ai rezolvat 100 de exerciții"},
+    "first_s1":         {"label": "S1 deblocat",            "icon": "1️⃣", "desc": "Primul exercițiu din Subiectul I"},
+    "first_s2":         {"label": "S2 deblocat",            "icon": "2️⃣", "desc": "Primul exercițiu din Subiectul II"},
+    "first_s3":         {"label": "S3 deblocat",            "icon": "3️⃣", "desc": "Primul exercițiu din Subiectul III"},
+    "xp_500":           {"label": "500 XP",                 "icon": "⚡", "desc": "Ai acumulat 500 XP"},
+    "xp_1000":          {"label": "1000 XP",                "icon": "💥", "desc": "Ai acumulat 1000 XP"},
+    "xp_3000":          {"label": "3000 XP",                "icon": "🏆", "desc": "Ai acumulat 3000 XP"},
+}
+
+
+def get_level(xp: int) -> dict:
+    level_info = LEVELS[0]
+    for min_xp, name, icon in LEVELS:
+        if xp >= min_xp:
+            level_info = (min_xp, name, icon)
+    # XP until next level
+    idx = next((i for i, (m, _, _) in enumerate(LEVELS) if m == level_info[0]), 0)
+    if idx + 1 < len(LEVELS):
+        next_xp = LEVELS[idx + 1][0]
+        xp_in_level = xp - level_info[0]
+        xp_needed = next_xp - level_info[0]
+    else:
+        next_xp = level_info[0]
+        xp_in_level = xp - level_info[0]
+        xp_needed = 1
+    return {
+        "name": level_info[1],
+        "icon": level_info[2],
+        "xp_total": xp,
+        "xp_in_level": xp_in_level,
+        "xp_for_next": xp_needed,
+        "progress_pct": min(100, round(xp_in_level / xp_needed * 100)) if xp_needed else 100,
+        "is_max": idx + 1 >= len(LEVELS),
+    }
+
+
+class GamificationProfile(BaseModel):
+    xp_total: int
+    streak_current: int
+    streak_max: int
+    last_active_date: Optional[str]
+    level: dict
+    badges: List[dict]
+
+
+class XPLogEntry(BaseModel):
+    xp_gained: int
+    reason: str
+    created_at: datetime
+
+    class Config:
+        json_encoders = {datetime: lambda dt: dt.isoformat()}
+
+
+# --- Exercise Submission Models ---
+
+class SelfEval(str, Enum):
+    FAILED   = "failed"
+    PARTIAL  = "partial"
+    COMPLETE = "complete"
+
+class TeacherReviewStatus(str, Enum):
+    PENDING   = "pending"
+    CORRECT   = "correct"
+    INCORRECT = "incorrect"
+
+class ExerciseSubmitRequest(BaseModel):
+    self_eval: SelfEval
+
+class TeacherReviewRequest(BaseModel):
+    status: TeacherReviewStatus
+    note: Optional[str] = None
+
+class ExerciseSubmissionDB(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    exercise_id: uuid.UUID
+    self_eval: SelfEval
+    photo_path: Optional[str]
+    photo_uploaded_at: Optional[datetime]
+    teacher_status: Optional[str]
+    reviewed_by: Optional[uuid.UUID]
+    reviewed_at: Optional[datetime]
+    teacher_note: Optional[str]
+    xp_self_eval: int
+    xp_photo: int
+    xp_teacher: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_encoders = {uuid.UUID: str, datetime: lambda dt: dt.isoformat()}
+
+class SubmissionForTeacher(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    student_name: str
+    student_email: str
+    exercise_id: uuid.UUID
+    exercise_statement: Optional[str]
+    self_eval: SelfEval
+    photo_path: Optional[str]
+    teacher_status: Optional[str]
+    teacher_note: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+        json_encoders = {uuid.UUID: str, datetime: lambda dt: dt.isoformat()}

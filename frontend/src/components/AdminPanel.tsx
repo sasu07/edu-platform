@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Shield, Crown, UserCheck, XCircle, UserPlus } from 'lucide-react';
-import { getAdminUsers, upgradeSubscription, cancelSubscription, createTeacher } from '../api';
+import { Shield, Crown, UserCheck, XCircle, UserPlus, Link2 } from 'lucide-react';
+import {
+  getAdminUsers, upgradeSubscription, cancelSubscription, createTeacher,
+  adminGetParentStudents, adminLinkParentStudent, adminRemoveParentStudentLink,
+} from '../api';
 import './AdminPanel.css';
 
 interface UserRow {
@@ -34,6 +37,84 @@ const PLANS = [
   { key: 'premium_gen',  label: '⚡ Gen',  title: 'Activează Premium Gen (generare nelimitată exerciții + variante BAC)' },
   { key: 'premium',      label: '👑 Full',  title: 'Activează Premium Full (toate facilitățile)' },
 ];
+
+function AdminParentSection({ users }: { users: UserRow[] }) {
+  const [links, setLinks] = useState<any[]>([]);
+  const [loadingLinks, setLoadingLinks] = useState(true);
+  const [parentId, setParentId] = useState('');
+  const [studentId, setStudentId] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  const loadLinks = () => {
+    setLoadingLinks(true);
+    adminGetParentStudents()
+      .then(r => setLinks(r.data))
+      .catch(() => {})
+      .finally(() => setLoadingLinks(false));
+  };
+
+  useEffect(() => { loadLinks(); }, []);
+
+  const parents = users.filter(u => u.role === 'parent');
+  const students = users.filter(u => u.role === 'student' || u.role === 'school_teacher');
+
+  const handleAdd = async () => {
+    if (!parentId || !studentId) return;
+    setAdding(true); setMsg(null);
+    try {
+      await adminLinkParentStudent({ parent_id: parentId, student_id: studentId });
+      setMsg({ text: 'Legătură creată.', ok: true });
+      setParentId(''); setStudentId('');
+      loadLinks();
+    } catch (e: any) {
+      setMsg({ text: e?.response?.data?.detail || 'Eroare.', ok: false });
+    } finally { setAdding(false); }
+  };
+
+  const handleRemove = async (linkId: string) => {
+    try {
+      await adminRemoveParentStudentLink(linkId);
+      setLinks(l => l.filter(x => x.id !== linkId));
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="admin-section">
+      <h3 className="admin-section-title"><Link2 size={16} /> Legătură Părinte–Elev</h3>
+
+      <div className="admin-parent-form">
+        <select className="admin-select" value={parentId} onChange={e => setParentId(e.target.value)}>
+          <option value="">— Selectează părinte —</option>
+          {parents.map(p => <option key={p.id} value={p.id}>{p.full_name} ({p.email})</option>)}
+        </select>
+        <select className="admin-select" value={studentId} onChange={e => setStudentId(e.target.value)}>
+          <option value="">— Selectează elev —</option>
+          {students.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.email})</option>)}
+        </select>
+        <button className="admin-btn" onClick={handleAdd} disabled={adding || !parentId || !studentId}>
+          {adding ? '...' : '+ Leagă'}
+        </button>
+      </div>
+      {msg && <div className={`admin-msg ${msg.ok ? 'ok' : 'err'}`}>{msg.text}</div>}
+
+      {loadingLinks && <div className="admin-empty">Se încarcă...</div>}
+      {!loadingLinks && links.length === 0 && <div className="admin-empty">Nicio legătură activă.</div>}
+      <div className="admin-links-list">
+        {links.map(l => (
+          <div key={l.id} className="admin-link-row">
+            <span className="admin-link-parent">👨‍👩‍👧 {l.parent_name} <small>({l.parent_email})</small></span>
+            <span className="admin-link-arrow">→</span>
+            <span className="admin-link-student">🎓 {l.student_name} <small>({l.student_email})</small></span>
+            <button className="admin-cancel-btn" onClick={() => handleRemove(l.id)} title="Șterge legătura">
+              <XCircle size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminPanel() {
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -237,6 +318,8 @@ export default function AdminPanel() {
           <li>Profesorii platformă și adminii au implicit acces complet</li>
         </ul>
       </div>
+
+      <AdminParentSection users={users} />
     </div>
   );
 }

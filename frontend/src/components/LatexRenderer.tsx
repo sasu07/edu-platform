@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import 'katex/dist/katex.min.css';
 import { BlockMath, InlineMath } from 'react-katex';
 
@@ -6,10 +7,9 @@ interface Props {
   className?: string;
 }
 
-export default function LatexRenderer({ text, className }: Props) {
+function LatexContent({ text, className }: Props) {
   if (!text) return null;
 
-  // Împarte textul în bucăți: $$...$$ (block), $...$ (inline), text simplu
   const parts = text.split(/(\$\$[\s\S]+?\$\$|\$[^$\n]+?\$)/g);
 
   return (
@@ -30,5 +30,33 @@ export default function LatexRenderer({ text, className }: Props) {
         return <span key={i}>{part}</span>;
       })}
     </span>
+  );
+}
+
+export default function LatexRenderer({ text, className }: Props) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={ref}>
+      {visible ? <LatexContent text={text} className={className} /> : <span style={{ minHeight: '1.5em', display: 'block' }} />}
+    </div>
   );
 }

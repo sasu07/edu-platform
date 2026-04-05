@@ -21,6 +21,7 @@ import StudentExercises from "./components/StudentExercises";
 import TeacherDashboard from "./components/TeacherDashboard";
 import AdminPanel from "./components/AdminPanel";
 import MyRequests from "./components/MyRequests";
+import ParentDashboard from "./components/ParentDashboard";
 
 import { AuthProvider, useAuth } from "./AuthContext";
 import NotificationBell from "./components/NotificationBell";
@@ -37,7 +38,8 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
 
 
 function AppHub() {
-  const { user, isTeacher, isAdmin } = useAuth();
+  const { user, isTeacher, isAdmin, isParent } = useAuth();
+  if (isParent) return <Navigate to="/app/parent" replace />;
   return (
     <div className="hub">
       <header className="hub-head">
@@ -86,6 +88,15 @@ function AppHub() {
             <div className="hub-card-title">Administrator</div>
             <div className="hub-card-sub">
               Gestionează utilizatori și abonamente
+            </div>
+            <div className="hub-card-cta">Deschide →</div>
+          </Link>
+        )}
+        {isParent && (
+          <Link to="/app/parent" className="hub-card hub-card-parent">
+            <div className="hub-card-title">Dashboard Progres</div>
+            <div className="hub-card-sub">
+              Urmărește activitatea și progresul elevului tău
             </div>
             <div className="hub-card-cta">Deschide →</div>
           </Link>
@@ -196,7 +207,7 @@ function NavbarUser() {
 function AppShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
-  const { isTeacher, isAdmin } = useAuth();
+  const { isTeacher, isAdmin, isParent } = useAuth();
 
   const bumpRefresh = () => setRefreshKey((k) => k + 1);
 
@@ -234,59 +245,72 @@ function AppShell() {
           </Link>
 
           <div className="navbar-links">
-            <NavLink
-              to="/app/exercises"
-              className={({ isActive }) =>
-                isActive ? "nav-link active" : "nav-link"
-              }
-            >
-              Exerciții
-            </NavLink>
-            <NavLink
-              to="/app/my-requests"
-              className={({ isActive }) =>
-                isActive ? "nav-link active" : "nav-link"
-              }
-            >
-              Cererile mele
-            </NavLink>
-            <NavLink
-              to="/app/variants"
-              className={({ isActive }) =>
-                isActive ? "nav-link active" : "nav-link"
-              }
-            >
-              Variante
-            </NavLink>
-            {isTeacher && (
+            {isParent ? (
               <NavLink
-                to="/app/content/import"
+                to="/app/parent"
                 className={({ isActive }) =>
                   isActive ? "nav-link active" : "nav-link"
                 }
               >
-                Conținut
+                Progres Elev
               </NavLink>
-            )}
-            {isTeacher && (
-              <NavLink
-                to="/app/teacher/requests"
-                className={({ isActive }) =>
-                  isActive ? "nav-link active" : "nav-link"
-                }
-              >
-                Cereri
-              </NavLink>
-            )}
-            {isAdmin && (
-              <NavLink
-                to="/app/admin"
-                className={({ isActive }) =>
-                  isActive ? "nav-link active" : "nav-link"
-                }
-              >
-                Admin
-              </NavLink>
+            ) : (
+              <>
+                <NavLink
+                  to="/app/exercises"
+                  className={({ isActive }) =>
+                    isActive ? "nav-link active" : "nav-link"
+                  }
+                >
+                  Exerciții
+                </NavLink>
+                <NavLink
+                  to="/app/my-requests"
+                  className={({ isActive }) =>
+                    isActive ? "nav-link active" : "nav-link"
+                  }
+                >
+                  Cererile mele
+                </NavLink>
+                <NavLink
+                  to="/app/variants"
+                  className={({ isActive }) =>
+                    isActive ? "nav-link active" : "nav-link"
+                  }
+                >
+                  Variante
+                </NavLink>
+                {isTeacher && (
+                  <NavLink
+                    to="/app/content/import"
+                    className={({ isActive }) =>
+                      isActive ? "nav-link active" : "nav-link"
+                    }
+                  >
+                    Conținut
+                  </NavLink>
+                )}
+                {isTeacher && (
+                  <NavLink
+                    to="/app/teacher/requests"
+                    className={({ isActive }) =>
+                      isActive ? "nav-link active" : "nav-link"
+                    }
+                  >
+                    Cereri
+                  </NavLink>
+                )}
+                {isAdmin && (
+                  <NavLink
+                    to="/app/admin"
+                    className={({ isActive }) =>
+                      isActive ? "nav-link active" : "nav-link"
+                    }
+                  >
+                    Admin
+                  </NavLink>
+                )}
+              </>
             )}
           </div>
 
@@ -312,6 +336,7 @@ function AppShell() {
           <Route path="teacher/requests" element={<TeacherDashboard />} />
           <Route path="my-requests" element={<MyRequests />} />
           <Route path="admin" element={<AdminPanel />} />
+          <Route path="parent" element={<ParentDashboard />} />
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Routes>
       </main>

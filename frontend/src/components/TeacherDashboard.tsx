@@ -1,255 +1,60 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, UserCheck, Send, Upload, BarChart2, Clock, MessageSquare, ChevronDown } from 'lucide-react';
+import { CheckCircle, Camera, ThumbsUp, ThumbsDown, Eye, Paperclip, Users } from 'lucide-react';
 import {
-  pendingHelpRequests,
-  assignHelpRequest,
-  respondToHelpRequest,
-  getTeacherStats,
-  type TeacherStats,
+  getTeacherSubmissions,
+  reviewSubmission,
+  uploadTeacherFile,
+  assignPendingSubmissions,
+  getSubmissionStats,
 } from '../api';
-import { useAuth } from '../AuthContext';
-import api from '../api';
 import './TeacherDashboard.css';
 
-const FLAG_LABELS: Record<string, { icon: string; label: string }> = {
-  WRITTEN: { icon: '✍️', label: 'Rezolvare scrisă' },
-  VIDEO:   { icon: '🎥', label: 'Rezolvare video' },
-  LIVE:    { icon: '🎙️', label: 'Sesiune live' },
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'În așteptare',
-  assigned: 'Preluat',
-  resolved: 'Rezolvat',
-};
-
-interface Request {
+interface SubmissionItem {
   id: string;
-  flag_type: 'WRITTEN' | 'VIDEO' | 'LIVE';
-  status: string;
-  notes?: string;
-  created_at: string;
   student_name: string;
   student_email: string;
+  exercise_id: string;
   statement_latex: string;
   difficulty?: number;
-  points?: number;
-  exercise_path?: string;
-  exercise_id: string;
-  assigned_teacher_id?: string;
+  self_eval: string;
+  photo_path: string | null;
+  photo_uploaded_at: string | null;
+  teacher_status: string | null;
+  teacher_note: string | null;
+  teacher_file_path: string | null;
+  assigned_teacher_id: string | null;
+  assigned_teacher_name: string | null;
+  created_at: string;
 }
 
-interface RespondFormProps {
-  request: Request;
-  onDone: () => void;
-}
-
-function RespondForm({ request, onDone }: RespondFormProps) {
-  const [contentText, setContentText] = useState('');
-  const [zoomLink, setZoomLink] = useState('');
-  const [scheduledAt, setScheduledAt] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    try {
-      await respondToHelpRequest(request.id, {
-        content_text: contentText || undefined,
-        zoom_link: zoomLink || undefined,
-        scheduled_at: scheduledAt || undefined,
-      });
-      onDone();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Eroare la trimitere');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <form className="respond-form" onSubmit={handleSubmit}>
-      {request.flag_type === 'WRITTEN' && (
-        <div className="respond-field">
-          <label>Rezolvare detaliată</label>
-          <textarea
-            value={contentText}
-            onChange={(e) => setContentText(e.target.value)}
-            placeholder="Scrie rezolvarea passo cu passo..."
-            rows={6}
-            required
-          />
-        </div>
-      )}
-
-      {request.flag_type === 'VIDEO' && (
-        <div className="respond-field">
-          <label>Mesaj pentru student (opțional)</label>
-          <textarea
-            value={contentText}
-            onChange={(e) => setContentText(e.target.value)}
-            placeholder="Ex: Am înregistrat explicația, o poți găsi atașată..."
-            rows={3}
-          />
-          <div className="respond-video-note">
-            <Upload size={14} />
-            Upload video — disponibil în curând
-          </div>
-        </div>
-      )}
-
-      {request.flag_type === 'LIVE' && (
-        <>
-          <div className="respond-field">
-            <label>Link Zoom</label>
-            <input
-              type="url"
-              value={zoomLink}
-              onChange={(e) => setZoomLink(e.target.value)}
-              placeholder="https://zoom.us/j/..."
-              required
-            />
-          </div>
-          <div className="respond-field">
-            <label>Data și ora sesiunii</label>
-            <input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-              required
-            />
-          </div>
-          <div className="respond-field">
-            <label>Mesaj (opțional)</label>
-            <textarea
-              value={contentText}
-              onChange={(e) => setContentText(e.target.value)}
-              placeholder="Ex: Ne întâlnim la ora indicată pe linkul de mai sus..."
-              rows={2}
-            />
-          </div>
-        </>
-      )}
-
-      {error && <div className="respond-error">{error}</div>}
-
-      <div className="respond-actions">
-        <button type="submit" className="respond-submit-btn" disabled={loading}>
-          <Send size={15} />
-          {loading ? 'Se trimite...' : 'Trimite răspunsul'}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-const FLAG_TYPE_LABELS: Record<string, string> = {
-  WRITTEN: '✍️ Scris',
-  VIDEO: '🎥 Video',
-  LIVE: '🎙️ Live',
+const SELF_EVAL_LABEL: Record<string, string> = {
+  failed: '❌ Nu am rezolvat',
+  partial: '⚠️ Parțial',
+  complete: '✅ Complet',
 };
 
-function StatsPanel({ stats, showAvgTime }: { stats: TeacherStats; showAvgTime: boolean }) {
-  const resolvedPct = stats.total_requests > 0
-    ? Math.round((stats.resolved / stats.total_requests) * 100)
-    : 0;
-
-  return (
-    <div className="teacher-stats-panel">
-      <div className="teacher-stats-title">
-        <BarChart2 size={18} /> Statistici
-      </div>
-      <div className="teacher-stats-grid">
-        <div className="teacher-stat-card">
-          <div className="teacher-stat-value">{stats.total_requests}</div>
-          <div className="teacher-stat-label">Total cereri</div>
-        </div>
-        <div className="teacher-stat-card stat-pending">
-          <div className="teacher-stat-value">{stats.pending}</div>
-          <div className="teacher-stat-label">În așteptare</div>
-        </div>
-        <div className="teacher-stat-card stat-assigned">
-          <div className="teacher-stat-value">{stats.assigned}</div>
-          <div className="teacher-stat-label">Preluate</div>
-        </div>
-        <div className="teacher-stat-card stat-resolved">
-          <div className="teacher-stat-value">{stats.resolved}</div>
-          <div className="teacher-stat-label">Rezolvate</div>
-        </div>
-        {showAvgTime && stats.avg_response_hours != null && (
-          <div className="teacher-stat-card">
-            <div className="teacher-stat-value">
-              <Clock size={16} style={{ display: 'inline', marginRight: 4 }} />
-              {stats.avg_response_hours}h
-            </div>
-            <div className="teacher-stat-label">Timp mediu răspuns</div>
-          </div>
-        )}
-        {stats.total_requests > 0 && (
-          <div className="teacher-stat-card">
-            <div className="teacher-stat-value">{resolvedPct}%</div>
-            <div className="teacher-stat-label">Rată rezolvare</div>
-          </div>
-        )}
-      </div>
-      {Object.keys(stats.by_type).length > 0 && (
-        <div className="teacher-stats-by-type">
-          <div className="teacher-stats-by-type-title">
-            <MessageSquare size={14} /> Cereri pe tip
-          </div>
-          <div className="teacher-by-type-list">
-            {Object.entries(stats.by_type).map(([type, cnt]) => (
-              <span key={type} className="teacher-type-pill">
-                {FLAG_TYPE_LABELS[type] || type}: <strong>{cnt}</strong>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface TeacherOption { id: string; full_name: string; email: string; }
-
-export default function TeacherDashboard() {
-  const { isAdmin } = useAuth();
-  const [requests, setRequests] = useState<Request[]>([]);
-  const [stats, setStats] = useState<TeacherStats | null>(null);
-  const [teachers, setTeachers] = useState<TeacherOption[]>([]);
-  const [selectedTeacherId, setSelectedTeacherId] = useState<string>('');
+function SubmissionsTab() {
+  const [submissions, setSubmissions] = useState<SubmissionItem[]>([]);
+  const [subStats, setSubStats] = useState<{ pending: number; correct: number; incorrect: number; total: number } | null>(null);
+  const [filter, setFilter] = useState<'pending' | 'correct' | 'incorrect'>('pending');
   const [loading, setLoading] = useState(true);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState('');
+  const [photoModal, setPhotoModal] = useState<string | null>(null);
+  const [uploadingFileId, setUploadingFileId] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState(false);
 
-  // Admin: fetch lista de profesori la mount
-  useEffect(() => {
-    if (!isAdmin) return;
-    api.get<TeacherOption[]>('/admin/teachers')
-      .then((res) => setTeachers(Array.isArray(res.data) ? res.data : []))
-      .catch(() => {});
-  }, [isAdmin]);
-
-  const loadStats = async (teacherId?: string) => {
-    try {
-      const params = teacherId ? { teacher_id: teacherId } : undefined;
-      const res = await getTeacherStats(params);
-      setStats(res.data);
-    } catch {
-      setStats(null);
-    }
-  };
-
-  const load = async () => {
+  const load = async (status = filter) => {
     setLoading(true);
     try {
-      const [reqRes] = await Promise.allSettled([pendingHelpRequests()]);
-      if (reqRes.status === 'fulfilled') setRequests(Array.isArray(reqRes.value.data) ? reqRes.value.data : []);
-      await loadStats(selectedTeacherId || undefined);
+      const [subRes, statsRes] = await Promise.all([
+        getTeacherSubmissions(status),
+        getSubmissionStats(),
+      ]);
+      setSubmissions(Array.isArray(subRes.data) ? subRes.data : []);
+      setSubStats(statsRes.data);
     } catch {
-      setRequests([]);
+      setSubmissions([]);
     } finally {
       setLoading(false);
     }
@@ -257,147 +62,208 @@ export default function TeacherDashboard() {
 
   useEffect(() => { load(); }, []);
 
-  const handleTeacherChange = async (id: string) => {
-    setSelectedTeacherId(id);
-    await loadStats(id || undefined);
+  const handleFilter = (f: 'pending' | 'correct' | 'incorrect') => {
+    setFilter(f);
+    load(f);
   };
 
-  const handleAssign = async (id: string) => {
+  const handleReview = async (submissionId: string, status: 'correct' | 'incorrect') => {
     try {
-      await assignHelpRequest(id);
-      load();
+      await reviewSubmission(submissionId, { status, note: noteText || undefined });
+      setReviewingId(null);
+      setNoteText('');
+      load(filter);
     } catch {}
   };
 
-  const handleRespondDone = () => {
-    setRespondingId(null);
-    load();
+  const handleFileUpload = async (submissionId: string, file: File) => {
+    setUploadingFileId(submissionId);
+    try {
+      await uploadTeacherFile(submissionId, file);
+      load(filter);
+    } catch {}
+    finally { setUploadingFileId(null); }
   };
 
-  if (loading) return <div className="teacher-dashboard">Se încarcă...</div>;
+  const handleAssignAll = async () => {
+    setAssigning(true);
+    try {
+      const res = await assignPendingSubmissions();
+      alert(`Ai preluat ${res.data.assigned} soluții.`);
+      load(filter);
+    } catch {}
+    finally { setAssigning(false); }
+  };
 
+  return (
+    <div className="submissions-tab">
+      {subStats && (
+        <div className="sub-stats-row">
+          <div className="sub-stat-pill sub-pending" onClick={() => handleFilter('pending')}>
+            <span className="sub-stat-num">{subStats.pending}</span>
+            <span>În așteptare</span>
+          </div>
+          <div className="sub-stat-pill sub-correct" onClick={() => handleFilter('correct')}>
+            <span className="sub-stat-num">{subStats.correct}</span>
+            <span>Corecte</span>
+          </div>
+          <div className="sub-stat-pill sub-incorrect" onClick={() => handleFilter('incorrect')}>
+            <span className="sub-stat-num">{subStats.incorrect}</span>
+            <span>Incorecte</span>
+          </div>
+          <div className="sub-stat-pill">
+            <span className="sub-stat-num">{subStats.total}</span>
+            <span>Total</span>
+          </div>
+          {subStats.pending > 0 && (
+            <button className="sub-assign-all-btn" onClick={handleAssignAll} disabled={assigning}>
+              <Users size={14} /> {assigning ? 'Se preia...' : `Preia toate (${subStats.pending})`}
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="sub-filter-bar">
+        {(['pending', 'correct', 'incorrect'] as const).map((f) => (
+          <button
+            key={f}
+            className={`sub-filter-btn${filter === f ? ' active' : ''}`}
+            onClick={() => handleFilter(f)}
+          >
+            {f === 'pending' ? '⏳ În așteptare' : f === 'correct' ? '✅ Corecte' : '❌ Incorecte'}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="teacher-empty">Se încarcă...</div>
+      ) : submissions.length === 0 ? (
+        <div className="teacher-empty">
+          <CheckCircle size={40} />
+          <p>Nu există soluții de verificat.</p>
+        </div>
+      ) : (
+        <div className="submissions-list">
+          {submissions.map((sub) => (
+            <div key={sub.id} className={`submission-card sub-status-${sub.teacher_status || 'pending'}`}>
+              <div className="sub-card-header">
+                <div className="sub-card-student">
+                  <strong>{sub.student_name}</strong>
+                  <span className="sub-card-email">{sub.student_email}</span>
+                </div>
+                <div className="sub-card-meta">
+                  {sub.difficulty && <span className="sub-diff">Dif: {sub.difficulty}/10</span>}
+                  <span className={`sub-eval-badge eval-${sub.self_eval}`}>
+                    {SELF_EVAL_LABEL[sub.self_eval] || sub.self_eval}
+                  </span>
+                  <span className="sub-date">{new Date(sub.created_at).toLocaleDateString('ro-RO')}</span>
+                </div>
+              </div>
+
+              <div className="sub-statement">{sub.statement_latex}</div>
+
+              {sub.photo_path && (
+                <div className="sub-photo-row">
+                  <Camera size={14} />
+                  <button className="sub-photo-btn" onClick={() => setPhotoModal(`http://localhost:8000${sub.photo_path}`)}>
+                    <Eye size={13} /> Vezi fișier elev
+                  </button>
+                  {sub.photo_uploaded_at && (
+                    <span className="sub-photo-date">
+                      {new Date(sub.photo_uploaded_at).toLocaleString('ro-RO')}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {sub.teacher_file_path && (
+                <div className="sub-photo-row">
+                  <Paperclip size={14} />
+                  <a className="sub-photo-btn" href={`http://localhost:8000${sub.teacher_file_path}`} target="_blank" rel="noopener noreferrer">
+                    <Eye size={13} /> Fișier tău încărcat
+                  </a>
+                </div>
+              )}
+
+              {sub.assigned_teacher_name && (
+                <div className="sub-assigned-badge">
+                  <Users size={12} /> Preluat de: {sub.assigned_teacher_name}
+                </div>
+              )}
+
+              {sub.teacher_note && (
+                <div className="sub-teacher-note">
+                  <strong>Notă profesor:</strong> {sub.teacher_note}
+                </div>
+              )}
+
+              <div className="sub-review-area">
+                {/* File upload by teacher */}
+                <label className="sub-file-upload-label">
+                  <Paperclip size={13} />
+                  {uploadingFileId === sub.id ? 'Se încarcă...' : 'Încarcă fișier rezolvare'}
+                  <input
+                    type="file"
+                    accept="image/*,.pdf"
+                    style={{ display: 'none' }}
+                    disabled={uploadingFileId === sub.id}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleFileUpload(sub.id, f); }}
+                  />
+                </label>
+
+                {sub.teacher_status === null || sub.teacher_status === 'pending' ? (
+                  reviewingId === sub.id ? (
+                    <>
+                      <textarea
+                        className="sub-note-input"
+                        placeholder="Notă pentru student (opțional)..."
+                        value={noteText}
+                        onChange={(e) => setNoteText(e.target.value)}
+                        rows={2}
+                      />
+                      <div className="sub-review-btns">
+                        <button className="sub-btn-correct" onClick={() => handleReview(sub.id, 'correct')}>
+                          <ThumbsUp size={14} /> Corect
+                        </button>
+                        <button className="sub-btn-incorrect" onClick={() => handleReview(sub.id, 'incorrect')}>
+                          <ThumbsDown size={14} /> Incorect
+                        </button>
+                        <button className="sub-btn-cancel" onClick={() => { setReviewingId(null); setNoteText(''); }}>
+                          Anulează
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <button className="sub-btn-review" onClick={() => setReviewingId(sub.id)}>
+                      Corectează soluția
+                    </button>
+                  )
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {photoModal && (
+        <div className="sub-photo-overlay" onClick={() => setPhotoModal(null)}>
+          <div className="sub-photo-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="sub-photo-close" onClick={() => setPhotoModal(null)}>✕</button>
+            <img src={photoModal} alt="Soluție student" className="sub-photo-img" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function TeacherDashboard() {
   return (
     <div className="teacher-dashboard">
       <div className="teacher-dash-header">
-        <h2>Dashboard Profesor</h2>
-        <button className="teacher-refresh-btn" onClick={load}>Refresh</button>
+        <h2><Camera size={20} /> Verificare soluții elevi</h2>
       </div>
-
-      {isAdmin && teachers.length > 0 && (
-        <div className="teacher-selector-bar">
-          <ChevronDown size={16} />
-          <label>Statistici pentru:</label>
-          <select
-            value={selectedTeacherId}
-            onChange={(e) => handleTeacherChange(e.target.value)}
-            className="teacher-selector-select"
-          >
-            <option value="">Toți profesorii (global)</option>
-            {teachers.map((t) => (
-              <option key={t.id} value={t.id}>{t.full_name} — {t.email}</option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {stats && <StatsPanel stats={stats} showAvgTime={isAdmin} />}
-
-      <div className="teacher-requests-section-title">
-        <h3>Cereri de ajutor active</h3>
-        <span className="teacher-count-badge">{requests.length}</span>
-      </div>
-
-      {requests.length === 0 ? (
-        <div className="teacher-empty">
-          <CheckCircle size={40} />
-          <p>Nu există cereri active. Revino mai târziu.</p>
-        </div>
-      ) : (
-        <div className="teacher-requests-list">
-          {requests.map((req) => {
-            const flag = FLAG_LABELS[req.flag_type] || { icon: '?', label: req.flag_type };
-            const isExpanded = expandedId === req.id;
-            const isResponding = respondingId === req.id;
-
-            return (
-              <div key={req.id} className={`teacher-request-card status-${req.status}`}>
-                <div
-                  className="teacher-request-header"
-                  onClick={() => setExpandedId(isExpanded ? null : req.id)}
-                >
-                  <div className="teacher-req-left">
-                    <span className="teacher-flag-icon">{flag.icon}</span>
-                    <div>
-                      <div className="teacher-req-title">{flag.label}</div>
-                      <div className="teacher-req-student">
-                        {req.student_name} · {req.student_email}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="teacher-req-right">
-                    {req.exercise_path && (
-                      <span className="teacher-req-path">{req.exercise_path}</span>
-                    )}
-                    <span className={`teacher-req-status status-badge-${req.status}`}>
-                      {STATUS_LABELS[req.status] || req.status}
-                    </span>
-                    <span className="teacher-req-date">
-                      {new Date(req.created_at).toLocaleDateString('ro-RO')}
-                    </span>
-                  </div>
-                </div>
-
-                {isExpanded && (
-                  <div className="teacher-request-body">
-                    <div className="teacher-req-exercise">
-                      <div className="teacher-req-label">Exercițiu</div>
-                      <div className="teacher-req-statement">
-                        {req.statement_latex}
-                      </div>
-                      <div className="teacher-req-meta">
-                        {req.difficulty && <span>Dificultate: {req.difficulty}/10</span>}
-                        {req.points && <span>{req.points} puncte</span>}
-                      </div>
-                    </div>
-
-                    {req.notes && (
-                      <div className="teacher-req-notes">
-                        <div className="teacher-req-label">Mesaj student</div>
-                        <p>{req.notes}</p>
-                      </div>
-                    )}
-
-                    <div className="teacher-req-actions">
-                      {req.status === 'pending' && (
-                        <button
-                          className="teacher-assign-btn"
-                          onClick={() => handleAssign(req.id)}
-                        >
-                          <UserCheck size={15} /> Preia cererea
-                        </button>
-                      )}
-
-                      {(req.status === 'assigned' || req.status === 'pending') && !isResponding && (
-                        <button
-                          className="teacher-respond-btn"
-                          onClick={() => setRespondingId(req.id)}
-                        >
-                          <Send size={15} /> Răspunde
-                        </button>
-                      )}
-                    </div>
-
-                    {isResponding && (
-                      <RespondForm request={req} onDone={handleRespondDone} />
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      <SubmissionsTab />
     </div>
   );
 }

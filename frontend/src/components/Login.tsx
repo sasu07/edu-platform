@@ -18,7 +18,7 @@ export default function Login() {
     try {
       const res = await authLogin({ email, password });
       login(res.data.access_token, res.data.user);
-      navigate('/app');
+      navigate(res.data.user.role === 'parent' ? '/app/parent' : '/app');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Email sau parolă incorectă');
     } finally {

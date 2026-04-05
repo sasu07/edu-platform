@@ -2,10 +2,12 @@
 import uuid
 import os
 import shutil
+from datetime import datetime
 from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, BackgroundTasks, Depends, HTTPException, status, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from psycopg import Connection
 from psycopg.rows import dict_row
 
@@ -28,6 +30,10 @@ from models import (
     HelpRequestCreate, HelpRequestDB, HelpFlagType, HelpRequestStatus,
     HelpResponseCreate, HelpResponseDB,
     NotificationDB, TeacherStats, SchoolTeacherUsage,
+    ParentLinkRequest, ParentStudentDB, ParentStudentStats, StudentActivityDay,
+    GamificationProfile, get_level, BADGES,
+    SelfEval, TeacherReviewStatus, ExerciseSubmitRequest,
+    TeacherReviewRequest, ExerciseSubmissionDB, SubmissionForTeacher,
 )
 from pix2text_processor import get_pix2text_processor
 from ai_tagger import get_ai_tagger
@@ -36,7 +42,10 @@ from import_json import JSONImporter
 from variant_generator import get_variant_generator
 from pdf_generator import get_pdf_generator
 from html_generator import get_html_generator
-from email_service import send_new_request_to_teacher, send_response_to_student
+from email_service import (
+    send_new_request_to_teacher, send_response_to_student,
+    send_parent_invite, send_parent_linked, send_weekly_digest,
+)
 from auth import (
     hash_password, verify_password, create_access_token,
     get_current_user, get_optional_user, require_role, require_premium,
@@ -73,6 +82,7 @@ app.add_middleware(
 # --- File Storage Setup ---
 UPLOAD_DIR = "uploaded_files"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 @app.on_event("startup")
 def startup_event():
@@ -811,10 +821,14 @@ def read_exercises(
     status_filter: Optional[str] = None,
     subiect_tag: Optional[str] = None,       # "1", "2", "3" — tag namespace=subiect
     topic_tag: Optional[str] = None,          # tag key din namespace=topic
+    method_tag: Optional[str] = None,         # tag key din namespace=method
     difficulty_min: Optional[int] = None,
     difficulty_max: Optional[int] = None,
     has_solution: Optional[bool] = None,      # True = doar cu soluție
+    has_scoring_guide: Optional[bool] = None, # True = doar cu barem
     subject_part: Optional[str] = None,       # S1, S2, S3
+    profile: Optional[str] = None,            # mate-info, st-nat, tehnologic, pedagogic
+    year: Optional[int] = None,               # an examene (via sources)
     only_roots: Optional[bool] = None,        # True = nu include copii (parent_external_id IS NULL)
     exclude_seen: Optional[bool] = None,      # True = exclude exercises already seen by user
     is_container: Optional[bool] = None,      # True = doar containere, False = doar simple
@@ -825,9 +839,6 @@ def read_exercises(
     """Retrieve exercises, optionally filtered by multiple criteria."""
     conditions = []
     params: list = []
-
-    # Tag join needed if filtering by subiect or topic tag
-    use_tag_join = bool(subiect_tag or topic_tag)
 
     if exam_type:
         conditions.append("e.exam_type = %s")
@@ -843,6 +854,10 @@ def read_exercises(
         conditions.append("e.subject_part = %s")
         params.append(subject_part)
 
+    if profile:
+        conditions.append("e.profile = %s")
+        params.append(profile)
+
     if difficulty_min is not None:
         conditions.append("(e.difficulty >= %s OR e.difficulty IS NULL)")
         params.append(difficulty_min)
@@ -854,6 +869,9 @@ def read_exercises(
     if has_solution:
         conditions.append("(e.solution_latex IS NOT NULL OR e.answer_latex IS NOT NULL)")
 
+    if has_scoring_guide:
+        conditions.append("(e.scoring_guide_latex IS NOT NULL OR e.scoring_guide_text IS NOT NULL)")
+
     if only_roots:
         conditions.append("e.metadata::jsonb->>'parent_external_id' IS NULL")
 
@@ -861,6 +879,10 @@ def read_exercises(
         conditions.append("(e.metadata::jsonb->>'is_container')::boolean = true")
     elif is_container is False:
         conditions.append("(e.metadata::jsonb->>'is_container' IS NULL OR (e.metadata::jsonb->>'is_container')::boolean = false)")
+
+    # Snapshot conditions/params WITHOUT exclude_seen (used for fallback)
+    conditions_no_seen = list(conditions)
+    params_no_seen: list = list(params)
 
     if exclude_seen and current_user:
         conditions.append("""
@@ -870,8 +892,25 @@ def read_exercises(
         """)
         params.append(str(current_user.id))
 
+    def _add(cond, param=None):
+        conditions.append(cond)
+        conditions_no_seen.append(cond)
+        if param is not None:
+            params.append(param)
+            params_no_seen.append(param)
+
+    if year:
+        _add("""
+            EXISTS (
+                SELECT 1 FROM exercise_source_segments ess
+                JOIN source_segments sg ON sg.id = ess.source_segment_id
+                JOIN sources s ON s.id = sg.source_id
+                WHERE ess.exercise_id = e.id AND s.year = %s
+            )
+        """, year)
+
     if subiect_tag:
-        conditions.append("""
+        _add("""
             EXISTS (
                 SELECT 1 FROM exercise_tags et2
                 JOIN tags t2 ON et2.tag_id = t2.id
@@ -879,11 +918,10 @@ def read_exercises(
                   AND t2.namespace = 'subiect'
                   AND t2.key = %s
             )
-        """)
-        params.append(subiect_tag)
+        """, subiect_tag)
 
     if topic_tag:
-        conditions.append("""
+        _add("""
             EXISTS (
                 SELECT 1 FROM exercise_tags et3
                 JOIN tags t3 ON et3.tag_id = t3.id
@@ -891,30 +929,224 @@ def read_exercises(
                   AND t3.namespace = 'topic'
                   AND t3.key = %s
             )
-        """)
-        params.append(topic_tag)
+        """, topic_tag)
+
+    if method_tag:
+        _add("""
+            EXISTS (
+                SELECT 1 FROM exercise_tags et4
+                JOIN tags t4 ON et4.tag_id = t4.id
+                WHERE et4.exercise_id = e.id
+                  AND t4.namespace = 'method'
+                  AND t4.key = %s
+            )
+        """, method_tag)
 
     where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
     if limit:
-        order_clause = f"ORDER BY RANDOM() LIMIT {int(limit)}"
+        query = f"""
+        SELECT * FROM (
+            SELECT DISTINCT e.id, e.exam_type, e.profile, e.subject_part, e.item_type,
+                   e.statement_latex, e.statement_text,
+                   e.answer_latex, e.solution_latex, e.scoring_guide_latex, e.scoring_guide_text,
+                   e.difficulty, e.estimated_time_sec, e.points, e.metadata, e.status,
+                   e.created_by_user_id, e.created_at, e.updated_at
+            FROM exercises e{where_clause}
+        ) sub
+        ORDER BY RANDOM() LIMIT {int(limit)};
+        """
     else:
-        order_clause = "ORDER BY e.created_at DESC"
-
-    query = f"""
-    SELECT DISTINCT e.id, e.exam_type, e.profile, e.subject_part, e.item_type,
-           e.statement_latex, e.statement_text,
-           e.answer_latex, e.solution_latex, e.scoring_guide_latex, e.scoring_guide_text,
-           e.difficulty, e.estimated_time_sec, e.points, e.metadata, e.status,
-           e.created_by_user_id, e.created_at, e.updated_at
-    FROM exercises e{where_clause}
-    {order_clause};
-    """
+        query = f"""
+        SELECT DISTINCT e.id, e.exam_type, e.profile, e.subject_part, e.item_type,
+               e.statement_latex, e.statement_text,
+               e.answer_latex, e.solution_latex, e.scoring_guide_latex, e.scoring_guide_text,
+               e.difficulty, e.estimated_time_sec, e.points, e.metadata, e.status,
+               e.created_by_user_id, e.created_at, e.updated_at
+        FROM exercises e{where_clause}
+        ORDER BY e.created_at DESC;
+        """
 
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(query, tuple(params))
         exercises = cur.fetchall()
+
+        # Dacă exclude_seen a filtrat tot, returnează fără restricția de seen
+        if len(exercises) == 0 and exclude_seen and current_user:
+            fallback_where = " WHERE " + " AND ".join(conditions_no_seen) if conditions_no_seen else ""
+            if limit:
+                fallback_query = f"""
+                SELECT * FROM (
+                    SELECT DISTINCT e.id, e.exam_type, e.profile, e.subject_part, e.item_type,
+                           e.statement_latex, e.statement_text,
+                           e.answer_latex, e.solution_latex, e.scoring_guide_latex, e.scoring_guide_text,
+                           e.difficulty, e.estimated_time_sec, e.points, e.metadata, e.status,
+                           e.created_by_user_id, e.created_at, e.updated_at
+                    FROM exercises e{fallback_where}
+                ) sub
+                ORDER BY RANDOM() LIMIT {int(limit)};
+                """
+            else:
+                fallback_query = f"""
+                SELECT * FROM (
+                    SELECT DISTINCT e.id, e.exam_type, e.profile, e.subject_part, e.item_type,
+                           e.statement_latex, e.statement_text,
+                           e.answer_latex, e.solution_latex, e.scoring_guide_latex, e.scoring_guide_text,
+                           e.difficulty, e.estimated_time_sec, e.points, e.metadata, e.status,
+                           e.created_by_user_id, e.created_at, e.updated_at
+                    FROM exercises e{fallback_where}
+                ) sub
+                ORDER BY RANDOM();
+                """
+            cur.execute(fallback_query, tuple(params_no_seen))
+            exercises = cur.fetchall()
+
         return exercises
+
+@app.get("/exercises/filter-options")
+def get_exercise_filter_options(
+    subiect_tag: Optional[str] = None,
+    profile: Optional[str] = None,
+    year: Optional[int] = None,
+    topic_tag: Optional[str] = None,
+    conn: Connection = Depends(get_db_conn),
+):
+    """Returnează valorile disponibile pentru filtrele de exerciții, filtrate contextual."""
+
+    # Build base exercise subquery based on current selections
+    conditions = ["(e.status != 'ARCHIVED' OR e.status IS NULL)"]
+    params: list = []
+
+    if subiect_tag:
+        conditions.append("""
+            EXISTS (
+                SELECT 1 FROM exercise_tags et2
+                JOIN tags t2 ON et2.tag_id = t2.id
+                WHERE et2.exercise_id = e.id AND t2.namespace = 'subiect' AND t2.key = %s
+            )
+        """)
+        params.append(subiect_tag)
+
+    if profile:
+        conditions.append("e.profile = %s")
+        params.append(profile)
+
+    if year:
+        conditions.append("""
+            EXISTS (
+                SELECT 1 FROM exercise_source_segments ess
+                JOIN source_segments sg ON sg.id = ess.source_segment_id
+                JOIN sources s ON s.id = sg.source_id
+                WHERE ess.exercise_id = e.id AND s.year = %s
+            )
+        """)
+        params.append(year)
+
+    if topic_tag:
+        conditions.append("""
+            EXISTS (
+                SELECT 1 FROM exercise_tags et3
+                JOIN tags t3 ON et3.tag_id = t3.id
+                WHERE et3.exercise_id = e.id AND t3.namespace = 'topic' AND t3.key = %s
+            )
+        """)
+        params.append(topic_tag)
+
+    where = "WHERE " + " AND ".join(conditions)
+    base_ids = f"SELECT e.id FROM exercises e {where}"
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        # Profiles and years are always static (top-level filters)
+        cur.execute("SELECT DISTINCT profile FROM exercises WHERE profile IS NOT NULL ORDER BY profile")
+        profiles = [r['profile'] for r in cur.fetchall()]
+
+        cur.execute("""
+            SELECT DISTINCT s.year FROM sources s
+            JOIN source_segments sg ON sg.source_id = s.id
+            JOIN exercise_source_segments ess ON ess.source_segment_id = sg.id
+            WHERE s.year IS NOT NULL ORDER BY s.year DESC
+        """)
+        years = [r['year'] for r in cur.fetchall()]
+
+        # Topics filtered by current context
+        cur.execute(f"""
+            SELECT t.key, t.label, COUNT(DISTINCT et.exercise_id) as cnt
+            FROM tags t
+            JOIN exercise_tags et ON et.tag_id = t.id
+            WHERE t.namespace = 'topic'
+              AND et.exercise_id IN ({base_ids})
+            GROUP BY t.key, t.label
+            ORDER BY cnt DESC
+        """, tuple(params))
+        topics = [{'key': r['key'], 'label': r['label'], 'count': r['cnt']} for r in cur.fetchall()]
+
+        # Methods filtered by current context
+        cur.execute(f"""
+            SELECT t.key, t.label, COUNT(DISTINCT et.exercise_id) as cnt
+            FROM tags t
+            JOIN exercise_tags et ON et.tag_id = t.id
+            WHERE t.namespace = 'method'
+              AND et.exercise_id IN ({base_ids})
+            GROUP BY t.key, t.label
+            ORDER BY cnt DESC
+            LIMIT 30
+        """, tuple(params))
+        methods = [{'key': r['key'], 'label': r['label'], 'count': r['cnt']} for r in cur.fetchall()]
+
+    return {"profiles": profiles, "years": years, "topics": topics, "methods": methods}
+
+
+@app.get("/exercises/batch-children")
+def get_exercises_batch_children(ids: str, conn: Connection = Depends(get_db_conn)):
+    """
+    Returnează copiii pentru mai mulți părinți dintr-o singură cerere.
+    ids = comma-separated UUIDs ale exercițiilor container.
+    Răspuns: { parent_id: [children] }
+    """
+    id_list = [i.strip() for i in ids.split(",") if i.strip()]
+    if not id_list:
+        return {}
+    try:
+        parsed_ids = [str(uuid.UUID(i)) for i in id_list]
+    except ValueError:
+        raise HTTPException(status_code=400, detail="IDs invalide")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        placeholders = ",".join(["%s"] * len(parsed_ids))
+        cur.execute(
+            f"SELECT id, metadata::jsonb->>'external_id' as ext_id FROM exercises WHERE id IN ({placeholders})",
+            tuple(parsed_ids)
+        )
+        parents = cur.fetchall()
+        ext_to_parent_id = {p['ext_id']: str(p['id']) for p in parents if p['ext_id']}
+
+        if not ext_to_parent_id:
+            return {pid: [] for pid in parsed_ids}
+
+        ext_ids = list(ext_to_parent_id.keys())
+        ext_placeholders = ",".join(["%s"] * len(ext_ids))
+        cur.execute(
+            f"""SELECT id, exam_type, profile, subject_part, item_type,
+                       statement_latex, statement_text, answer_latex, solution_latex,
+                       scoring_guide_latex, scoring_guide_text,
+                       difficulty, estimated_time_sec, points, metadata, status,
+                       created_at, updated_at
+                FROM exercises
+                WHERE metadata::jsonb->>'parent_external_id' IN ({ext_placeholders})
+                ORDER BY metadata::jsonb->>'subpoint' ASC""",
+            tuple(ext_ids)
+        )
+        all_children = cur.fetchall()
+
+    result: dict = {pid: [] for pid in parsed_ids}
+    for child in all_children:
+        parent_ext = child['metadata'].get('parent_external_id') if child['metadata'] else None
+        if parent_ext and parent_ext in ext_to_parent_id:
+            parent_id = ext_to_parent_id[parent_ext]
+            result[parent_id].append(child)
+
+    return result
+
 
 @app.get("/exercises/{exercise_id}", response_model=ExerciseDB)
 def read_exercise(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
@@ -1419,57 +1651,6 @@ def get_exercise_children(exercise_id: uuid.UUID, conn: Connection = Depends(get
         """, (parent_ext_id,))
         children = cur.fetchall()
         return children
-
-@app.get("/exercises/batch-children")
-def get_exercises_batch_children(ids: str, conn: Connection = Depends(get_db_conn)):
-    """
-    Returnează copiii pentru mai mulți părinți dintr-o singură cerere.
-    ids = comma-separated UUIDs ale exercițiilor container.
-    Răspuns: { parent_id: [children] }
-    """
-    id_list = [i.strip() for i in ids.split(",") if i.strip()]
-    if not id_list:
-        return {}
-    try:
-        parsed_ids = [str(uuid.UUID(i)) for i in id_list]
-    except ValueError:
-        raise HTTPException(status_code=400, detail="IDs invalide")
-
-    with conn.cursor(row_factory=dict_row) as cur:
-        placeholders = ",".join(["%s"] * len(parsed_ids))
-        cur.execute(
-            f"SELECT id, metadata::jsonb->>'external_id' as ext_id FROM exercises WHERE id IN ({placeholders})",
-            tuple(parsed_ids)
-        )
-        parents = cur.fetchall()
-        ext_to_parent_id = {p['ext_id']: str(p['id']) for p in parents if p['ext_id']}
-
-        if not ext_to_parent_id:
-            return {pid: [] for pid in parsed_ids}
-
-        ext_ids = list(ext_to_parent_id.keys())
-        ext_placeholders = ",".join(["%s"] * len(ext_ids))
-        cur.execute(
-            f"""SELECT id, exam_type, profile, subject_part, item_type,
-                       statement_latex, statement_text, answer_latex, solution_latex,
-                       scoring_guide_latex, scoring_guide_text,
-                       difficulty, estimated_time_sec, points, metadata, status,
-                       created_at, updated_at
-                FROM exercises
-                WHERE metadata::jsonb->>'parent_external_id' IN ({ext_placeholders})
-                ORDER BY metadata::jsonb->>'subpoint' ASC""",
-            tuple(ext_ids)
-        )
-        all_children = cur.fetchall()
-
-    result: dict = {pid: [] for pid in parsed_ids}
-    for child in all_children:
-        parent_ext = child['metadata'].get('parent_external_id') if child['metadata'] else None
-        if parent_ext and parent_ext in ext_to_parent_id:
-            parent_id = ext_to_parent_id[parent_ext]
-            result[parent_id].append(child)
-
-    return result
 
 
 @app.get("/exercises/by-path/{path:path}")
@@ -2495,15 +2676,37 @@ def delete_exercise_set(
     current_user: UserDB = Depends(get_current_user),
     conn: Connection = Depends(get_db_conn),
 ):
-    """Șterge un set salvat al utilizatorului curent."""
+    """Șterge un set salvat al utilizatorului curent și elimină exercițiile din seen."""
     with conn.cursor() as cur:
+        # Obține exercițiile din set înainte de ștergere
+        cur.execute(
+            "SELECT exercise_id FROM user_exercise_set_items WHERE set_id = %s",
+            (str(set_id),),
+        )
+        exercise_ids = [str(r[0]) for r in cur.fetchall()]
+
         cur.execute(
             "DELETE FROM user_exercise_sets WHERE id = %s AND user_id = %s RETURNING id",
             (str(set_id), str(current_user.id)),
         )
         deleted = cur.fetchone()
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Set negăsit sau nu îți aparține")
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Set negăsit sau nu îți aparține")
+
+        # Elimină exercițiile din seen doar dacă nu mai apar în alte seturi ale userului
+        if exercise_ids:
+            placeholders = ",".join(["%s"] * len(exercise_ids))
+            cur.execute(f"""
+                DELETE FROM user_seen_exercises
+                WHERE user_id = %s
+                  AND exercise_id IN ({placeholders})
+                  AND exercise_id NOT IN (
+                      SELECT si.exercise_id FROM user_exercise_set_items si
+                      JOIN user_exercise_sets s ON s.id = si.set_id
+                      WHERE s.user_id = %s AND s.id != %s
+                  )
+            """, (str(current_user.id), *exercise_ids, str(current_user.id), str(set_id)))
+
     conn.commit()
     return {"deleted": True}
 
@@ -2891,3 +3094,1048 @@ def get_help_response(
     if not row:
         raise HTTPException(status_code=404, detail="Niciun răspuns încă")
     return HelpResponseDB(**row)
+
+
+# =============================================================================
+# --- Exercise Completion ---
+# =============================================================================
+
+@app.post("/exercises/{exercise_id}/complete", tags=["Student"])
+def mark_exercise_complete(
+    exercise_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Elevul marchează un exercițiu ca rezolvat (toggle)."""
+    if current_user.role not in (UserRole.STUDENT, UserRole.SCHOOL_TEACHER):
+        raise HTTPException(status_code=403, detail="Doar elevii pot marca exerciții")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT id, completed FROM student_progress WHERE student_id=%s AND exercise_id=%s",
+            (str(current_user.id), exercise_id),
+        )
+        row = cur.fetchone()
+        if row:
+            new_val = not row["completed"]
+            cur.execute(
+                "UPDATE student_progress SET completed=%s, completed_at=%s WHERE id=%s",
+                (new_val, datetime.now() if new_val else None, str(row["id"])),
+            )
+        else:
+            new_val = True
+            cur.execute(
+                """INSERT INTO student_progress (student_id, exercise_id, completed, completed_at)
+                   VALUES (%s, %s, TRUE, NOW())
+                   ON CONFLICT (student_id, exercise_id) DO UPDATE
+                   SET completed=TRUE, completed_at=NOW()""",
+                (str(current_user.id), exercise_id),
+            )
+
+        # Acordă XP dacă marchează ca rezolvat (nu la unmark)
+        xp_gained = 0
+        new_badges = []
+        if new_val:
+            # XP bazat pe dificultate exercițiu
+            cur.execute("SELECT difficulty, metadata FROM exercises WHERE id=%s", (exercise_id,))
+            ex_row = cur.fetchone()
+            difficulty = (ex_row["difficulty"] or 5) if ex_row else 5
+            xp_gained = max(10, difficulty * 15)
+
+            # Streak bonus +20% dacă streak >= 3
+            cur.execute(
+                "SELECT streak_current, last_active_date FROM student_gamification WHERE user_id=%s",
+                (str(current_user.id),),
+            )
+            gam = cur.fetchone()
+            today = datetime.now().date()
+
+            if gam:
+                last_date = gam["last_active_date"]
+                streak = gam["streak_current"]
+                if last_date == today:
+                    pass  # deja activ azi, streak rămâne
+                elif last_date and (today - last_date).days == 1:
+                    streak += 1  # zi consecutivă
+                else:
+                    streak = 1  # restart streak
+                if streak >= 3:
+                    xp_gained = int(xp_gained * 1.2)
+                cur.execute(
+                    """UPDATE student_gamification
+                       SET xp_total = xp_total + %s,
+                           streak_current = %s,
+                           streak_max = GREATEST(streak_max, %s),
+                           last_active_date = %s,
+                           updated_at = NOW()
+                       WHERE user_id = %s""",
+                    (xp_gained, streak, streak, today, str(current_user.id)),
+                )
+                new_xp_total = gam["xp_total"] + xp_gained if "xp_total" in gam else xp_gained
+            else:
+                streak = 1
+                cur.execute(
+                    """INSERT INTO student_gamification (user_id, xp_total, streak_current, streak_max, last_active_date)
+                       VALUES (%s, %s, 1, 1, %s)""",
+                    (str(current_user.id), xp_gained, today),
+                )
+                cur.execute("SELECT xp_total FROM student_gamification WHERE user_id=%s", (str(current_user.id),))
+                new_xp_total = (cur.fetchone() or {}).get("xp_total", xp_gained)
+
+            # Log XP
+            cur.execute(
+                "INSERT INTO xp_log (user_id, xp_gained, reason, reference_id) VALUES (%s, %s, %s, %s)",
+                (str(current_user.id), xp_gained, "exercise_completed", exercise_id),
+            )
+
+            # Verifică insigne noi
+            cur.execute("SELECT badge_key FROM student_badges WHERE user_id=%s", (str(current_user.id),))
+            existing_badges = {r["badge_key"] for r in cur.fetchall()}
+
+            cur.execute("SELECT COUNT(*) as cnt FROM student_progress WHERE student_id=%s AND completed=TRUE", (str(current_user.id),))
+            total_completed = cur.fetchone()["cnt"]
+
+            cur.execute(
+                """SELECT e.metadata->>'subiect' as subiect FROM student_progress sp
+                   JOIN exercises e ON e.id=sp.exercise_id
+                   WHERE sp.student_id=%s AND sp.completed=TRUE AND e.metadata IS NOT NULL""",
+                (str(current_user.id),),
+            )
+            completed_subiects = {r["subiect"] for r in cur.fetchall() if r["subiect"]}
+
+            cur.execute("SELECT xp_total FROM student_gamification WHERE user_id=%s", (str(current_user.id),))
+            xp_row = cur.fetchone()
+            current_xp = xp_row["xp_total"] if xp_row else xp_gained
+
+            to_check = [
+                ("first_exercise",  total_completed >= 1),
+                ("exercises_10",    total_completed >= 10),
+                ("exercises_50",    total_completed >= 50),
+                ("exercises_100",   total_completed >= 100),
+                ("first_s1",        "1" in completed_subiects),
+                ("first_s2",        "2" in completed_subiects),
+                ("first_s3",        "3" in completed_subiects),
+                ("streak_3",        streak >= 3),
+                ("streak_7",        streak >= 7),
+                ("streak_14",       streak >= 14),
+                ("streak_30",       streak >= 30),
+                ("xp_500",          current_xp >= 500),
+                ("xp_1000",         current_xp >= 1000),
+                ("xp_3000",         current_xp >= 3000),
+            ]
+            for badge_key, condition in to_check:
+                if condition and badge_key not in existing_badges:
+                    cur.execute(
+                        "INSERT INTO student_badges (user_id, badge_key) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                        (str(current_user.id), badge_key),
+                    )
+                    new_badges.append(badge_key)
+
+        conn.commit()
+    return {"exercise_id": exercise_id, "completed": new_val, "xp_gained": xp_gained, "new_badges": new_badges}
+
+
+@app.get("/exercises/{exercise_id}/complete", tags=["Student"])
+def get_exercise_complete_status(
+    exercise_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT completed FROM student_progress WHERE student_id=%s AND exercise_id=%s",
+            (str(current_user.id), exercise_id),
+        )
+        row = cur.fetchone()
+    return {"exercise_id": exercise_id, "completed": row["completed"] if row else False}
+
+
+@app.get("/student/completed-exercise-ids", tags=["Student"])
+def get_completed_exercise_ids(
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Returnează lista de id-uri de exerciții marcate rezolvate de utilizatorul curent."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT exercise_id FROM student_progress WHERE student_id=%s AND completed=TRUE",
+            (str(current_user.id),),
+        )
+        rows = cur.fetchall()
+    return [str(r[0]) for r in rows]
+
+
+# =============================================================================
+# --- Parent-Student Endpoints ---
+# =============================================================================
+
+@app.post("/parent/link-student", response_model=ParentStudentDB, tags=["Parent"])
+def link_parent_to_student(
+    body: ParentLinkRequest,
+    background_tasks: BackgroundTasks,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """
+    Elevul adaugă un părinte după email.
+    Dacă emailul nu există → creăm cont parent + trimitem email cu parolă temporară.
+    Dacă există deja → legăm direct.
+    """
+    if current_user.role not in (UserRole.STUDENT, UserRole.SCHOOL_TEACHER):
+        raise HTTPException(status_code=403, detail="Doar elevii pot adăuga un părinte")
+
+    import secrets, string
+    parent_email = body.parent_email.strip().lower()
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        # Verificăm dacă există deja legătura
+        cur.execute(
+            """SELECT ps.id, ps.parent_id, ps.student_id, ps.linked_at,
+                      p.email as parent_email, p.full_name as parent_name,
+                      s.full_name as student_name
+               FROM parent_student ps
+               JOIN users p ON p.id = ps.parent_id
+               JOIN users s ON s.id = ps.student_id
+               WHERE ps.student_id=%s AND p.email=%s""",
+            (str(current_user.id), parent_email),
+        )
+        existing = cur.fetchone()
+        if existing:
+            return ParentStudentDB(**existing)
+
+        # Căutăm contul de parent
+        cur.execute("SELECT id, full_name, email FROM users WHERE email=%s", (parent_email,))
+        parent_user = cur.fetchone()
+        created_new = False
+
+        if not parent_user:
+            # Creăm cont nou
+            alphabet = string.ascii_letters + string.digits
+            temp_password = ''.join(secrets.choice(alphabet) for _ in range(10))
+            parent_name = body.parent_name or parent_email.split("@")[0]
+            from auth import hash_password as hp
+            cur.execute(
+                """INSERT INTO users (email, password_hash, full_name, role)
+                   VALUES (%s, %s, %s, 'parent') RETURNING id, full_name, email""",
+                (parent_email, hp(temp_password), parent_name),
+            )
+            parent_user = cur.fetchone()
+            created_new = True
+        elif parent_user.get("role") not in (None, "parent"):
+            raise HTTPException(status_code=400, detail="Emailul aparține unui alt tip de cont")
+
+        # Creăm legătura
+        cur.execute(
+            """INSERT INTO parent_student (parent_id, student_id)
+               VALUES (%s, %s) RETURNING id, linked_at""",
+            (str(parent_user["id"]), str(current_user.id)),
+        )
+        link_row = cur.fetchone()
+        conn.commit()
+
+        result = ParentStudentDB(
+            id=link_row["id"],
+            parent_id=parent_user["id"],
+            student_id=current_user.id,
+            parent_email=parent_email,
+            parent_name=parent_user["full_name"],
+            student_name=current_user.full_name,
+            linked_at=link_row["linked_at"],
+        )
+
+    if created_new:
+        background_tasks.add_task(
+            send_parent_invite, parent_email, parent_user["full_name"],
+            current_user.full_name, temp_password,
+        )
+    else:
+        background_tasks.add_task(
+            send_parent_linked, parent_email, parent_user["full_name"],
+            current_user.full_name,
+        )
+
+    return result
+
+
+@app.get("/student/my-parents", response_model=list[ParentStudentDB], tags=["Parent"])
+def get_my_parents(
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Elevul vede părinții legați la contul său."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """SELECT ps.id, ps.parent_id, ps.student_id, ps.linked_at,
+                      p.email as parent_email, p.full_name as parent_name,
+                      s.full_name as student_name
+               FROM parent_student ps
+               JOIN users p ON p.id = ps.parent_id
+               JOIN users s ON s.id = ps.student_id
+               WHERE ps.student_id=%s ORDER BY ps.linked_at DESC""",
+            (str(current_user.id),),
+        )
+        rows = cur.fetchall()
+    return [ParentStudentDB(**r) for r in rows]
+
+
+@app.delete("/student/my-parents/{parent_id}", tags=["Parent"])
+def remove_parent_link(
+    parent_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM parent_student WHERE student_id=%s AND parent_id=%s",
+            (str(current_user.id), parent_id),
+        )
+        conn.commit()
+    return {"ok": True}
+
+
+@app.get("/parent/students", response_model=list[ParentStudentDB], tags=["Parent"])
+def get_my_students(
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Părintele vede elevii legați la contul său."""
+    if current_user.role != UserRole.PARENT:
+        raise HTTPException(status_code=403, detail="Doar părinții pot accesa această resursă")
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """SELECT ps.id, ps.parent_id, ps.student_id, ps.linked_at,
+                      p.email as parent_email, p.full_name as parent_name,
+                      s.full_name as student_name
+               FROM parent_student ps
+               JOIN users p ON p.id = ps.parent_id
+               JOIN users s ON s.id = ps.student_id
+               WHERE ps.parent_id=%s ORDER BY ps.linked_at DESC""",
+            (str(current_user.id),),
+        )
+        rows = cur.fetchall()
+    return [ParentStudentDB(**r) for r in rows]
+
+
+@app.get("/parent/students/{student_id}/stats", response_model=ParentStudentStats, tags=["Parent"])
+def get_student_stats(
+    student_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Dashboard date pentru un elev — accesibil de părinte sau admin."""
+    if current_user.role == UserRole.PARENT:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM parent_student WHERE parent_id=%s AND student_id=%s",
+                (str(current_user.id), student_id),
+            )
+            if not cur.fetchone():
+                raise HTTPException(status_code=403, detail="Nu ești legat de acest elev")
+    elif current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Acces interzis")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        # Info elev
+        cur.execute("SELECT full_name, email FROM users WHERE id=%s", (student_id,))
+        student = cur.fetchone()
+        if not student:
+            raise HTTPException(status_code=404, detail="Elevul nu există")
+
+        # Totale
+        cur.execute(
+            "SELECT COUNT(*) as cnt FROM student_progress WHERE student_id=%s",
+            (student_id,),
+        )
+        total_seen = cur.fetchone()["cnt"]
+
+        cur.execute(
+            "SELECT COUNT(*) as cnt FROM student_progress WHERE student_id=%s AND completed=TRUE",
+            (student_id,),
+        )
+        total_completed = cur.fetchone()["cnt"]
+
+        cur.execute(
+            "SELECT COUNT(*) as cnt FROM variants WHERE created_by_user_id=%s",
+            (student_id,),
+        )
+        total_variants = cur.fetchone()["cnt"]
+
+        cur.execute(
+            "SELECT COUNT(*) as cnt FROM help_requests WHERE student_id=%s",
+            (student_id,),
+        )
+        total_flags = cur.fetchone()["cnt"]
+
+        cur.execute(
+            "SELECT MAX(last_seen_at) as last_active FROM student_progress WHERE student_id=%s",
+            (student_id,),
+        )
+        last_active_row = cur.fetchone()
+        last_active = last_active_row["last_active"].isoformat() if last_active_row and last_active_row["last_active"] else None
+
+        # Activitate pe zile (ultimele 30 zile)
+        cur.execute(
+            """
+            SELECT
+                DATE(last_seen_at) as day,
+                COUNT(*) as exercises_seen,
+                SUM(CASE WHEN completed THEN 1 ELSE 0 END) as exercises_completed
+            FROM student_progress
+            WHERE student_id=%s AND last_seen_at >= NOW() - INTERVAL '30 days'
+            GROUP BY DATE(last_seen_at)
+            ORDER BY day
+            """,
+            (student_id,),
+        )
+        seen_by_day = {str(r["day"]): r for r in cur.fetchall()}
+
+        cur.execute(
+            """
+            SELECT DATE(created_at) as day, COUNT(*) as cnt
+            FROM variants WHERE created_by_user_id=%s AND created_at >= NOW() - INTERVAL '30 days'
+            GROUP BY DATE(created_at)
+            """,
+            (student_id,),
+        )
+        variants_by_day = {str(r["day"]): r["cnt"] for r in cur.fetchall()}
+
+        cur.execute(
+            """
+            SELECT DATE(created_at) as day, COUNT(*) as cnt
+            FROM help_requests WHERE student_id=%s AND created_at >= NOW() - INTERVAL '30 days'
+            GROUP BY DATE(created_at)
+            """,
+            (student_id,),
+        )
+        flags_by_day = {str(r["day"]): r["cnt"] for r in cur.fetchall()}
+
+        # Completări pe subiect (din metadata exercițiu)
+        cur.execute(
+            """
+            SELECT e.metadata->>'subiect' as subiect, COUNT(*) as cnt
+            FROM student_progress sp
+            JOIN exercises e ON e.id = sp.exercise_id
+            WHERE sp.student_id=%s AND sp.completed=TRUE AND e.metadata IS NOT NULL
+            GROUP BY e.metadata->>'subiect'
+            """,
+            (student_id,),
+        )
+        completion_by_subiect = {str(r["subiect"]): r["cnt"] for r in cur.fetchall() if r["subiect"]}
+
+    # Construim lista de zile
+    from datetime import date, timedelta
+    all_days = []
+    today = date.today()
+    for i in range(29, -1, -1):
+        d = str(today - timedelta(days=i))
+        sd = seen_by_day.get(d, {})
+        all_days.append(StudentActivityDay(
+            date=d,
+            exercises_seen=sd.get("exercises_seen", 0),
+            exercises_completed=sd.get("exercises_completed", 0),
+            variants_generated=variants_by_day.get(d, 0),
+            flags_sent=flags_by_day.get(d, 0),
+        ))
+
+    return ParentStudentStats(
+        student_id=student_id,
+        student_name=student["full_name"],
+        student_email=student["email"],
+        total_exercises_seen=total_seen,
+        total_exercises_completed=total_completed,
+        total_variants_generated=total_variants,
+        total_flags_sent=total_flags,
+        last_active_at=last_active,
+        activity_last_30_days=all_days,
+        completion_by_subiect=completion_by_subiect,
+    )
+
+
+# Admin: leagă manual un parinte de un elev
+@app.post("/admin/parent-student", response_model=ParentStudentDB, tags=["Admin"])
+def admin_link_parent_student(
+    body: dict,
+    background_tasks: BackgroundTasks,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Admin leagă manual un cont de parent de un cont de student."""
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Doar admin")
+
+    parent_id = body.get("parent_id")
+    student_id = body.get("student_id")
+    if not parent_id or not student_id:
+        raise HTTPException(status_code=400, detail="parent_id și student_id sunt obligatorii")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT id, full_name, email, role FROM users WHERE id=%s", (parent_id,))
+        parent = cur.fetchone()
+        cur.execute("SELECT id, full_name, email FROM users WHERE id=%s", (student_id,))
+        student = cur.fetchone()
+        if not parent or not student:
+            raise HTTPException(status_code=404, detail="Utilizator inexistent")
+
+        cur.execute(
+            """INSERT INTO parent_student (parent_id, student_id)
+               VALUES (%s, %s)
+               ON CONFLICT (parent_id, student_id) DO NOTHING
+               RETURNING id, linked_at""",
+            (parent_id, student_id),
+        )
+        row = cur.fetchone()
+        conn.commit()
+
+    if row:
+        background_tasks.add_task(
+            send_parent_linked, parent["email"], parent["full_name"], student["full_name"],
+        )
+        return ParentStudentDB(
+            id=row["id"],
+            parent_id=parent_id,
+            student_id=student_id,
+            parent_email=parent["email"],
+            parent_name=parent["full_name"],
+            student_name=student["full_name"],
+            linked_at=row["linked_at"],
+        )
+    raise HTTPException(status_code=409, detail="Legătura există deja")
+
+
+@app.get("/admin/parent-students", tags=["Admin"])
+def admin_get_parent_students(
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Doar admin")
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """SELECT ps.id, ps.parent_id, ps.student_id, ps.linked_at,
+                      p.email as parent_email, p.full_name as parent_name,
+                      s.full_name as student_name, s.email as student_email
+               FROM parent_student ps
+               JOIN users p ON p.id = ps.parent_id
+               JOIN users s ON s.id = ps.student_id
+               ORDER BY ps.linked_at DESC"""
+        )
+        return cur.fetchall()
+
+
+@app.delete("/admin/parent-student/{link_id}", tags=["Admin"])
+def admin_remove_parent_student(
+    link_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Doar admin")
+    with conn.cursor() as cur:
+        cur.execute("DELETE FROM parent_student WHERE id=%s", (link_id,))
+        conn.commit()
+    return {"ok": True}
+
+
+# =============================================================================
+# --- Gamification Endpoints ---
+# =============================================================================
+
+@app.get("/student/gamification", response_model=GamificationProfile, tags=["Student"])
+def get_my_gamification(
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Returnează profilul de gamification al utilizatorului curent."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT xp_total, streak_current, streak_max, last_active_date FROM student_gamification WHERE user_id=%s",
+            (str(current_user.id),),
+        )
+        gam = cur.fetchone()
+        if not gam:
+            gam = {"xp_total": 0, "streak_current": 0, "streak_max": 0, "last_active_date": None}
+
+        cur.execute(
+            "SELECT badge_key, earned_at FROM student_badges WHERE user_id=%s ORDER BY earned_at DESC",
+            (str(current_user.id),),
+        )
+        badge_rows = cur.fetchall()
+
+    badges = []
+    for row in badge_rows:
+        meta = BADGES.get(row["badge_key"], {})
+        badges.append({
+            "key": row["badge_key"],
+            "label": meta.get("label", row["badge_key"]),
+            "icon": meta.get("icon", "🏅"),
+            "desc": meta.get("desc", ""),
+            "earned_at": row["earned_at"].isoformat() if row["earned_at"] else None,
+        })
+
+    return GamificationProfile(
+        xp_total=gam["xp_total"],
+        streak_current=gam["streak_current"],
+        streak_max=gam["streak_max"],
+        last_active_date=str(gam["last_active_date"]) if gam["last_active_date"] else None,
+        level=get_level(gam["xp_total"]),
+        badges=badges,
+    )
+
+
+@app.get("/student/gamification/{student_id}", response_model=GamificationProfile, tags=["Student"])
+def get_student_gamification(
+    student_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Returnează profilul de gamification al unui elev — pentru părinte sau admin."""
+    if current_user.role == UserRole.PARENT:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT 1 FROM parent_student WHERE parent_id=%s AND student_id=%s",
+                (str(current_user.id), student_id),
+            )
+            if not cur.fetchone():
+                raise HTTPException(status_code=403, detail="Acces interzis")
+    elif current_user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Acces interzis")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT xp_total, streak_current, streak_max, last_active_date FROM student_gamification WHERE user_id=%s",
+            (student_id,),
+        )
+        gam = cur.fetchone()
+        if not gam:
+            gam = {"xp_total": 0, "streak_current": 0, "streak_max": 0, "last_active_date": None}
+
+        cur.execute(
+            "SELECT badge_key, earned_at FROM student_badges WHERE user_id=%s ORDER BY earned_at DESC",
+            (student_id,),
+        )
+        badge_rows = cur.fetchall()
+
+    badges = []
+    for row in badge_rows:
+        meta = BADGES.get(row["badge_key"], {})
+        badges.append({
+            "key": row["badge_key"],
+            "label": meta.get("label", row["badge_key"]),
+            "icon": meta.get("icon", "🏅"),
+            "desc": meta.get("desc", ""),
+            "earned_at": row["earned_at"].isoformat() if row["earned_at"] else None,
+        })
+
+    return GamificationProfile(
+        xp_total=gam["xp_total"],
+        streak_current=gam["streak_current"],
+        streak_max=gam["streak_max"],
+        last_active_date=str(gam["last_active_date"]) if gam["last_active_date"] else None,
+        level=get_level(gam["xp_total"]),
+        badges=badges,
+    )
+
+
+# =============================================================================
+# --- Exercise Submissions (autoevaluare + foto + corecție profesor) ---
+# =============================================================================
+
+def _calc_base_xp(difficulty: float) -> int:
+    """XP de bază recalibrat pe dificultate."""
+    d = difficulty or 5
+    if d <= 2:   return 10
+    if d <= 4:   return 20
+    if d <= 6:   return 35
+    if d <= 8:   return 55
+    return 80
+
+
+def _award_xp(conn, user_id: str, xp: int, reason: str, ref_id: str = None):
+    """Adaugă XP cu cap zilnic de 300. Returnează XP efectiv acordat."""
+    if xp <= 0:
+        return 0
+    today = datetime.now().date()
+    with conn.cursor(row_factory=dict_row) as cur:
+        # XP câștigat azi
+        cur.execute(
+            "SELECT COALESCE(SUM(xp_gained),0) as total FROM xp_log WHERE user_id=%s AND DATE(created_at)=%s",
+            (user_id, today),
+        )
+        xp_today = cur.fetchone()["total"]
+        xp_allowed = min(xp, max(0, 300 - xp_today))
+        if xp_allowed <= 0:
+            return 0
+        # Actualizează gamification
+        cur.execute(
+            """INSERT INTO student_gamification (user_id, xp_total, streak_current, streak_max, last_active_date)
+               VALUES (%s, %s, 1, 1, %s)
+               ON CONFLICT (user_id) DO UPDATE
+               SET xp_total = student_gamification.xp_total + %s,
+                   last_active_date = EXCLUDED.last_active_date,
+                   updated_at = NOW()""",
+            (user_id, xp_allowed, today, xp_allowed),
+        )
+        # Log
+        cur.execute(
+            "INSERT INTO xp_log (user_id, xp_gained, reason, reference_id) VALUES (%s, %s, %s, %s)",
+            (user_id, xp_allowed, reason, ref_id),
+        )
+    return xp_allowed
+
+
+@app.post("/exercises/{exercise_id}/submit", response_model=ExerciseSubmissionDB, tags=["Student"])
+async def submit_exercise(
+    exercise_id: str,
+    body: ExerciseSubmitRequest,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """
+    Pasul 1: Elevul trimite autoevaluarea (failed/partial/complete).
+    Primește 10% din XP-ul de bază imediat.
+    """
+    if current_user.role not in (UserRole.STUDENT, UserRole.SCHOOL_TEACHER):
+        raise HTTPException(status_code=403, detail="Doar elevii pot trimite soluții")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        # XP de bază
+        cur.execute("SELECT difficulty FROM exercises WHERE id=%s", (exercise_id,))
+        ex = cur.fetchone()
+        if not ex:
+            raise HTTPException(status_code=404, detail="Exercițiu inexistent")
+        base_xp = _calc_base_xp(ex["difficulty"] or 5)
+        xp_self = max(1, round(base_xp * 0.10))
+
+        # Upsert submission
+        cur.execute(
+            """INSERT INTO exercise_submissions
+                   (user_id, exercise_id, self_eval, teacher_status, xp_self_eval)
+               VALUES (%s, %s, %s, 'pending', %s)
+               ON CONFLICT (user_id, exercise_id) DO UPDATE
+               SET self_eval = EXCLUDED.self_eval,
+                   teacher_status = CASE
+                       WHEN exercise_submissions.teacher_status IS NULL THEN 'pending'
+                       ELSE exercise_submissions.teacher_status END,
+                   updated_at = NOW()
+               RETURNING *""",
+            (str(current_user.id), exercise_id, body.self_eval, xp_self),
+        )
+        row = cur.fetchone()
+
+        # Acordă XP self_eval doar dacă e prima dată
+        xp_awarded = _award_xp(conn, str(current_user.id), xp_self, "self_eval", exercise_id)
+
+        # Marchează și în student_progress
+        cur.execute(
+            """INSERT INTO student_progress (student_id, exercise_id, completed, completed_at, last_seen_at)
+               VALUES (%s, %s, TRUE, NOW(), NOW())
+               ON CONFLICT (student_id, exercise_id) DO UPDATE
+               SET completed=TRUE, completed_at=NOW(), last_seen_at=NOW()""",
+            (str(current_user.id), exercise_id),
+        )
+        conn.commit()
+
+    return ExerciseSubmissionDB(**row)
+
+
+@app.post("/exercises/{exercise_id}/submit-photo", tags=["Student"])
+async def upload_submission_photo(
+    exercise_id: str,
+    photo: UploadFile = File(...),
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """
+    Pasul 2 (opțional): Elevul încarcă fotografie sau PDF cu soluția.
+    Primește +40% din XP-ul de bază (total 50%).
+    """
+    if current_user.role not in (UserRole.STUDENT, UserRole.SCHOOL_TEACHER):
+        raise HTTPException(status_code=403, detail="Doar elevii pot încărca soluții")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT id, xp_photo FROM exercise_submissions WHERE user_id=%s AND exercise_id=%s",
+            (str(current_user.id), exercise_id),
+        )
+        sub = cur.fetchone()
+        if not sub:
+            raise HTTPException(status_code=400, detail="Trimite mai întâi autoevaluarea")
+
+        # Salvează fișier (imagine sau PDF)
+        original_name = photo.filename or "solution.jpg"
+        ext = os.path.splitext(original_name)[1].lower() or ".jpg"
+        allowed_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"}
+        if ext not in allowed_exts:
+            raise HTTPException(status_code=400, detail="Tipul de fișier nu este acceptat. Folosește imagine sau PDF.")
+        filename = f"submission_{current_user.id}_{exercise_id}{ext}"
+        photo_dir = os.path.join(UPLOAD_DIR, "submissions")
+        os.makedirs(photo_dir, exist_ok=True)
+        photo_path_disk = os.path.join(photo_dir, filename)
+        photo_url = f"/uploads/submissions/{filename}"
+        with open(photo_path_disk, "wb") as f:
+            shutil.copyfileobj(photo.file, f)
+
+        # XP foto — doar dacă nu a mai primit foto XP
+        cur.execute("SELECT difficulty, statement_text FROM exercises WHERE id=%s", (exercise_id,))
+        ex = cur.fetchone()
+        base_xp = _calc_base_xp((ex["difficulty"] or 5) if ex else 5)
+        xp_photo = max(1, round(base_xp * 0.40))
+        extra_xp = xp_photo if sub["xp_photo"] == 0 else 0
+
+        cur.execute(
+            """UPDATE exercise_submissions
+               SET photo_path=%s, photo_uploaded_at=NOW(), xp_photo=%s, teacher_status='pending', updated_at=NOW()
+               WHERE user_id=%s AND exercise_id=%s RETURNING *""",
+            (photo_url, xp_photo, str(current_user.id), exercise_id),
+        )
+        row = cur.fetchone()
+        submission_id = str(row["id"])
+
+        if extra_xp > 0:
+            _award_xp(conn, str(current_user.id), extra_xp, "photo_upload", exercise_id)
+
+        # Notifică toți profesorii / adminii că există o nouă soluție de corectat
+        cur.execute(
+            "SELECT id FROM users WHERE role IN ('teacher', 'admin') AND is_active = TRUE"
+        )
+        teachers = cur.fetchall()
+        ex_short = ((ex["statement_text"] or "")[:60] + "…") if ex and ex.get("statement_text") else "exercițiu"
+        for t in teachers:
+            cur.execute(
+                """INSERT INTO notifications (user_id, type, title, body, related_id)
+                   VALUES (%s, 'new_submission', %s, %s, %s)
+                   ON CONFLICT DO NOTHING""",
+                (
+                    str(t["id"]),
+                    "Soluție nouă de corectat",
+                    f"{current_user.full_name} a trimis o soluție: {ex_short}",
+                    submission_id,
+                ),
+            )
+
+        conn.commit()
+
+    return {"status": "ok", "photo_path": photo_url, "xp_awarded": extra_xp}
+
+
+@app.get("/exercises/{exercise_id}/submission", tags=["Student"])
+def get_my_submission(
+    exercise_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Statusul submisiei curente a elevului pentru un exercițiu."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT * FROM exercise_submissions WHERE user_id=%s AND exercise_id=%s",
+            (str(current_user.id), exercise_id),
+        )
+        row = cur.fetchone()
+    if not row:
+        return None
+    return ExerciseSubmissionDB(**row)
+
+
+@app.get("/student/submissions", tags=["Student"])
+def get_my_submissions(
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Lista tuturor submisiilor elevului curent."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """SELECT es.*, e.statement_text, e.statement_latex
+               FROM exercise_submissions es
+               JOIN exercises e ON e.id = es.exercise_id
+               WHERE es.user_id=%s ORDER BY es.created_at DESC""",
+            (str(current_user.id),),
+        )
+        return cur.fetchall()
+
+
+# =============================================================================
+# --- Teacher: Verificare soluții (doar EtoX teachers + admin) ---
+# =============================================================================
+
+@app.get("/teacher/submissions", tags=["Teacher"])
+def get_pending_submissions(
+    status: Optional[str] = "pending",
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Lista submisiilor care așteaptă corecție — doar profesori EtoX și admin."""
+    if current_user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Acces interzis")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        query = """
+            SELECT es.id, es.user_id, u.full_name as student_name, u.email as student_email,
+                   es.exercise_id, e.statement_text as exercise_statement,
+                   e.statement_latex as exercise_statement_latex, e.difficulty,
+                   es.self_eval, es.photo_path, es.teacher_status, es.teacher_note,
+                   es.teacher_file_path, es.assigned_teacher_id,
+                   es.xp_self_eval, es.xp_photo, es.xp_teacher,
+                   es.created_at, es.reviewed_at,
+                   rv.full_name as reviewer_name,
+                   at.full_name as assigned_teacher_name
+            FROM exercise_submissions es
+            JOIN users u ON u.id = es.user_id
+            JOIN exercises e ON e.id = es.exercise_id
+            LEFT JOIN users rv ON rv.id = es.reviewed_by
+            LEFT JOIN users at ON at.id = es.assigned_teacher_id
+        """
+        params = []
+        if status and status != "all":
+            query += " WHERE es.teacher_status = %s"
+            params.append(status)
+        query += " ORDER BY es.created_at ASC"
+        cur.execute(query, params)
+        return cur.fetchall()
+
+
+@app.post("/teacher/submissions/assign-pending", tags=["Teacher"])
+def assign_pending_submissions(
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Profesorul preia toate submisiile fără profesor atribuit."""
+    if current_user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Acces interzis")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """UPDATE exercise_submissions
+               SET assigned_teacher_id=%s, updated_at=NOW()
+               WHERE teacher_status='pending' AND assigned_teacher_id IS NULL
+               RETURNING id""",
+            (str(current_user.id),),
+        )
+        rows = cur.fetchall()
+        conn.commit()
+
+    return {"assigned": len(rows)}
+
+
+@app.post("/teacher/submissions/{submission_id}/review", tags=["Teacher"])
+def review_submission(
+    submission_id: str,
+    body: TeacherReviewRequest,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Profesorul EtoX marchează submisia ca corectă sau incorectă."""
+    if current_user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Acces interzis")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT * FROM exercise_submissions WHERE id=%s",
+            (submission_id,),
+        )
+        sub = cur.fetchone()
+        if not sub:
+            raise HTTPException(status_code=404, detail="Submisie inexistentă")
+
+        xp_teacher = 0
+        if body.status == TeacherReviewStatus.CORRECT and sub["xp_teacher"] == 0:
+            cur.execute("SELECT difficulty FROM exercises WHERE id=%s", (str(sub["exercise_id"]),))
+            ex = cur.fetchone()
+            base_xp = _calc_base_xp((ex["difficulty"] or 5) if ex else 5)
+            xp_teacher = max(1, round(base_xp * 0.50))
+            _award_xp(conn, str(sub["user_id"]), xp_teacher, "teacher_correct", str(sub["exercise_id"]))
+
+        cur.execute(
+            """UPDATE exercise_submissions
+               SET teacher_status=%s, reviewed_by=%s, reviewed_at=NOW(),
+                   teacher_note=%s, xp_teacher=%s, updated_at=NOW()
+               WHERE id=%s RETURNING *""",
+            (body.status, str(current_user.id), body.note, xp_teacher, submission_id),
+        )
+        row = cur.fetchone()
+
+        # Notifică studentul cu rezultatul corecției
+        is_correct = body.status == TeacherReviewStatus.CORRECT
+        notif_title = "Soluție corectată ✅" if is_correct else "Soluție incorectă ❌"
+        notif_body = f"Profesorul a evaluat soluția ta: {'Corectă' if is_correct else 'Incorectă'}."
+        if body.note:
+            notif_body += f" Notă: {body.note}"
+        if xp_teacher > 0:
+            notif_body += f" +{xp_teacher} XP!"
+        cur.execute(
+            """INSERT INTO notifications (user_id, type, title, body, related_id)
+               VALUES (%s, 'submission_reviewed', %s, %s, %s)""",
+            (str(sub["user_id"]), notif_title, notif_body, submission_id),
+        )
+
+        conn.commit()
+
+    return row
+
+
+@app.post("/teacher/submissions/{submission_id}/upload-file", tags=["Teacher"])
+async def upload_teacher_file(
+    submission_id: str,
+    file: UploadFile = File(...),
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Profesorul încarcă un fișier (PDF/imagine) cu rezolvarea detaliată."""
+    if current_user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Acces interzis")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT id, user_id FROM exercise_submissions WHERE id=%s", (submission_id,))
+        sub = cur.fetchone()
+        if not sub:
+            raise HTTPException(status_code=404, detail="Submisie inexistentă")
+
+        ext = os.path.splitext(file.filename or "solution.pdf")[1].lower() or ".pdf"
+        allowed_exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"}
+        if ext not in allowed_exts:
+            raise HTTPException(status_code=400, detail="Tipul de fișier nu este acceptat.")
+
+        filename = f"teacher_{current_user.id}_{submission_id}{ext}"
+        file_dir = os.path.join(UPLOAD_DIR, "teacher_files")
+        os.makedirs(file_dir, exist_ok=True)
+        file_path_disk = os.path.join(file_dir, filename)
+        file_url = f"/uploads/teacher_files/{filename}"
+        with open(file_path_disk, "wb") as f:
+            shutil.copyfileobj(file.file, f)
+
+        cur.execute(
+            "UPDATE exercise_submissions SET teacher_file_path=%s, updated_at=NOW() WHERE id=%s",
+            (file_url, submission_id),
+        )
+
+        # Notifică studentul că există un fișier nou
+        cur.execute(
+            """INSERT INTO notifications (user_id, type, title, body, related_id)
+               VALUES (%s, 'teacher_file', 'Fișier de la profesor 📎', %s, %s)""",
+            (
+                str(sub["user_id"]),
+                "Profesorul ți-a încărcat un fișier cu rezolvarea detaliată. Verifică-l în platforma EtoX.",
+                submission_id,
+            ),
+        )
+        conn.commit()
+
+    return {"status": "ok", "file_url": file_url}
+
+
+@app.get("/teacher/submissions/stats", tags=["Teacher"])
+def get_submission_stats(
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    if current_user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Acces interzis")
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE teacher_status='pending') as pending,
+                COUNT(*) FILTER (WHERE teacher_status='correct') as correct,
+                COUNT(*) FILTER (WHERE teacher_status='incorrect') as incorrect,
+                COUNT(*) as total
+            FROM exercise_submissions WHERE photo_path IS NOT NULL
+        """)
+        return cur.fetchone()

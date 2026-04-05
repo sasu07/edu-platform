@@ -580,6 +580,27 @@ class JSONImporter:
         if existing:
             print(f"  [source] deja există: {external_id} -> {existing}")
             self.source_uuid_cache[external_id] = existing
+
+            # Dacă importul curent aduce fișiere noi (variantă / barem), suprascrie-le
+            new_varianta = source_data.get('url_file_path')
+            new_barem    = source_data.get('url_barem_path')
+            if new_varianta or new_barem:
+                parts = []
+                vals  = []
+                if new_varianta:
+                    parts.append("url_file_path = %s")
+                    vals.append(new_varianta)
+                if new_barem:
+                    parts.append("url_barem_path = %s")
+                    vals.append(new_barem)
+                vals.append(existing)
+                with self.conn.cursor() as cur:
+                    cur.execute(
+                        f"UPDATE sources SET {', '.join(parts)} WHERE id = %s",
+                        vals,
+                    )
+                print(f"  [source] actualizat fișiere: varianta={new_varianta} barem={new_barem}")
+
             return existing
 
         source_id = uuid.uuid4()

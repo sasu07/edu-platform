@@ -455,6 +455,11 @@
   background: linear-gradient(135deg, #fffbeb 0%, #fef9c3 100%);
 }
 
+.hub-card-parent {
+  border-color: #c4b5fd;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+}
+
 /* top row (title) gets an icon bubble via CSS only */
 .hub-card-title {
   position: relative;

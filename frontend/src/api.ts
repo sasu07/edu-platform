@@ -86,7 +86,7 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
-  role: 'student' | 'teacher' | 'school_teacher' | 'admin';
+  role: 'student' | 'teacher' | 'school_teacher' | 'admin' | 'parent';
   is_active: boolean;
   created_at: string;
 }
@@ -197,15 +197,33 @@ export const getExerciseSet = (id: string) => api.get<ExerciseSetDetail>(`/exerc
 export const deleteExerciseSet = (id: string) => api.delete(`/exercise-sets/${id}`);
 
 export const getSources = () => api.get<Source[]>('/sources/');
+export interface FilterOptions {
+  profiles: string[];
+  years: number[];
+  topics: { key: string; label: string; count: number }[];
+  methods: { key: string; label: string; count: number }[];
+}
+
+export const getExerciseFilterOptions = (params?: {
+  subiect_tag?: string;
+  profile?: string;
+  year?: number;
+  topic_tag?: string;
+}) => api.get<FilterOptions>('/exercises/filter-options', { params });
+
 export const getExercises = (params?: {
   exam_type?: string;
   status?: string;
   subiect_tag?: string;
   topic_tag?: string;
+  method_tag?: string;
   difficulty_min?: number;
   difficulty_max?: number;
   has_solution?: boolean;
+  has_scoring_guide?: boolean;
   subject_part?: string;
+  profile?: string;
+  year?: number;
   only_roots?: boolean;
   exclude_seen?: boolean;
   is_container?: boolean;
@@ -234,5 +252,145 @@ export interface TeacherStats {
 
 export const getTeacherStats = (params?: { teacher_id?: string }) =>
   api.get<TeacherStats>('/teacher/stats', { params });
+
+// --- Exercise completion ---
+export const markExerciseComplete = (exerciseId: string) =>
+  api.post<{ exercise_id: string; completed: boolean; xp_gained: number; new_badges: string[] }>(`/exercises/${exerciseId}/complete`);
+export const getExerciseCompleteStatus = (exerciseId: string) =>
+  api.get<{ exercise_id: string; completed: boolean }>(`/exercises/${exerciseId}/complete`);
+export const getCompletedExerciseIds = () =>
+  api.get<string[]>('/student/completed-exercise-ids');
+
+// --- Gamification ---
+export interface GamificationLevel {
+  name: string;
+  icon: string;
+  xp_total: number;
+  xp_in_level: number;
+  xp_for_next: number;
+  progress_pct: number;
+  is_max: boolean;
+}
+
+export interface GamificationBadge {
+  key: string;
+  label: string;
+  icon: string;
+  desc: string;
+  earned_at: string;
+}
+
+export interface GamificationProfile {
+  xp_total: number;
+  streak_current: number;
+  streak_max: number;
+  last_active_date: string | null;
+  level: GamificationLevel;
+  badges: GamificationBadge[];
+}
+
+export const getMyGamification = () =>
+  api.get<GamificationProfile>('/student/gamification');
+export const getStudentGamification = (studentId: string) =>
+  api.get<GamificationProfile>(`/student/gamification/${studentId}`);
+
+// --- Exercise Submissions ---
+export type SelfEval = 'failed' | 'partial' | 'complete';
+export type TeacherStatus = 'pending' | 'correct' | 'incorrect';
+
+export interface ExerciseSubmission {
+  id: string;
+  user_id: string;
+  exercise_id: string;
+  self_eval: SelfEval;
+  photo_path: string | null;
+  photo_uploaded_at: string | null;
+  teacher_status: TeacherStatus | null;
+  teacher_note: string | null;
+  teacher_file_path: string | null;
+  xp_self_eval: number;
+  xp_photo: number;
+  xp_teacher: number;
+  created_at: string;
+}
+
+export const submitExercise = (exerciseId: string, self_eval: SelfEval) =>
+  api.post<ExerciseSubmission>(`/exercises/${exerciseId}/submit`, { self_eval });
+export const uploadSubmissionPhoto = (exerciseId: string, photo: File) => {
+  const fd = new FormData();
+  fd.append('photo', photo);
+  return api.post<{ status: string; xp_awarded: number }>(`/exercises/${exerciseId}/submit-photo`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+export const getMySubmission = (exerciseId: string) =>
+  api.get<ExerciseSubmission | null>(`/exercises/${exerciseId}/submission`);
+export const getMySubmissions = () =>
+  api.get<any[]>('/student/submissions');
+
+// Teacher
+export const getTeacherSubmissions = (status = 'pending') =>
+  api.get<any[]>('/teacher/submissions', { params: { status } });
+export const reviewSubmission = (submissionId: string, data: { status: TeacherStatus; note?: string }) =>
+  api.post(`/teacher/submissions/${submissionId}/review`, data);
+export const uploadTeacherFile = (submissionId: string, file: File) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post<{ status: string; file_url: string }>(`/teacher/submissions/${submissionId}/upload-file`, fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+export const assignPendingSubmissions = () =>
+  api.post<{ assigned: number }>('/teacher/submissions/assign-pending');
+export const getSubmissionStats = () =>
+  api.get<{ pending: number; correct: number; incorrect: number; total: number }>('/teacher/submissions/stats');
+
+// --- Parent-Student ---
+export interface ParentStudentLink {
+  id: string;
+  parent_id: string;
+  student_id: string;
+  parent_email: string;
+  parent_name: string;
+  student_name: string;
+  linked_at: string;
+}
+
+export interface StudentActivityDay {
+  date: string;
+  exercises_seen: number;
+  exercises_completed: number;
+  variants_generated: number;
+  flags_sent: number;
+}
+
+export interface ParentStudentStats {
+  student_id: string;
+  student_name: string;
+  student_email: string;
+  total_exercises_seen: number;
+  total_exercises_completed: number;
+  total_variants_generated: number;
+  total_flags_sent: number;
+  last_active_at?: string;
+  activity_last_30_days: StudentActivityDay[];
+  completion_by_subiect: Record<string, number>;
+}
+
+export const linkParent = (data: { parent_email: string; parent_name?: string }) =>
+  api.post<ParentStudentLink>('/parent/link-student', data);
+export const getMyParents = () => api.get<ParentStudentLink[]>('/student/my-parents');
+export const removeParentLink = (parentId: string) =>
+  api.delete(`/student/my-parents/${parentId}`);
+export const getMyStudents = () => api.get<ParentStudentLink[]>('/parent/students');
+export const getStudentStats = (studentId: string) =>
+  api.get<ParentStudentStats>(`/parent/students/${studentId}/stats`);
+
+// Admin parent management
+export const adminGetParentStudents = () => api.get<any[]>('/admin/parent-students');
+export const adminLinkParentStudent = (data: { parent_id: string; student_id: string }) =>
+  api.post<ParentStudentLink>('/admin/parent-student', data);
+export const adminRemoveParentStudentLink = (linkId: string) =>
+  api.delete(`/admin/parent-student/${linkId}`);
 
 export default api;

@@ -245,3 +245,56 @@
   color: #374151;
   line-height: 1.6;
 }
+
+/* Parent-Student section */
+.admin-parent-form {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.admin-select {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  color: #f1f5f9;
+  font-size: 0.875rem;
+}
+
+.admin-links-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.admin-link-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  color: #f1f5f9;
+  flex-wrap: wrap;
+}
+
+.admin-link-arrow {
+  color: #475569;
+}
+
+.admin-link-parent, .admin-link-student {
+  flex: 1;
+  min-width: 150px;
+}
+
+.admin-link-parent small, .admin-link-student small {
+  color: #64748b;
+  font-size: 0.8rem;
+}

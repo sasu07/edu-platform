@@ -15,8 +15,10 @@ interface Notif {
 }
 
 const TYPE_ROUTES: Record<string, string> = {
-  help_response: '/app/my-requests',
-  new_request:   '/app/teacher/requests',
+  help_response:        '/app/my-requests',
+  new_request:          '/app/teacher/requests',
+  submission_reviewed:  '/app/my-requests?tab=solutions',
+  teacher_file:         '/app/my-requests?tab=solutions',
 };
 
 export default function NotificationBell() {
