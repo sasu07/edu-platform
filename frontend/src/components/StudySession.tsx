@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Play, Clock, CheckCircle, XCircle, Zap, BarChart2, ChevronRight, BookOpen, Timer } from 'lucide-react';
 import {
   startStudySession,
@@ -7,6 +7,7 @@ import {
   abandonStudySession,
   getStudySessions,
   getStudyStats,
+  getStudySession,
   markExerciseComplete,
   getCompletedExerciseIds,
   type SessionType,
@@ -90,22 +91,36 @@ interface ConfigureProps {
   defaultFilters?: Record<string, any>;
 }
 
+function getStartErrorMessage(error: any) {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === 'string') {
+    if (detail.toLowerCase().includes('no exercises') || detail.toLowerCase().includes('nu există')) {
+      return 'Nu am găsit suficiente exerciții pentru filtrele alese. Încearcă fără filtru pe subiect sau schimbă tipul sesiunii.';
+    }
+    return detail;
+  }
+  return 'Eroare la pornirea sesiunii.';
+}
+
 function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaultFilters = {} }: ConfigureProps) {
   const [sessionType, setSessionType] = useState<SessionType>(defaultType);
   const [subiect, setSubiect] = useState<string>(defaultFilters.subiect_tag || '');
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
+  const exactSetMode = Boolean(defaultFilters.exercise_set_id);
 
   const handleStart = async () => {
     setStarting(true);
     setError('');
     try {
-      const filters: Record<string, any> = {};
-      if (subiect) filters.subiect_tag = subiect;
+      const filters: Record<string, any> = { ...defaultFilters };
+      if (!exactSetMode) {
+        if (subiect) filters.subiect_tag = subiect;
+      }
       const res = await startStudySession({ session_type: sessionType, filters, plan_day_id: planDayId });
       onStart(res.data);
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Eroare la pornirea sesiunii.');
+      setError(getStartErrorMessage(e));
       setStarting(false);
     }
   };
@@ -137,11 +152,18 @@ function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaul
       <div className="ss-section-title">Filtre exerciții</div>
       <div className="ss-filters">
         <label className="ss-filter-label">Subiect
-          <select className="ss-select" value={subiect} onChange={e => setSubiect(e.target.value)}>
+          <select className="ss-select" value={subiect} onChange={e => setSubiect(e.target.value)} disabled={exactSetMode}>
             {SUBIECT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </label>
       </div>
+
+      {exactSetMode && (
+        <div className="ss-info-row">
+          <BookOpen size={15} />
+          <span>Sesiunea va folosi exact setul salvat pe care l-ai planificat.</span>
+        </div>
+      )}
 
       <div className="ss-info-row">
         <Timer size={15} />
@@ -282,11 +304,44 @@ interface SummaryProps {
   onNew: () => void;
 }
 
+function recommendationToSubiect(recommendation: string | null | undefined) {
+  if (!recommendation) return '';
+  const match = recommendation.match(/([123])/);
+  return match?.[1] || '';
+}
+
 function SummaryPhase({ session, durationSec, doneCount, xpGained, onNew }: SummaryProps) {
+  const navigate = useNavigate();
   const total = session.exercises_total || session.exercises?.length || 0;
   const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
   const cfg = SESSION_CONFIG[session.session_type];
   const isGood = pct >= 80;
+  const [stats, setStats] = useState<StudyStats | null>(null);
+
+  useEffect(() => {
+    getStudyStats()
+      .then((res) => setStats(res.data))
+      .catch(() => setStats(null));
+  }, []);
+
+  const recommendation = stats?.recommendation || null;
+  const recommendationSubiect = recommendationToSubiect(recommendation);
+
+  const handleRecommendedSession = () => {
+    const params = new URLSearchParams({ type: 'test_scurt' });
+    if (recommendationSubiect) {
+      params.set('subiect', recommendationSubiect);
+    }
+    navigate(`/app/study-session?${params.toString()}`);
+  };
+
+  const handleRecommendedExercises = () => {
+    if (!recommendationSubiect) {
+      navigate('/app/exercises');
+      return;
+    }
+    navigate(`/app/exercises?subiect=${recommendationSubiect}`);
+  };
 
   return (
     <div className="ss-summary">
@@ -331,10 +386,26 @@ function SummaryPhase({ session, durationSec, doneCount, xpGained, onNew }: Summ
         </div>
       )}
 
+      {recommendation && (
+        <div className="ss-recommendation">
+          💡 Următorul pas recomandat: lucrează mai mult la <strong>{recommendation}</strong>
+        </div>
+      )}
+
       <div className="ss-summary-actions">
         <button className="ss-start-btn" onClick={onNew}>
           <Play size={15} /> Sesiune nouă
         </button>
+        {recommendation && (
+          <>
+            <button className="ss-start-btn" onClick={handleRecommendedSession}>
+              <Timer size={15} /> Sesiune recomandată
+            </button>
+            <button className="ss-start-btn" onClick={handleRecommendedExercises}>
+              <BookOpen size={15} /> Exersează {recommendation}
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -342,7 +413,7 @@ function SummaryPhase({ session, durationSec, doneCount, xpGained, onNew }: Summ
 
 // ─── History ──────────────────────────────────────────────────────────────────
 
-function HistoryTab() {
+function HistoryTab({ onStartNew }: { onStartNew: () => void }) {
   const [sessions, setSessions] = useState<StudySessionType[]>([]);
   const [stats, setStats] = useState<StudyStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -404,7 +475,12 @@ function HistoryTab() {
       )}
 
       {sessions.length === 0 ? (
-        <div className="ss-empty">Nu ai sesiuni de studiu înregistrate.</div>
+        <div className="ss-empty">
+          <div>Nu ai sesiuni de studiu înregistrate.</div>
+          <button className="ss-start-btn" onClick={onStartNew}>
+            <Play size={15} /> Pornește prima sesiune
+          </button>
+        </div>
       ) : (
         <div className="ss-history-list">
           {sessions.map(s => {
@@ -453,13 +529,37 @@ interface StudySessionProps {
 export default function StudySession({ planDayId: planDayIdProp, defaultType: defaultTypeProp, defaultFilters, onSessionDone }: StudySessionProps) {
   const [searchParams] = useSearchParams();
   const planDayId = planDayIdProp || searchParams.get('plan') || undefined;
+  const resumeSessionId = searchParams.get('resume') || undefined;
   const defaultType = (defaultTypeProp || searchParams.get('type') as SessionType || 'test_scurt');
+  const mergedDefaultFilters = {
+    ...(defaultFilters || {}),
+    ...(searchParams.get('subiect') ? { subiect_tag: searchParams.get('subiect') } : {}),
+    ...(searchParams.get('set') ? { exercise_set_id: searchParams.get('set') } : {}),
+  };
   const [tab, setTab] = useState<Tab>('new');
   const [phase, setPhase] = useState<Phase>('configure');
   const [session, setSession] = useState<StudySessionType | null>(null);
   const [summaryDuration, setSummaryDuration] = useState(0);
   const [summaryDone, setSummaryDone] = useState(0);
   const [summaryXp, setSummaryXp] = useState(0);
+  const [loadingResume, setLoadingResume] = useState(Boolean(resumeSessionId));
+
+  useEffect(() => {
+    if (!resumeSessionId) return;
+
+    setLoadingResume(true);
+    getStudySession(resumeSessionId)
+      .then((res) => {
+        const resumedSession = res.data;
+        if (resumedSession?.status === 'active') {
+          setSession(resumedSession);
+          setPhase('active');
+          setTab('new');
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingResume(false));
+  }, [resumeSessionId]);
 
   const handleStart = (s: StudySessionType) => {
     setSession(s);
@@ -504,7 +604,9 @@ export default function StudySession({ planDayId: planDayIdProp, defaultType: de
         <h2>Sesiuni de studiu</h2>
       </div>
 
-      {phase !== 'active' && (
+      {loadingResume && <div className="ss-loading">Se reia sesiunea activă...</div>}
+
+      {!loadingResume && phase !== 'active' && (
         <div className="ss-tabs">
           <button className={`ss-tab-btn${tab === 'new' ? ' active' : ''}`} onClick={() => { setTab('new'); if (phase === 'summary') handleNew(); }}>
             <Play size={14} /> Sesiune nouă
@@ -515,16 +617,16 @@ export default function StudySession({ planDayId: planDayIdProp, defaultType: de
         </div>
       )}
 
-      {tab === 'new' && phase === 'configure' && (
+      {!loadingResume && tab === 'new' && phase === 'configure' && (
         <ConfigurePhase
           onStart={handleStart}
           planDayId={planDayId}
           defaultType={defaultType}
-          defaultFilters={defaultFilters}
+          defaultFilters={mergedDefaultFilters}
         />
       )}
 
-      {tab === 'new' && phase === 'active' && session && (
+      {!loadingResume && tab === 'new' && phase === 'active' && session && (
         <ActivePhase
           session={session}
           onComplete={handleComplete}
@@ -532,7 +634,7 @@ export default function StudySession({ planDayId: planDayIdProp, defaultType: de
         />
       )}
 
-      {tab === 'new' && phase === 'summary' && session && (
+      {!loadingResume && tab === 'new' && phase === 'summary' && session && (
         <SummaryPhase
           session={session}
           durationSec={summaryDuration}
@@ -542,7 +644,7 @@ export default function StudySession({ planDayId: planDayIdProp, defaultType: de
         />
       )}
 
-      {tab === 'history' && <HistoryTab />}
+      {!loadingResume && tab === 'history' && <HistoryTab onStartNew={() => { setTab('new'); setPhase('configure'); }} />}
     </div>
   );
 }

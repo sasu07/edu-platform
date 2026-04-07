@@ -824,6 +824,11 @@ class ExerciseSetCreateRequest(BaseModel):
     linked_plan: Optional[str] = None
 
 
+class ExerciseSetUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    linked_plan: Optional[str] = None
+
+
 class StudySessionStartRequest(BaseModel):
     session_type: str = "test_scurt"
     filters: Dict[str, Any] = Field(default_factory=dict)

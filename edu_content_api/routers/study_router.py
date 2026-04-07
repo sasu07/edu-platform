@@ -62,6 +62,42 @@ def _build_session_selection(filters: dict, ex_count: int) -> tuple[str, list]:
     return query, params
 
 
+def _load_exact_exercise_set(conn: Connection, user_id: str, exercise_set_id: str):
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT s.id as set_id, s.name, s.filters,
+                   e.id as exercise_id, e.statement_latex, e.statement_text,
+                   e.answer_latex, e.solution_latex, e.difficulty, e.metadata
+            FROM user_exercise_sets s
+            JOIN user_exercise_set_items si ON si.set_id = s.id
+            JOIN exercises e ON e.id = si.exercise_id
+            WHERE s.id = %s AND s.user_id = %s
+            ORDER BY si.sort_order
+            """,
+            (exercise_set_id, user_id),
+        )
+        rows = cur.fetchall()
+
+    if not rows:
+        raise HTTPException(status_code=404, detail="Setul selectat nu există sau nu îți aparține")
+
+    set_filters = rows[0]["filters"] if rows[0]["filters"] else {}
+    exercises = [
+        {
+            "id": row["exercise_id"],
+            "statement_latex": row["statement_latex"],
+            "statement_text": row["statement_text"],
+            "answer_latex": row["answer_latex"],
+            "solution_latex": row["solution_latex"],
+            "difficulty": row["difficulty"],
+            "metadata": row["metadata"],
+        }
+        for row in rows
+    ]
+    return rows[0]["set_id"], set_filters, exercises
+
+
 def _ensure_parent_link(conn: Connection, parent_id: str, student_id: str) -> None:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
@@ -86,27 +122,34 @@ def start_study_session(
     ex_count = 10 if session_type == "test_scurt" else 25
 
     with conn.cursor(row_factory=dict_row) as cur:
-        query, params = _build_session_selection(filters, ex_count)
-        cur.execute(query, params)
-        exercises = cur.fetchall()
+        exact_set_id = filters.get("exercise_set_id")
+        if exact_set_id:
+            set_id, set_filters, exercises = _load_exact_exercise_set(conn, str(current_user.id), str(exact_set_id))
+            filters = {**set_filters, **filters}
+        else:
+            query, params = _build_session_selection(filters, ex_count)
+            cur.execute(query, params)
+            exercises = cur.fetchall()
+            set_id = None
 
         if not exercises:
             raise HTTPException(status_code=400, detail="Nu există exerciții disponibile pentru filtrele selectate")
 
         exercise_ids = [str(exercise["id"]) for exercise in exercises]
 
-        cur.execute(
-            """INSERT INTO user_exercise_sets (user_id, name, linked_plan, filters)
-               VALUES (%s, %s, %s, %s) RETURNING id""",
-            (str(current_user.id), f"Sesiune {session_type}", "study_session", json.dumps(filters)),
-        )
-        set_id = cur.fetchone()["id"]
-
-        for exercise_id in exercise_ids:
+        if not set_id:
             cur.execute(
-                "INSERT INTO user_exercise_set_items (set_id, exercise_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-                (str(set_id), exercise_id),
+                """INSERT INTO user_exercise_sets (user_id, name, linked_plan, filters)
+                   VALUES (%s, %s, %s, %s) RETURNING id""",
+                (str(current_user.id), f"Sesiune {session_type}", "study_session", json.dumps(filters)),
             )
+            set_id = cur.fetchone()["id"]
+
+            for exercise_id in exercise_ids:
+                cur.execute(
+                    "INSERT INTO user_exercise_set_items (set_id, exercise_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                    (str(set_id), exercise_id),
+                )
 
         avg_diff = sum(ex["difficulty"] for ex in exercises if ex["difficulty"]) / max(
             1, sum(1 for ex in exercises if ex["difficulty"])
@@ -129,6 +172,16 @@ def start_study_session(
             ),
         )
         session = dict(cur.fetchone())
+
+        if body.plan_day_id:
+            cur.execute(
+                """
+                UPDATE study_plan_days
+                SET session_id = %s
+                WHERE id = %s AND user_id = %s
+                """,
+                (str(session["id"]), str(body.plan_day_id), str(current_user.id)),
+            )
         conn.commit()
 
     session["exercises"] = [dict(exercise) for exercise in exercises]
@@ -371,6 +424,30 @@ def get_student_study_sessions_for_parent(
         stats = cur.fetchone()
 
         return {"sessions": [dict(session) for session in sessions], "stats": dict(stats) if stats else {}}
+
+
+@router.get("/parent/students/{student_id}/study-plan", tags=["Parent"])
+def get_student_study_plan_for_parent(
+    student_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    if current_user.role not in (UserRole.PARENT, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Acces interzis")
+
+    if current_user.role == UserRole.PARENT:
+        _ensure_parent_link(conn, str(current_user.id), student_id)
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """SELECT spd.*, u.full_name as teacher_name
+               FROM study_plan_days spd
+               LEFT JOIN users u ON u.id = spd.teacher_id
+               WHERE spd.user_id=%s AND spd.plan_date >= CURRENT_DATE - INTERVAL '30 days'
+               ORDER BY spd.plan_date, spd.created_at""",
+            (student_id,),
+        )
+        return cur.fetchall()
 
 
 @router.get("/study-plan/", tags=["Study"])

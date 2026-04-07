@@ -13,7 +13,18 @@ import Login from "./components/Login";
 import Register from "./components/Register";
 import { AuthProvider, useAuth } from "./AuthContext";
 import NotificationBell from "./components/NotificationBell";
-import { buildApiUrl } from "./api";
+import StudyPrepCalendar from "./components/StudyPrepCalendar";
+import {
+  buildApiUrl,
+  getMyGamification,
+  getStudyPlan,
+  getStudySessions,
+  getStudyStats,
+  type GamificationProfile,
+  type StudyPlanDay,
+  type StudySession,
+  type StudyStats,
+} from "./api";
 import "./App.css";
 
 const LandingPage = lazy(() => import("./components/LandingPage"));
@@ -46,13 +57,235 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
 
 function AppHub() {
   const { user, isTeacher, isAdmin, isParent } = useAuth();
+  const [allSessions, setAllSessions] = useState<StudySession[]>([]);
+  const [allPlanDays, setAllPlanDays] = useState<StudyPlanDay[]>([]);
+  const [activeSession, setActiveSession] = useState<StudySession | null>(null);
+  const [todayPlanEntries, setTodayPlanEntries] = useState<StudyPlanDay[]>([]);
+  const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
+  const [gamification, setGamification] = useState<GamificationProfile | null>(null);
+  const weakestSubiect =
+    studyStats?.subiect_progress?.length
+      ? [...studyStats.subiect_progress].sort((a, b) => a.pct - b.pct)[0]
+      : null;
+  const recommendedSubiect =
+    studyStats?.recommendation?.match(/([123])/)?.[1] || weakestSubiect?.subiect || "";
+
+  useEffect(() => {
+    if (isTeacher || isParent) return;
+
+    Promise.all([getStudySessions(), getStudyPlan(), getStudyStats(), getMyGamification()])
+      .then(([sessionsRes, planRes, statsRes, gamificationRes]) => {
+        const sessions = Array.isArray(sessionsRes.data) ? sessionsRes.data : [];
+        const plans = Array.isArray(planRes.data) ? planRes.data : [];
+        const today = new Date().toISOString().slice(0, 10);
+
+        setAllSessions(sessions);
+        setAllPlanDays(plans);
+        const active = sessions.find((session) => session.status === "active") || null;
+        setActiveSession(active);
+        setStudyStats(statsRes.data || null);
+        setGamification(gamificationRes.data || null);
+        setTodayPlanEntries(
+          plans
+            .filter((entry) => entry.plan_date === today)
+            .sort((a, b) => a.created_at.localeCompare(b.created_at)),
+        );
+      })
+      .catch(() => {
+        setAllSessions([]);
+        setAllPlanDays([]);
+        setActiveSession(null);
+        setTodayPlanEntries([]);
+        setStudyStats(null);
+        setGamification(null);
+      });
+  }, [isParent, isTeacher]);
+
   if (isParent) return <Navigate to="/app/parent" replace />;
   return (
     <div className="hub">
       <header className="hub-head">
         <h1 className="hub-title">EtoXPlatform</h1>
-        <p className="hub-subtitle">Bună ziua, {user?.full_name}! Alege zona în care vrei să lucrezi.</p>
+        <p className="hub-subtitle">Salut, {user?.full_name}! Hai să vedem care e cel mai bun pas pentru azi.</p>
       </header>
+
+      {!isTeacher && !isParent && (
+        <section className="hub-dashboard">
+          <div className="hub-dashboard-main">
+            <div className="hub-dashboard-kicker">Astăzi</div>
+            <h2 className="hub-dashboard-title">Hai să intrăm în ritm</h2>
+            <p className="hub-dashboard-subtitle">
+              Tot ce ai nevoie ca să știi rapid de unde să începi, fără aglomerație inutilă.
+            </p>
+          </div>
+
+          <div className="hub-student-hero">
+            <div className="hub-student-hero-main">
+              <div className="hub-panel-label">Pasul tău de acum</div>
+              <div className="hub-student-hero-title">
+                {activeSession
+                  ? "Continuă ce ai început"
+                  : todayPlanEntries.length > 0
+                    ? "Ai ceva pregătit pentru azi"
+                    : weakestSubiect
+                      ? `Merită să lucrezi pe Subiectul ${weakestSubiect.subiect}`
+                      : "Pornește cu o sesiune scurtă"}
+              </div>
+              <div className="hub-panel-text">
+                {activeSession
+                  ? `Ai deja un ${activeSession.session_type === "test_bac" ? "Test BAC" : "Test Scurt"} în desfășurare. Închide-l întâi și păstrezi ritmul.`
+                  : todayPlanEntries.length > 0
+                    ? `Ai ${todayPlanEntries.length} activități planificate azi. Începe cu prima și intri imediat în modul de lucru.`
+                    : weakestSubiect
+                      ? `Aici ai cel mai mult loc de progres acum: ${weakestSubiect.completed} din ${weakestSubiect.total} exerciții completate.`
+                      : "După primele sesiuni, pagina asta o să-ți arate automat unde merită să insiști mai întâi."}
+              </div>
+
+              <div className="hub-student-hero-actions">
+                {activeSession ? (
+                  <Link to={`/app/study-session?resume=${activeSession.id}`} className="hub-panel-action">
+                    Continuă acum
+                  </Link>
+                ) : todayPlanEntries.length > 0 ? (
+                  <Link
+                    to={`/app/study-session?plan=${todayPlanEntries[0].id}&type=${todayPlanEntries[0].session_type}${todayPlanEntries[0].filters?.subiect_tag ? `&subiect=${todayPlanEntries[0].filters.subiect_tag}` : ""}${todayPlanEntries[0].filters?.exercise_set_id ? `&set=${todayPlanEntries[0].filters.exercise_set_id}` : ""}`}
+                    className="hub-panel-action"
+                  >
+                    Începe ce ai planificat
+                  </Link>
+                ) : (
+                  <Link
+                    to={`/app/study-session?type=test_scurt${recommendedSubiect ? `&subiect=${recommendedSubiect}` : ""}`}
+                    className="hub-panel-action"
+                  >
+                    Pornește o sesiune
+                  </Link>
+                )}
+
+                <Link
+                  to={recommendedSubiect ? `/app/exercises?subiect=${recommendedSubiect}` : "/app/exercises"}
+                  className="hub-panel-action secondary"
+                >
+                  Lucrează pe subiect
+                </Link>
+              </div>
+            </div>
+
+            <div className="hub-student-summary">
+              <div className="hub-student-summary-card">
+                <div className="hub-student-summary-value">{studyStats?.total_sessions || 0}</div>
+                <div className="hub-student-summary-label">sesiuni</div>
+              </div>
+              <div className="hub-student-summary-card">
+                <div className="hub-student-summary-value">{studyStats?.total_xp || 0}</div>
+                <div className="hub-student-summary-label">XP</div>
+              </div>
+              <div className="hub-student-summary-card">
+                <div className="hub-student-summary-value">{gamification?.streak_current || 0}</div>
+                <div className="hub-student-summary-label">zile streak</div>
+              </div>
+              <div className="hub-student-summary-card">
+                <div className="hub-student-summary-value">{weakestSubiect ? `${weakestSubiect.pct}%` : "-"}</div>
+                <div className="hub-student-summary-label">pe focus</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="hub-compact-links">
+            <Link to="/app/study-plan" className="hub-compact-link">Planul meu</Link>
+            <Link to="/app/exercises" className="hub-compact-link">Exerciții</Link>
+            <Link to="/app/variants" className="hub-compact-link">Antrenament BAC</Link>
+          </div>
+
+          <div className="hub-details-stack">
+            <details className="hub-detail-card">
+              <summary>Vezi cum stau</summary>
+              <div className="hub-detail-grid">
+                {gamification && (
+                  <div className="hub-panel">
+                    <div className="hub-panel-label">Nivelul meu</div>
+                    <div className="hub-panel-value">{gamification.level.name}</div>
+                    <div className="hub-panel-text">
+                      Ai {gamification.xp_total} XP, un streak de {gamification.streak_current} zile și un record de {gamification.streak_max}.
+                    </div>
+                    {!!gamification.badges.length && (
+                      <div className="hub-hero-badge-row">
+                        {gamification.badges.slice(0, 4).map((badge) => (
+                          <span key={badge.key} className="hub-mini-badge" title={badge.label}>
+                            {badge.icon}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="hub-panel">
+                  <div className="hub-panel-label">Unde stai acum</div>
+                  {studyStats?.subiect_progress?.length ? (
+                    <div className="hub-progress-list">
+                      {studyStats.subiect_progress.map((item) => (
+                        <div key={item.subiect} className="hub-progress-row">
+                          <div className="hub-progress-top">
+                            <span>{`Subiectul ${item.subiect}`}</span>
+                            <span>{item.pct}%</span>
+                          </div>
+                          <div className="hub-progress-track">
+                            <div className="hub-progress-fill" style={{ width: `${item.pct}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="hub-panel-foot">După câteva sesiuni, aici o să vezi clar ce merge bine și ce mai ai de lucrat.</div>
+                  )}
+                </div>
+
+                <div className="hub-panel">
+                  <div className="hub-panel-label">Ce ai făcut recent</div>
+                  {studyStats?.daily_last_30?.length ? (
+                    <div className="hub-activity-list">
+                      {studyStats.daily_last_30
+                        .filter((day) => day.sessions > 0 || day.exercises > 0)
+                        .slice(-5)
+                        .reverse()
+                        .map((day) => (
+                          <div key={day.date} className="hub-activity-row">
+                            <div>
+                              <div className="hub-activity-date">
+                                {new Date(day.date).toLocaleDateString("ro-RO", { day: "numeric", month: "long" })}
+                              </div>
+                              <div className="hub-activity-meta">
+                                {day.sessions} sesiuni · {day.exercises} exerciții
+                              </div>
+                            </div>
+                            <div className="hub-activity-pill">
+                              {day.exercises > 0 ? "Activ" : "Light"}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <div className="hub-panel-foot">Încă nu ai activitate recentă înregistrată aici.</div>
+                  )}
+                </div>
+              </div>
+            </details>
+
+            <details className="hub-detail-card">
+              <summary>Vezi calendarul meu</summary>
+              <StudyPrepCalendar
+                title="Calendarul tău de pregătire"
+                subtitle="Aici vezi zilele în care ai lucrat, ce ai planificat și cum arată streak-ul tău."
+                sessions={allSessions}
+                planDays={allPlanDays}
+                gamification={gamification}
+                className="hub-prep-calendar"
+              />
+            </details>
+          </div>
+        </section>
+      )}
 
       <div className="hub-grid">
         {isTeacher && (

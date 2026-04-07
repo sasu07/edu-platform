@@ -1,19 +1,21 @@
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff, Flag, ChevronDown, ChevronUp, BookOpen, Zap, Layers, Trash2, ChevronRight, ChevronLeft, SlidersHorizontal, X } from 'lucide-react';
+import { Eye, EyeOff, Flag, ChevronDown, ChevronUp, BookOpen, Zap, Layers, Trash2, ChevronRight, ChevronLeft, SlidersHorizontal, X, CalendarDays, Play, Pencil } from 'lucide-react';
 import {
   getExercises, getBatchChildren, createHelpRequest,
   getMyLimits, logExerciseGeneration, saveExerciseSet, getExerciseSets,
-  getExerciseSet, deleteExerciseSet, getExerciseFilterOptions,
+  getExerciseSet, updateExerciseSet, deleteExerciseSet, getExerciseFilterOptions,
   getCompletedExerciseIds,
   submitExercise, uploadSubmissionPhoto, getMySubmission,
   linkParent, getMyParents, removeParentLink,
+  createStudyPlanDay,
   buildApiUrl,
   type Exercise, type GenLimits, type ExerciseSet, type ExerciseSetDetail, type FilterOptions,
-  type ParentStudentLink, type SelfEval, type ExerciseSubmission,
+  type ParentStudentLink, type SelfEval, type ExerciseSubmission, type SessionType,
 } from '../api';
 import { useAuth } from '../AuthContext';
 import LatexRenderer from './LatexRenderer';
 import GamificationBar, { XPToast } from './GamificationBar';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import './StudentExercises.css';
 
 const PAGE_SIZE = 22;
@@ -525,10 +527,156 @@ function Pagination({ page, totalPages, onChange }: { page: number; totalPages: 
 
 // --- Saved Sets Components ---
 
-function SetCard({ set, onOpen, onDelete }: {
+function toInputDate(date: Date) {
+  const cloned = new Date(date);
+  cloned.setMinutes(cloned.getMinutes() - cloned.getTimezoneOffset());
+  return cloned.toISOString().slice(0, 10);
+}
+
+function buildStudySessionUrl(sessionType: SessionType, filters?: Record<string, any> | null, exerciseSetId?: string | null) {
+  const params = new URLSearchParams({ type: sessionType });
+  if (filters?.subiect_tag) {
+    params.set('subiect', String(filters.subiect_tag));
+  }
+  if (exerciseSetId) {
+    params.set('set', exerciseSetId);
+  }
+  return `/app/study-session?${params.toString()}`;
+}
+
+function ScheduleSetModal({
+  set,
+  onClose,
+  onScheduled,
+}: {
+  set: ExerciseSet;
+  onClose: () => void;
+  onScheduled: () => void;
+}) {
+  const [planDate, setPlanDate] = useState(toInputDate(new Date()));
+  const [sessionType, setSessionType] = useState<SessionType>('test_scurt');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const res = await createStudyPlanDay({
+        plan_date: planDate,
+        session_type: sessionType,
+        filters: {
+          ...(set.filters || {}),
+          exercise_set_id: set.id,
+        },
+        note: `Pornit din setul: ${set.name}`,
+      });
+      await updateExerciseSet(set.id, { linked_plan: res.data.id });
+      onScheduled();
+      onClose();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Nu am putut planifica sesiunea.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flag-modal-overlay" onClick={onClose}>
+      <div className="flag-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="flag-modal-header">
+          <h3>Planifică sesiune din set</h3>
+          <button className="flag-modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <p className="flag-modal-subtitle">
+          Vom folosi filtrele salvate în setul <strong>{set.name}</strong>.
+        </p>
+
+        <div className="flag-notes">
+          <label>Data</label>
+          <input type="date" value={planDate} min={toInputDate(new Date())} onChange={(e) => setPlanDate(e.target.value)} />
+        </div>
+
+        <div className="flag-notes">
+          <label>Tip sesiune</label>
+          <select value={sessionType} onChange={(e) => setSessionType(e.target.value as SessionType)}>
+            <option value="test_scurt">Test Scurt</option>
+            <option value="test_bac">Test BAC</option>
+          </select>
+        </div>
+
+        {error && <div className="flag-error">{error}</div>}
+
+        <div className="flag-modal-actions">
+          <button className="flag-cancel-btn" onClick={onClose}>Anulează</button>
+          <button className="flag-submit-btn" disabled={saving || !planDate} onClick={handleSave}>
+            {saving ? 'Se salvează...' : 'Adaugă în plan'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RenameSetModal({
+  set,
+  onClose,
+  onRenamed,
+}: {
+  set: ExerciseSet;
+  onClose: () => void;
+  onRenamed: (updated: ExerciseSet) => void;
+}) {
+  const [name, setName] = useState(set.name);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const res = await updateExerciseSet(set.id, { name: name.trim() || set.name });
+      onRenamed(res.data);
+      onClose();
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Nu am putut redenumi setul.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flag-modal-overlay" onClick={onClose}>
+      <div className="flag-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="flag-modal-header">
+          <h3>Redenumește setul</h3>
+          <button className="flag-modal-close" onClick={onClose}>×</button>
+        </div>
+
+        <div className="flag-notes">
+          <label>Nume set</label>
+          <input type="text" value={name} maxLength={120} onChange={(e) => setName(e.target.value)} />
+        </div>
+
+        {error && <div className="flag-error">{error}</div>}
+
+        <div className="flag-modal-actions">
+          <button className="flag-cancel-btn" onClick={onClose}>Anulează</button>
+          <button className="flag-submit-btn" disabled={saving || !name.trim()} onClick={handleSave}>
+            {saving ? 'Se salvează...' : 'Salvează'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SetCard({ set, onOpen, onDelete, onPlan, onPractice, onRename }: {
   set: ExerciseSet;
   onOpen: (id: string) => void;
   onDelete: (id: string) => void;
+  onPlan: (set: ExerciseSet) => void;
+  onPractice: (set: ExerciseSet, sessionType: SessionType) => void;
+  onRename: (set: ExerciseSet) => void;
 }) {
   const [deleting, setDeleting] = useState(false);
 
@@ -561,11 +709,40 @@ function SetCard({ set, onOpen, onDelete }: {
         <div className="saved-set-name">{set.name}</div>
         <div className="saved-set-meta">
           <span>{set.exercise_count} exerciții</span>
+          {set.linked_plan && <span className="saved-set-filters">Planificat</span>}
           {filterSummary && <span className="saved-set-filters">{filterSummary}</span>}
           <span className="saved-set-date">{date}</span>
         </div>
       </div>
       <div className="saved-set-actions">
+        <button
+          className="saved-set-delete"
+          onClick={(e) => { e.stopPropagation(); onPractice(set, 'test_scurt'); }}
+          title="Pornește Test Scurt din aceste filtre"
+        >
+          <Play size={15} />
+        </button>
+        <button
+          className="saved-set-delete"
+          onClick={(e) => { e.stopPropagation(); onPractice(set, 'test_bac'); }}
+          title="Pornește Test BAC din aceste filtre"
+        >
+          BAC
+        </button>
+        <button
+          className="saved-set-delete"
+          onClick={(e) => { e.stopPropagation(); onPlan(set); }}
+          title="Adaugă în planul de studiu"
+        >
+          <CalendarDays size={15} />
+        </button>
+        <button
+          className="saved-set-delete"
+          onClick={(e) => { e.stopPropagation(); onRename(set); }}
+          title="Redenumește setul"
+        >
+          <Pencil size={15} />
+        </button>
         <ChevronRight size={18} className="saved-set-arrow" />
         <button
           className="saved-set-delete"
@@ -585,10 +762,14 @@ function SavedSetsTab({ canHelpRequests, completedIds, onToggleComplete }: {
   completedIds: Set<string>;
   onToggleComplete: (id: string, val: boolean, xp: number, badges: string[]) => void;
 }) {
+  const navigate = useNavigate();
   const [sets, setSets] = useState<ExerciseSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [openSet, setOpenSet] = useState<ExerciseSetDetail | null>(null);
   const [loadingSet, setLoadingSet] = useState(false);
+  const [planningSet, setPlanningSet] = useState<ExerciseSet | null>(null);
+  const [renamingSet, setRenamingSet] = useState<ExerciseSet | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     getExerciseSets()
@@ -615,6 +796,24 @@ function SavedSetsTab({ canHelpRequests, completedIds, onToggleComplete }: {
     if (openSet?.id === id) setOpenSet(null);
   };
 
+  const updateLocalSet = (updated: ExerciseSet) => {
+    setSets((prev) => prev.map((set) => (set.id === updated.id ? { ...set, ...updated } : set)));
+    setOpenSet((prev) => (prev && prev.id === updated.id ? { ...prev, name: updated.name, linked_plan: updated.linked_plan } : prev));
+  };
+
+  const handlePractice = (set: ExerciseSet, sessionType: SessionType) => {
+    navigate(buildStudySessionUrl(sessionType, set.filters, set.id));
+  };
+
+  const handlePlanSuccess = async () => {
+    const refreshed = await getExerciseSets().catch(() => null);
+    if (refreshed?.data) {
+      setSets(Array.isArray(refreshed.data) ? refreshed.data : []);
+    }
+    setSuccessMessage('Sesiunea a fost adăugată în planul de studiu.');
+    window.setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
   if (loading) return <div className="student-empty">Se încarcă seturile...</div>;
   if (sets.length === 0) return (
     <div className="student-empty">
@@ -624,9 +823,19 @@ function SavedSetsTab({ canHelpRequests, completedIds, onToggleComplete }: {
 
   return (
     <div className="saved-sets-container">
+      {successMessage && <div className="saved-set-notice">{successMessage}</div>}
+
       <div className="saved-sets-list">
         {sets.map((s) => (
-          <SetCard key={s.id} set={s} onOpen={handleOpen} onDelete={handleDelete} />
+          <SetCard
+            key={s.id}
+            set={s}
+            onOpen={handleOpen}
+            onDelete={handleDelete}
+            onPlan={setPlanningSet}
+            onPractice={handlePractice}
+            onRename={setRenamingSet}
+          />
         ))}
       </div>
 
@@ -636,7 +845,18 @@ function SavedSetsTab({ canHelpRequests, completedIds, onToggleComplete }: {
         <div className="saved-set-exercises">
           <div className="saved-set-exercises-header">
             <h3>{openSet.name}</h3>
-            <button className="saved-set-close" onClick={() => setOpenSet(null)}>Închide ×</button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {openSet.linked_plan && (
+                <span className="saved-set-filters">Deja planificat</span>
+              )}
+              <button className="saved-set-close" onClick={() => navigate(buildStudySessionUrl('test_scurt', openSet.filters, openSet.id))}>
+                <Play size={14} /> Test Scurt
+              </button>
+              <button className="saved-set-close" onClick={() => navigate(buildStudySessionUrl('test_bac', openSet.filters, openSet.id))}>
+                BAC
+              </button>
+              <button className="saved-set-close" onClick={() => setOpenSet(null)}>Închide ×</button>
+            </div>
           </div>
           <div className="student-exercises-list">
             {openSet.exercises.map((ex, i) => (
@@ -645,6 +865,24 @@ function SavedSetsTab({ canHelpRequests, completedIds, onToggleComplete }: {
             ))}
           </div>
         </div>
+      )}
+
+      {planningSet && (
+        <ScheduleSetModal
+          set={planningSet}
+          onClose={() => setPlanningSet(null)}
+          onScheduled={() => {
+            void handlePlanSuccess();
+          }}
+        />
+      )}
+
+      {renamingSet && (
+        <RenameSetModal
+          set={renamingSet}
+          onClose={() => setRenamingSet(null)}
+          onRenamed={updateLocalSet}
+        />
       )}
     </div>
   );
@@ -745,6 +983,7 @@ function ParentsTab() {
 
 export default function StudentExercises() {
   const { canHelpRequests, canUnlimitedGen } = useAuth();
+  const [searchParams] = useSearchParams();
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [gamRefresh, setGamRefresh] = useState(0);
   const [xpToast, setXpToast] = useState<{ xp: number; badges: string[] } | null>(null);
@@ -761,7 +1000,7 @@ export default function StudentExercises() {
 
   // Filters
   const [count, setCount] = useState(10);
-  const [subiectTag, setSubiectTag] = useState('all');
+  const [subiectTag, setSubiectTag] = useState(searchParams.get('subiect') || 'all');
   const [profile, setProfile] = useState('all');
   const [year, setYear] = useState('all');
   const [topicTag, setTopicTag] = useState('all');
@@ -908,8 +1147,7 @@ export default function StudentExercises() {
         if (hasSolution) filters.has_solution = true;
         if (hasScoringGuide) filters.has_scoring_guide = true;
 
-        const linked_plan = canUnlimitedGen ? 'premium_gen' : null;
-        saveExerciseSet({ exercise_ids: allIds, filters, linked_plan })
+        saveExerciseSet({ exercise_ids: allIds, filters })
           .then((r) => setSavedSetId(r.data.id))
           .catch(() => {});
       }

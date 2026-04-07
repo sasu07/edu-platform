@@ -10,7 +10,16 @@ from psycopg.rows import dict_row
 from ai_tagger import get_ai_tagger
 from auth import get_current_user, get_optional_user
 from database import get_db_conn
-from models import ExerciseCreate, ExerciseDB, ExerciseSetCreateRequest, ExerciseUpdate, TagCreate, TagDB, UserDB
+from models import (
+    ExerciseCreate,
+    ExerciseDB,
+    ExerciseSetCreateRequest,
+    ExerciseSetUpdateRequest,
+    ExerciseUpdate,
+    TagCreate,
+    TagDB,
+    UserDB,
+)
 
 router = APIRouter()
 
@@ -778,6 +787,54 @@ def get_exercise_set(set_id: uuid.UUID, current_user: UserDB = Depends(get_curre
         "filters": exercise_set["filters"],
         "created_at": exercise_set["created_at"].isoformat() if exercise_set["created_at"] else None,
         "exercises": exercises,
+    }
+
+
+@router.put("/exercise-sets/{set_id}", tags=["ExerciseSets"])
+def update_exercise_set(
+    set_id: uuid.UUID,
+    body: ExerciseSetUpdateRequest,
+    current_user: UserDB = Depends(get_current_user),
+    conn: Connection = Depends(get_db_conn),
+):
+    updates = []
+    values: list[str | None] = []
+
+    if body.name is not None:
+        updates.append("name = %s")
+        values.append(body.name.strip() or f"Set {datetime.now().strftime('%d.%m.%Y %H:%M')}")
+
+    if body.linked_plan is not None:
+        updates.append("linked_plan = %s")
+        values.append(body.linked_plan.strip() or None)
+
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nu ai trimis câmpuri pentru actualizare")
+
+    values.extend([str(set_id), str(current_user.id)])
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            f"""
+            UPDATE user_exercise_sets
+            SET {", ".join(updates)}
+            WHERE id = %s AND user_id = %s
+            RETURNING id, name, linked_plan, filters, created_at
+            """,
+            values,
+        )
+        updated = cur.fetchone()
+        if not updated:
+            conn.rollback()
+            raise HTTPException(status_code=404, detail="Set negăsit sau nu îți aparține")
+        conn.commit()
+
+    return {
+        "id": str(updated["id"]),
+        "name": updated["name"],
+        "linked_plan": updated["linked_plan"],
+        "filters": updated["filters"],
+        "created_at": updated["created_at"].isoformat() if updated["created_at"] else None,
     }
 
 

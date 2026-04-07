@@ -258,7 +258,17 @@ export default function StudyPlan() {
   };
 
   const handleStart = (entry: StudyPlanDay) => {
-    navigate(`/app/study-session?plan=${entry.id}&type=${entry.session_type}`);
+    const params = new URLSearchParams({
+      plan: entry.id,
+      type: entry.session_type,
+    });
+    if (entry.filters?.subiect_tag) {
+      params.set('subiect', String(entry.filters.subiect_tag));
+    }
+    if (entry.filters?.exercise_set_id) {
+      params.set('set', String(entry.filters.exercise_set_id));
+    }
+    navigate(`/app/study-session?${params.toString()}`);
   };
 
   const openModal = (date: string) => {

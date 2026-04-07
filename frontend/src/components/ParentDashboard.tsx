@@ -1,5 +1,17 @@
 import { useEffect, useState } from 'react';
-import { getMyStudents, getStudentStats, getParentStudentSessions, type ParentStudentStats, type ParentStudentLink, type StudySession } from '../api';
+import {
+  getMyStudents,
+  getParentStudentSessions,
+  getParentStudentStudyPlan,
+  getStudentGamification,
+  getStudentStats,
+  type GamificationProfile,
+  type ParentStudentStats,
+  type ParentStudentLink,
+  type StudyPlanDay,
+  type StudySession,
+} from '../api';
+import StudyPrepCalendar from './StudyPrepCalendar';
 import './ParentDashboard.css';
 
 const SESSION_LABELS: Record<string, string> = {
@@ -33,6 +45,8 @@ function ActivityChart({ days }: { days: ParentStudentStats['activity_last_30_da
 function StudentCard({ link }: { link: ParentStudentLink }) {
   const [stats, setStats] = useState<ParentStudentStats | null>(null);
   const [sessions, setSessions] = useState<StudySession[]>([]);
+  const [planDays, setPlanDays] = useState<StudyPlanDay[]>([]);
+  const [gamification, setGamification] = useState<GamificationProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
@@ -40,10 +54,14 @@ function StudentCard({ link }: { link: ParentStudentLink }) {
     Promise.all([
       getStudentStats(link.student_id),
       getParentStudentSessions(link.student_id),
+      getParentStudentStudyPlan(link.student_id),
+      getStudentGamification(link.student_id),
     ])
-      .then(([s, sess]) => {
+      .then(([s, sess, plan, gamificationRes]) => {
         setStats(s.data);
-        setSessions(Array.isArray(sess.data) ? sess.data.slice(0, 5) : []);
+        setSessions(Array.isArray(sess.data?.sessions) ? sess.data.sessions : []);
+        setPlanDays(Array.isArray(plan.data) ? plan.data : []);
+        setGamification(gamificationRes.data || null);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -128,7 +146,7 @@ function StudentCard({ link }: { link: ParentStudentLink }) {
                 <>
                   <div className="pd-section-title">Sesiuni de studiu recente</div>
                   <div className="pd-sessions-list">
-                    {sessions.map(s => {
+                    {sessions.slice(0, 5).map(s => {
                       const pct = s.exercises_total > 0 ? Math.round((s.exercises_completed / s.exercises_total) * 100) : 0;
                       return (
                         <div key={s.id} className={`pd-session-row pd-sess-${s.status}`}>
@@ -145,6 +163,17 @@ function StudentCard({ link }: { link: ParentStudentLink }) {
                   </div>
                 </>
               )}
+
+              <div className="pd-calendar-wrap">
+                <StudyPrepCalendar
+                  title="Calendar de pregătire"
+                  subtitle="Vezi zilele active, planificarea și streak-ul elevului în același loc."
+                  sessions={sessions}
+                  planDays={planDays}
+                  gamification={gamification}
+                  className="pd-calendar"
+                />
+              </div>
             </>
           )}
         </>

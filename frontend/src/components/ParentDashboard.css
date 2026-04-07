@@ -319,6 +319,55 @@
   border-radius: 4px;
 }
 
+.pd-calendar-wrap {
+  padding: 0 20px 20px;
+}
+
+.pd-calendar {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.pd-calendar .spc-title,
+.pd-calendar .spc-weekday,
+.pd-calendar .spc-subtitle,
+.pd-calendar .spc-legend,
+.pd-calendar .spc-chip,
+.pd-calendar .spc-chip.done,
+.pd-calendar .spc-chip.active {
+  color: #cbd5e1;
+}
+
+.pd-calendar .spc-month-label,
+.pd-calendar .spc-day-num,
+.pd-calendar .spc-quick-link strong {
+  color: #f8fafc;
+}
+
+.pd-calendar .spc-summary span {
+  background: rgba(59, 130, 246, 0.16);
+  color: #bfdbfe;
+}
+
+.pd-calendar .spc-nav {
+  background: #1e293b;
+  border-color: #334155;
+  color: #e2e8f0;
+}
+
+.pd-calendar .spc-cell {
+  background: #111827;
+  border-color: #1f2937;
+}
+
+.pd-calendar .spc-cell.has-active {
+  background: linear-gradient(180deg, rgba(6, 78, 59, 0.45), #111827);
+}
+
+.pd-calendar .spc-cell.has-plan {
+  box-shadow: inset 0 0 0 1px rgba(56, 189, 248, 0.2);
+}
+
 @media (max-width: 600px) {
   .pd-stats-row {
     grid-template-columns: repeat(2, 1fr);

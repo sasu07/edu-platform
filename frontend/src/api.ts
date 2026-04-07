@@ -223,6 +223,8 @@ export const saveExerciseSet = (data: {
 
 export const getExerciseSets = () => api.get<ExerciseSet[]>('/exercise-sets/');
 export const getExerciseSet = (id: string) => api.get<ExerciseSetDetail>(`/exercise-sets/${id}`);
+export const updateExerciseSet = (id: string, data: { name?: string; linked_plan?: string | null }) =>
+  api.put<ExerciseSet>(`/exercise-sets/${id}`, data);
 export const deleteExerciseSet = (id: string) => api.delete(`/exercise-sets/${id}`);
 
 export const getSources = () => api.get<Source[]>('/sources/');
@@ -469,6 +471,11 @@ export interface StudyStats {
   recommendation: string | null;
 }
 
+export interface ParentStudySessionsResponse {
+  sessions: StudySession[];
+  stats: Record<string, number | null>;
+}
+
 export const startStudySession = (data: { session_type: SessionType; filters: Record<string, any>; plan_day_id?: string }) =>
   api.post<StudySession>('/study-sessions/start', data);
 export const completeStudySession = (sessionId: string, data: { duration_sec: number; exercises_completed: number }) =>
@@ -482,7 +489,9 @@ export const getStudySession = (sessionId: string) =>
 export const getStudyStats = () =>
   api.get<StudyStats>('/student/study-stats');
 export const getParentStudentSessions = (studentId: string) =>
-  api.get<StudySession[]>(`/parent/students/${studentId}/study-sessions`);
+  api.get<ParentStudySessionsResponse>(`/parent/students/${studentId}/study-sessions`);
+export const getParentStudentStudyPlan = (studentId: string) =>
+  api.get<StudyPlanDay[]>(`/parent/students/${studentId}/study-plan`);
 
 // Study Plan
 export const getStudyPlan = () =>
