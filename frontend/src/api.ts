@@ -393,4 +393,76 @@ export const adminLinkParentStudent = (data: { parent_id: string; student_id: st
 export const adminRemoveParentStudentLink = (linkId: string) =>
   api.delete(`/admin/parent-student/${linkId}`);
 
+// --- Study Sessions ---
+export type SessionType = 'test_scurt' | 'test_bac';
+export type SessionStatus = 'active' | 'completed' | 'abandoned';
+
+export interface StudySession {
+  id: string;
+  user_id: string;
+  session_type: SessionType;
+  filters: Record<string, any>;
+  exercise_set_id: string | null;
+  status: SessionStatus;
+  started_at: string;
+  completed_at: string | null;
+  duration_sec: number | null;
+  exercises_total: number;
+  exercises_completed: number;
+  avg_difficulty: number | null;
+  xp_gained: number;
+  created_at: string;
+  exercises?: any[];
+}
+
+export interface StudyPlanDay {
+  id: string;
+  user_id: string;
+  plan_date: string;
+  session_type: SessionType;
+  filters: Record<string, any>;
+  note: string | null;
+  created_by: 'student' | 'teacher';
+  teacher_id: string | null;
+  teacher_name: string | null;
+  session_id: string | null;
+  completed: boolean;
+  created_at: string;
+}
+
+export interface StudyStats {
+  total_sessions: number;
+  total_exercises: number;
+  total_xp: number;
+  avg_completion_pct: number;
+  daily_last_30: { date: string; sessions: number; exercises: number }[];
+  subiect_progress: { subiect: string; total: number; completed: number; pct: number }[];
+  recommendation: string | null;
+}
+
+export const startStudySession = (data: { session_type: SessionType; filters: Record<string, any>; plan_day_id?: string }) =>
+  api.post<StudySession>('/study-sessions/start', data);
+export const completeStudySession = (sessionId: string, data: { duration_sec: number; exercises_completed: number }) =>
+  api.post<StudySession>(`/study-sessions/${sessionId}/complete`, data);
+export const abandonStudySession = (sessionId: string) =>
+  api.post(`/study-sessions/${sessionId}/abandon`);
+export const getStudySessions = () =>
+  api.get<StudySession[]>('/study-sessions/');
+export const getStudySession = (sessionId: string) =>
+  api.get<StudySession>(`/study-sessions/${sessionId}`);
+export const getStudyStats = () =>
+  api.get<StudyStats>('/student/study-stats');
+export const getParentStudentSessions = (studentId: string) =>
+  api.get<StudySession[]>(`/parent/students/${studentId}/study-sessions`);
+
+// Study Plan
+export const getStudyPlan = () =>
+  api.get<StudyPlanDay[]>('/study-plan/');
+export const createStudyPlanDay = (data: { user_id?: string; plan_date: string; session_type: SessionType; filters?: Record<string, any>; note?: string }) =>
+  api.post<StudyPlanDay>('/study-plan/', data);
+export const deleteStudyPlanDay = (planId: string) =>
+  api.delete(`/study-plan/${planId}`);
+export const getTeacherStudentsList = () =>
+  api.get<{ id: string; full_name: string; email: string }[]>('/teacher/students-list');
+
 export default api;

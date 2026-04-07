@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
-import { getMyStudents, getStudentStats, type ParentStudentStats, type ParentStudentLink } from '../api';
+import { getMyStudents, getStudentStats, getParentStudentSessions, type ParentStudentStats, type ParentStudentLink, type StudySession } from '../api';
 import './ParentDashboard.css';
+
+const SESSION_LABELS: Record<string, string> = {
+  test_scurt: '⚡ Test Scurt',
+  test_bac:   '🏆 Test BAC',
+};
 
 const SUBIECT_LABEL: Record<string, string> = { '1': 'Subiect I', '2': 'Subiect II', '3': 'Subiect III' };
 
@@ -27,12 +32,19 @@ function ActivityChart({ days }: { days: ParentStudentStats['activity_last_30_da
 
 function StudentCard({ link }: { link: ParentStudentLink }) {
   const [stats, setStats] = useState<ParentStudentStats | null>(null);
+  const [sessions, setSessions] = useState<StudySession[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
-    getStudentStats(link.student_id)
-      .then(r => setStats(r.data))
+    Promise.all([
+      getStudentStats(link.student_id),
+      getParentStudentSessions(link.student_id),
+    ])
+      .then(([s, sess]) => {
+        setStats(s.data);
+        setSessions(Array.isArray(sess.data) ? sess.data.slice(0, 5) : []);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [link.student_id]);
@@ -108,6 +120,28 @@ function StudentCard({ link }: { link: ParentStudentLink }) {
                         <span className="pd-subiect-val">{v}</span>
                       </div>
                     ))}
+                  </div>
+                </>
+              )}
+
+              {sessions.length > 0 && (
+                <>
+                  <div className="pd-section-title">Sesiuni de studiu recente</div>
+                  <div className="pd-sessions-list">
+                    {sessions.map(s => {
+                      const pct = s.exercises_total > 0 ? Math.round((s.exercises_completed / s.exercises_total) * 100) : 0;
+                      return (
+                        <div key={s.id} className={`pd-session-row pd-sess-${s.status}`}>
+                          <span className="pd-sess-type">{SESSION_LABELS[s.session_type] || s.session_type}</span>
+                          <span className="pd-sess-date">
+                            {new Date(s.started_at).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}
+                          </span>
+                          <span className="pd-sess-stat">{s.exercises_completed}/{s.exercises_total}</span>
+                          <span className="pd-sess-pct">{pct}%</span>
+                          {s.xp_gained > 0 && <span className="pd-sess-xp">+{s.xp_gained} XP</span>}
+                        </div>
+                      );
+                    })}
                   </div>
                 </>
               )}

@@ -460,6 +460,16 @@
   background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
 }
 
+.hub-card-session {
+  border-color: #a78bfa;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
+}
+
+.hub-card-plan {
+  border-color: #6ee7b7;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+}
+
 /* top row (title) gets an icon bubble via CSS only */
 .hub-card-title {
   position: relative;

@@ -4139,3 +4139,480 @@ def get_submission_stats(
             FROM exercise_submissions WHERE photo_path IS NOT NULL
         """)
         return cur.fetchone()
+
+
+# =============================================================================
+# --- Study Sessions ---
+# =============================================================================
+
+@app.post("/study-sessions/start", tags=["Study"])
+def start_study_session(
+    body: dict,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    """
+    Elevul pornește o sesiune nouă.
+    Body: { session_type, filters, exercise_ids }
+    Creează study_session + user_exercise_set și returnează session_id.
+    """
+    if current_user.role not in (UserRole.STUDENT,):
+        raise HTTPException(status_code=403, detail="Doar elevii pot porni sesiuni de studiu")
+
+    session_type = body.get("session_type", "test_scurt")
+    filters = body.get("filters", {})
+    plan_day_id = body.get("plan_day_id")
+
+    ex_count = 10 if session_type == "test_scurt" else 25
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        # ── Generează exerciții din filters ──
+        conditions = ["e.status = 'READY'",
+                      "e.metadata::jsonb->>'parent_external_id' IS NULL",
+                      "(e.metadata::jsonb->>'is_container' IS NULL OR (e.metadata::jsonb->>'is_container')::boolean = false)"]
+        params: list = []
+
+        subiect_tag = filters.get("subiect_tag")
+        if subiect_tag:
+            conditions.append("""
+                EXISTS (
+                    SELECT 1 FROM exercise_tags et2
+                    JOIN tags t2 ON et2.tag_id = t2.id
+                    WHERE et2.exercise_id = e.id
+                      AND t2.namespace = 'subiect'
+                      AND t2.key = %s
+                )
+            """)
+            params.append(subiect_tag)
+
+        where_clause = " WHERE " + " AND ".join(conditions)
+        query = f"""
+            SELECT DISTINCT e.id, e.statement_latex, e.statement_text,
+                   e.answer_latex, e.solution_latex, e.difficulty, e.metadata
+            FROM exercises e{where_clause}
+            ORDER BY RANDOM() LIMIT {ex_count}
+        """
+        cur.execute(query, params)
+        exercises = cur.fetchall()
+
+        if not exercises:
+            raise HTTPException(status_code=400, detail="Nu există exerciții disponibile pentru filtrele selectate")
+
+        exercise_ids = [str(e["id"]) for e in exercises]
+
+        # Creează exercise set
+        cur.execute(
+            """INSERT INTO user_exercise_sets (user_id, name, linked_plan, filters)
+               VALUES (%s, %s, %s, %s) RETURNING id""",
+            (str(current_user.id), f"Sesiune {session_type}", "study_session", json.dumps(filters)),
+        )
+        set_id = cur.fetchone()["id"]
+
+        for ex_id in exercise_ids:
+            cur.execute(
+                "INSERT INTO user_exercise_set_items (set_id, exercise_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                (str(set_id), ex_id),
+            )
+
+        avg_diff = sum(e["difficulty"] for e in exercises if e["difficulty"]) / max(1, sum(1 for e in exercises if e["difficulty"]))
+        avg_diff = round(avg_diff, 2) if avg_diff else None
+
+        cur.execute(
+            """INSERT INTO study_sessions
+               (user_id, session_type, filters, exercise_set_id, status,
+                exercises_total, avg_difficulty)
+               VALUES (%s, %s, %s, %s, 'active', %s, %s)
+               RETURNING *""",
+            (
+                str(current_user.id),
+                session_type,
+                json.dumps(filters),
+                str(set_id),
+                len(exercise_ids),
+                avg_diff,
+            ),
+        )
+        session = dict(cur.fetchone())
+        conn.commit()
+
+    session["exercises"] = [dict(e) for e in exercises]
+    return session
+
+
+@app.post("/study-sessions/{session_id}/complete", tags=["Study"])
+def complete_study_session(
+    session_id: str,
+    body: dict,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    """
+    Elevul finalizează sesiunea manual.
+    Body: { exercises_completed, duration_sec }
+    """
+    if current_user.role not in (UserRole.STUDENT, UserRole.SCHOOL_TEACHER):
+        raise HTTPException(status_code=403, detail="Acces interzis")
+
+    exercises_completed = body.get("exercises_completed", 0)
+    duration_sec = body.get("duration_sec", 0)
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT * FROM study_sessions WHERE id=%s AND user_id=%s",
+            (session_id, str(current_user.id)),
+        )
+        session = cur.fetchone()
+        if not session:
+            raise HTTPException(status_code=404, detail="Sesiune inexistentă")
+        if session["status"] != "active":
+            raise HTTPException(status_code=400, detail="Sesiunea nu este activă")
+
+        # XP bonus pentru sesiune completată
+        completion_pct = exercises_completed / max(session["exercises_total"], 1)
+        bonus_xp = 0
+        if completion_pct >= 0.8:
+            bonus_xp = 50 if session["session_type"] == "test_bac" else 20
+            _award_xp(conn, str(current_user.id), bonus_xp, "session_complete", session_id)
+
+        cur.execute(
+            """UPDATE study_sessions
+               SET status='completed', completed_at=NOW(),
+                   duration_sec=%s, exercises_completed=%s, xp_gained=%s
+               WHERE id=%s RETURNING *""",
+            (duration_sec, exercises_completed, bonus_xp, session_id),
+        )
+        updated = cur.fetchone()
+
+        # Dacă există un plan asociat, marchează ziua ca completată
+        cur.execute(
+            "UPDATE study_plan_days SET completed=TRUE, session_id=%s WHERE session_id IS NULL AND user_id=%s AND plan_date=CURRENT_DATE AND completed=FALSE",
+            (session_id, str(current_user.id)),
+        )
+
+        conn.commit()
+
+    return dict(updated)
+
+
+@app.post("/study-sessions/{session_id}/abandon", tags=["Study"])
+def abandon_study_session(
+    session_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Elevul abandonează sesiunea."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "UPDATE study_sessions SET status='abandoned', completed_at=NOW() WHERE id=%s AND user_id=%s RETURNING id",
+            (session_id, str(current_user.id)),
+        )
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Sesiune inexistentă")
+        conn.commit()
+    return {"status": "abandoned"}
+
+
+@app.get("/study-sessions/", tags=["Study"])
+def list_study_sessions(
+    limit: int = 30,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Istoricul sesiunilor elevului."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """SELECT * FROM study_sessions
+               WHERE user_id=%s ORDER BY started_at DESC LIMIT %s""",
+            (str(current_user.id), limit),
+        )
+        return cur.fetchall()
+
+
+@app.get("/study-sessions/{session_id}", tags=["Study"])
+def get_study_session(
+    session_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Detaliile unei sesiuni (inclusiv exercițiile)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT * FROM study_sessions WHERE id=%s AND user_id=%s",
+            (session_id, str(current_user.id)),
+        )
+        session = cur.fetchone()
+        if not session:
+            raise HTTPException(status_code=404, detail="Sesiune inexistentă")
+
+        # Exercițiile din set
+        if session["exercise_set_id"]:
+            cur.execute(
+                """SELECT e.id, e.statement_latex, e.statement_text, e.difficulty, e.points,
+                          e.metadata, e.solution_latex, e.answer_latex
+                   FROM user_exercise_set_items si
+                   JOIN exercises e ON e.id = si.exercise_id
+                   WHERE si.set_id=%s""",
+                (str(session["exercise_set_id"]),),
+            )
+            exercises = cur.fetchall()
+        else:
+            exercises = []
+
+        result = dict(session)
+        result["exercises"] = exercises
+        return result
+
+
+@app.get("/student/study-stats", tags=["Study"])
+def get_student_study_stats(
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Statistici sesiuni pentru elev (și parinte via student_id param)."""
+    user_id = str(current_user.id)
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        # Totale
+        cur.execute(
+            """SELECT
+                COUNT(*) as total_sessions,
+                COUNT(*) FILTER (WHERE status='completed') as completed_sessions,
+                SUM(duration_sec) FILTER (WHERE status='completed') as total_time_sec,
+                SUM(exercises_completed) FILTER (WHERE status='completed') as total_exercises,
+                ROUND(AVG(avg_difficulty) FILTER (WHERE status='completed'), 1) as avg_difficulty,
+                SUM(xp_gained) as total_xp
+               FROM study_sessions WHERE user_id=%s""",
+            (user_id,),
+        )
+        totals = cur.fetchone()
+
+        # Sesiuni pe ultimele 30 de zile (pentru grafic)
+        cur.execute(
+            """SELECT
+                DATE(started_at) as date,
+                COUNT(*) as sessions,
+                SUM(exercises_completed) as exercises,
+                SUM(duration_sec) as time_sec
+               FROM study_sessions
+               WHERE user_id=%s AND started_at >= NOW() - INTERVAL '30 days'
+               GROUP BY DATE(started_at)
+               ORDER BY date""",
+            (user_id,),
+        )
+        daily = cur.fetchall()
+
+        # Progres per subiect (completate vs total disponibil)
+        cur.execute(
+            """SELECT
+                e.metadata->>'subiect' as subiect,
+                COUNT(*) as total_available
+               FROM exercises e
+               WHERE e.status='READY' AND e.metadata->>'subiect' IS NOT NULL
+               AND e.metadata::jsonb->>'parent_external_id' IS NULL
+               GROUP BY e.metadata->>'subiect'""",
+        )
+        available_by_subiect = {r["subiect"]: r["total_available"] for r in cur.fetchall()}
+
+        cur.execute(
+            """SELECT e.metadata->>'subiect' as subiect, COUNT(*) as completed
+               FROM student_progress sp
+               JOIN exercises e ON e.id = sp.exercise_id
+               WHERE sp.student_id=%s AND sp.completed=TRUE
+               AND e.metadata->>'subiect' IS NOT NULL
+               GROUP BY e.metadata->>'subiect'""",
+            (user_id,),
+        )
+        completed_by_subiect = {r["subiect"]: r["completed"] for r in cur.fetchall()}
+
+        subiect_progress = []
+        for s in ["1", "2", "3"]:
+            total = available_by_subiect.get(s, 0)
+            done = completed_by_subiect.get(s, 0)
+            subiect_progress.append({
+                "subiect": s,
+                "label": f"Subiectul {s}",
+                "total": total,
+                "completed": done,
+                "pct": round(done / total * 100) if total > 0 else 0,
+            })
+
+        # Recomandare: subiectul cu cel mai mic procent
+        rec = min(subiect_progress, key=lambda x: x["pct"]) if subiect_progress else None
+
+        return {
+            "totals": dict(totals) if totals else {},
+            "daily_last_30": [dict(d) for d in daily],
+            "subiect_progress": subiect_progress,
+            "recommendation": rec,
+        }
+
+
+@app.get("/parent/students/{student_id}/study-sessions", tags=["Parent"])
+def get_student_study_sessions_for_parent(
+    student_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Părintele vede sesiunile de studiu ale elevului său."""
+    if current_user.role not in (UserRole.PARENT, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Acces interzis")
+
+    # Verifică că e legat
+    if current_user.role == UserRole.PARENT:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "SELECT id FROM parent_student WHERE parent_id=%s AND student_id=%s",
+                (str(current_user.id), student_id),
+            )
+            if not cur.fetchone():
+                raise HTTPException(status_code=403, detail="Nu ești legat de acest elev")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """SELECT * FROM study_sessions
+               WHERE user_id=%s ORDER BY started_at DESC LIMIT 60""",
+            (student_id,),
+        )
+        sessions = cur.fetchall()
+
+        # Statistici rapide
+        cur.execute(
+            """SELECT
+                COUNT(*) FILTER (WHERE status='completed') as completed,
+                SUM(exercises_completed) FILTER (WHERE status='completed') as total_exercises,
+                SUM(duration_sec) FILTER (WHERE status='completed') as total_time_sec
+               FROM study_sessions WHERE user_id=%s""",
+            (student_id,),
+        )
+        stats = cur.fetchone()
+
+        return {"sessions": [dict(s) for s in sessions], "stats": dict(stats) if stats else {}}
+
+
+# =============================================================================
+# --- Study Plan ---
+# =============================================================================
+
+@app.get("/study-plan/", tags=["Study"])
+def get_study_plan(
+    student_id: Optional[str] = None,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    """
+    Returnează planul săptămânal pentru un elev.
+    Elevul vede propriul plan. Profesorul poate vedea planul oricărui elev.
+    """
+    # Dacă e profesor/admin și pasează student_id, vede planul elevului
+    if student_id and current_user.role in (UserRole.TEACHER, UserRole.ADMIN):
+        target_id = student_id
+    else:
+        target_id = str(current_user.id)
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """SELECT spd.*, u.full_name as teacher_name
+               FROM study_plan_days spd
+               LEFT JOIN users u ON u.id = spd.teacher_id
+               WHERE spd.user_id=%s AND spd.plan_date >= CURRENT_DATE - INTERVAL '1 day'
+               ORDER BY spd.plan_date, spd.created_at""",
+            (target_id,),
+        )
+        return cur.fetchall()
+
+
+@app.post("/study-plan/", tags=["Study"])
+def create_study_plan_day(
+    body: dict,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    """
+    Adaugă o intrare în planul săptămânal.
+    Elevul adaugă pentru sine. Profesorul adaugă pentru un elev (trebuie student_id).
+    """
+    plan_date = body.get("plan_date")  # YYYY-MM-DD
+    session_type = body.get("session_type", "test_scurt")
+    filters = body.get("filters", {})
+    note = body.get("note")
+    # frontend trimite user_id pentru elevul țintă (folosit de profesor)
+    target_student_id = body.get("user_id") or body.get("student_id")
+
+    if not plan_date:
+        raise HTTPException(status_code=400, detail="plan_date este obligatoriu")
+
+    if current_user.role in (UserRole.TEACHER, UserRole.ADMIN) and target_student_id:
+        # Profesor adaugă pentru un elev specific
+        target_user_id = target_student_id
+        created_by = "teacher"
+        teacher_id = str(current_user.id)
+    else:
+        # Elev sau profesor care adaugă pentru sine
+        target_user_id = str(current_user.id)
+        created_by = "student"
+        teacher_id = None
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """INSERT INTO study_plan_days
+               (user_id, plan_date, session_type, filters, note, created_by, teacher_id)
+               VALUES (%s, %s, %s, %s, %s, %s, %s)
+               RETURNING *""",
+            (
+                target_user_id, plan_date, session_type,
+                json.dumps(filters), note, created_by, teacher_id,
+            ),
+        )
+        row = cur.fetchone()
+
+        # Notifică elevul dacă planul a fost adăugat de profesor
+        if created_by == "teacher":
+            cur.execute(
+                """INSERT INTO notifications (user_id, type, title, body, related_id)
+                   VALUES (%s, 'study_plan', %s, %s, %s)""",
+                (
+                    target_user_id,
+                    "Plan de studiu nou 📅",
+                    f"Profesorul ți-a adăugat o sesiune în plan pentru {plan_date}.",
+                    str(row["id"]),
+                ),
+            )
+
+        conn.commit()
+    return dict(row)
+
+
+@app.delete("/study-plan/{plan_id}", tags=["Study"])
+def delete_study_plan_day(
+    plan_id: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Șterge o intrare din plan. Elevul șterge propria intrare, profesorul poate șterge orice."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        if current_user.role in (UserRole.TEACHER, UserRole.ADMIN):
+            cur.execute("DELETE FROM study_plan_days WHERE id=%s RETURNING id", (plan_id,))
+        else:
+            cur.execute(
+                "DELETE FROM study_plan_days WHERE id=%s AND user_id=%s RETURNING id",
+                (plan_id, str(current_user.id)),
+            )
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Intrare inexistentă")
+        conn.commit()
+    return {"deleted": True}
+
+
+@app.get("/teacher/students-list", tags=["Teacher"])
+def get_students_list(
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    """Profesorul vede lista tuturor elevilor activi (pentru a le adăuga plan)."""
+    if current_user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Acces interzis")
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT id, full_name, email FROM users WHERE role='student' AND is_active=TRUE ORDER BY full_name"
+        )
+        return cur.fetchall()

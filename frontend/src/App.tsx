@@ -22,6 +22,8 @@ import TeacherDashboard from "./components/TeacherDashboard";
 import AdminPanel from "./components/AdminPanel";
 import MyRequests from "./components/MyRequests";
 import ParentDashboard from "./components/ParentDashboard";
+import StudySession from "./components/StudySession";
+import StudyPlan from "./components/StudyPlan";
 
 import { AuthProvider, useAuth } from "./AuthContext";
 import NotificationBell from "./components/NotificationBell";
@@ -65,6 +67,26 @@ function AppHub() {
           </div>
           <div className="hub-card-cta">Deschide →</div>
         </Link>
+
+        {!isTeacher && (
+          <Link to="/app/study-session" className="hub-card hub-card-session">
+            <div className="hub-card-title">⚡ Sesiune de studiu</div>
+            <div className="hub-card-sub">
+              Test scurt (10 ex · 60 min) sau Test BAC (25 ex · 3h) cu timer live
+            </div>
+            <div className="hub-card-cta">Pornește →</div>
+          </Link>
+        )}
+
+        {!isTeacher && (
+          <Link to="/app/study-plan" className="hub-card hub-card-plan">
+            <div className="hub-card-title">📅 Plan săptămânal</div>
+            <div className="hub-card-sub">
+              Planifică sesiunile de studiu și urmărește countdown-ul până la BAC
+            </div>
+            <div className="hub-card-cta">Deschide →</div>
+          </Link>
+        )}
 
         <Link to="/app/variants" className="hub-card">
           <div className="hub-card-title">Variante BAC</div>
@@ -272,6 +294,26 @@ function AppShell() {
                 >
                   Cererile mele
                 </NavLink>
+                {!isTeacher && (
+                  <NavLink
+                    to="/app/study-session"
+                    className={({ isActive }) =>
+                      isActive ? "nav-link active" : "nav-link"
+                    }
+                  >
+                    Sesiuni
+                  </NavLink>
+                )}
+                {!isTeacher && (
+                  <NavLink
+                    to="/app/study-plan"
+                    className={({ isActive }) =>
+                      isActive ? "nav-link active" : "nav-link"
+                    }
+                  >
+                    Plan
+                  </NavLink>
+                )}
                 <NavLink
                   to="/app/variants"
                   className={({ isActive }) =>
@@ -288,6 +330,16 @@ function AppShell() {
                     }
                   >
                     Conținut
+                  </NavLink>
+                )}
+                {isTeacher && (
+                  <NavLink
+                    to="/app/study-plan"
+                    className={({ isActive }) =>
+                      isActive ? "nav-link active" : "nav-link"
+                    }
+                  >
+                    Plan studiu
                   </NavLink>
                 )}
                 {isTeacher && (
@@ -335,6 +387,8 @@ function AppShell() {
           <Route path="exercises" element={<StudentExercises />} />
           <Route path="teacher/requests" element={<TeacherDashboard />} />
           <Route path="my-requests" element={<MyRequests />} />
+          <Route path="study-session" element={<StudySession />} />
+          <Route path="study-plan" element={<StudyPlan />} />
           <Route path="admin" element={<AdminPanel />} />
           <Route path="parent" element={<ParentDashboard />} />
           <Route path="*" element={<Navigate to="/app" replace />} />
