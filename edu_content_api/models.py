@@ -813,3 +813,37 @@ class SubmissionForTeacher(BaseModel):
     class Config:
         from_attributes = True
         json_encoders = {uuid.UUID: str, datetime: lambda dt: dt.isoformat()}
+
+
+# --- Study / Saved Sets Request Models ---
+
+class ExerciseSetCreateRequest(BaseModel):
+    exercise_ids: List[uuid.UUID]
+    filters: Dict[str, Any] = Field(default_factory=dict)
+    name: Optional[str] = None
+    linked_plan: Optional[str] = None
+
+
+class StudySessionStartRequest(BaseModel):
+    session_type: str = "test_scurt"
+    filters: Dict[str, Any] = Field(default_factory=dict)
+    plan_day_id: Optional[str] = None
+
+
+class StudySessionCompleteRequest(BaseModel):
+    exercises_completed: int = 0
+    duration_sec: int = 0
+
+
+class StudyPlanDayCreateRequest(BaseModel):
+    plan_date: str
+    session_type: str = "test_scurt"
+    filters: Dict[str, Any] = Field(default_factory=dict)
+    note: Optional[str] = None
+    user_id: Optional[str] = None
+    student_id: Optional[str] = None
+
+
+class AdminParentStudentLinkRequest(BaseModel):
+    parent_id: str
+    student_id: str

@@ -10,6 +10,14 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
+import {
+  addExercisesToVariant,
+  createVariant as createVariantRequest,
+  getExercises,
+  getVariantExercises,
+  getVariants,
+  removeExerciseFromVariant,
+} from "../api";
 import "./VariantBuilder.css";
 
 interface Exercise {
@@ -46,8 +54,6 @@ interface VariantExercise extends Exercise {
 type MsgType = "info" | "success" | "error";
 type UiMsg = { type: MsgType; text: string };
 
-const DEFAULT_API_BASE = "http://localhost:8000";
-
 function previewText(ex: Pick<Exercise, "statement_text" | "statement_latex">) {
   const raw = (ex.statement_text || ex.statement_latex || "").trim();
   if (!raw) return "(fără enunț)";
@@ -66,8 +72,6 @@ function examLabel(v: string) {
 }
 
 export default function VariantBuilder() {
-  const apiBase = (import.meta as any).env?.VITE_API_URL ?? DEFAULT_API_BASE;
-
   const [variants, setVariants] = useState<Variant[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
@@ -122,21 +126,18 @@ export default function VariantBuilder() {
   const setError = (text: string) => setMsg({ type: "error", text });
 
   const fetchVariants = async () => {
-    const r = await fetch(`${apiBase}/variants/`);
-    if (!r.ok) throw new Error("Nu pot încărca lista de variante.");
-    return (await r.json()) as Variant[];
+    const res = await getVariants();
+    return res.data as Variant[];
   };
 
   const fetchExercises = async () => {
-    const r = await fetch(`${apiBase}/exercises/`);
-    if (!r.ok) throw new Error("Nu pot încărca lista de exerciții.");
-    return (await r.json()) as Exercise[];
+    const res = await getExercises();
+    return res.data as Exercise[];
   };
 
   const fetchVariantExercises = async (variantId: string) => {
-    const r = await fetch(`${apiBase}/variants/${variantId}/exercises/`);
-    if (!r.ok) throw new Error("Nu pot încărca exercițiile pentru variantă.");
-    return (await r.json()) as VariantExercise[];
+    const res = await getVariantExercises(variantId);
+    return res.data as VariantExercise[];
   };
 
   const refreshAll = async () => {
@@ -183,20 +184,13 @@ export default function VariantBuilder() {
     });
   };
 
-  const createVariant = async (e: React.FormEvent) => {
+  const handleCreateVariant = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setInfo("Se creează varianta…");
     try {
-      const r = await fetch(`${apiBase}/variants/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newVariant),
-      });
-
-      if (!r.ok) throw new Error("Eroare la crearea variantei.");
-
-      const created = (await r.json()) as Variant;
+      const res = await createVariantRequest(newVariant);
+      const created = res.data as Variant;
       setVariants((prev) => [created, ...prev]);
       setSelectedVariantId(created.id);
       setShowCreate(false);
@@ -230,14 +224,7 @@ export default function VariantBuilder() {
     setLoading(true);
     setInfo("Se adaugă exercițiile în variantă…");
     try {
-      const r = await fetch(`${apiBase}/variants/${selectedVariantId}/exercises/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(Array.from(selectedExercises)),
-      });
-
-      if (!r.ok) throw new Error("Eroare la adăugarea exercițiilor.");
-
+      await addExercisesToVariant(selectedVariantId, Array.from(selectedExercises));
       const ve = await fetchVariantExercises(selectedVariantId);
       setVariantExercises(ve);
       setSelectedExercises(new Set());
@@ -255,12 +242,7 @@ export default function VariantBuilder() {
     setLoading(true);
     setInfo("Se șterge exercițiul…");
     try {
-      const r = await fetch(`${apiBase}/variants/${selectedVariantId}/exercises/${exerciseId}`, {
-        method: "DELETE",
-      });
-
-      if (!r.ok) throw new Error("Eroare la ștergerea exercițiului.");
-
+      await removeExerciseFromVariant(selectedVariantId, exerciseId);
       const ve = await fetchVariantExercises(selectedVariantId);
       setVariantExercises(ve);
       setSuccess("Exercițiu șters.");
@@ -328,7 +310,7 @@ export default function VariantBuilder() {
           </div>
 
           {showCreate && (
-            <form className="vx-form" onSubmit={createVariant}>
+                <form className="vx-form" onSubmit={handleCreateVariant}>
               <div className="vx-form-title">Creare variantă</div>
 
               <div className="vx-field">

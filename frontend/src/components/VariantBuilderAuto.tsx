@@ -10,7 +10,15 @@ import {
   Sparkles,
   Zap,
 } from "lucide-react";
-import { getMyVariants, getMyLimits, type GenLimits } from "../api";
+import {
+  createVariant as createVariantRequest,
+  generateVariant,
+  getMyLimits,
+  getMyVariants,
+  getVariantDocument,
+  getVariantExercises,
+  type GenLimits,
+} from "../api";
 import { useAuth } from "../AuthContext";
 import LatexRenderer from "./LatexRenderer";
 import "./VariantBuilder.css";
@@ -45,11 +53,7 @@ interface VariantExercise {
 type MsgType = "info" | "success" | "error";
 type UiMsg = { type: MsgType; text: string };
 
-const DEFAULT_API_BASE = "http://localhost:8000";
-
-
 export default function VariantBuilderAuto() {
-  const apiBase = (import.meta as any).env?.VITE_API_URL ?? DEFAULT_API_BASE;
   const { canDownloadPdf } = useAuth();
 
   const [variants, setVariants] = useState<Variant[]>([]);
@@ -85,22 +89,14 @@ export default function VariantBuilderAuto() {
   const setSuccess = (text: string) => setMsg({ type: "success", text });
   const setError = (text: string) => setMsg({ type: "error", text });
 
-  const authHeaders = (): Record<string, string> => {
-    const token = localStorage.getItem('access_token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  };
-
   const fetchVariants = async () => {
     const res = await getMyVariants();
     return res.data as Variant[];
   };
 
   const fetchVariantExercises = async (variantId: string) => {
-    const r = await fetch(`${apiBase}/variants/${variantId}/exercises/`, {
-      headers: authHeaders(),
-    });
-    if (!r.ok) throw new Error("Nu pot încărca exercițiile pentru variantă.");
-    return (await r.json()) as VariantExercise[];
+    const res = await getVariantExercises(variantId);
+    return res.data as VariantExercise[];
   };
 
   const refreshAll = async () => {
@@ -141,20 +137,13 @@ export default function VariantBuilderAuto() {
     })();
   }, [selectedVariantId]);
 
-  const createVariant = async (e: React.FormEvent) => {
+  const handleCreateVariant = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setInfo("Se creează varianta…");
     try {
-      const r = await fetch(`${apiBase}/variants/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify(newVariant),
-      });
-
-      if (!r.ok) throw new Error("Eroare la crearea variantei.");
-
-      const created = (await r.json()) as Variant;
+      const res = await createVariantRequest(newVariant);
+      const created = res.data as Variant;
       setVariants((prev) => [created, ...prev]);
       setSelectedVariantId(created.id);
       setShowCreate(false);
@@ -176,17 +165,7 @@ export default function VariantBuilderAuto() {
     setLoading(true);
     setInfo("Se generează automat exercițiile…");
     try {
-      const r = await fetch(`${apiBase}/variants/generate`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders() },
-        body: JSON.stringify({ variant_id: selectedVariantId }),
-      });
-
-      if (!r.ok) {
-        const errData = await r.json().catch(() => ({}));
-        throw new Error(errData.detail || "Eroare la generare.");
-      }
-
+      await generateVariant(selectedVariantId);
       const ve = await fetchVariantExercises(selectedVariantId);
       setVariantExercises(ve);
       setSuccess("Generare completă.");
@@ -206,14 +185,8 @@ export default function VariantBuilderAuto() {
     }
     setInfo("Se generează documentul…");
     try {
-      const r = await fetch(`${apiBase}/variants/${selectedVariantId}/${endpoint}`, {
-        headers: authHeaders(),
-      });
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(err.detail || "Eroare la generare.");
-      }
-      const blob = await r.blob();
+      const res = await getVariantDocument(selectedVariantId, endpoint as 'preview-exam' | 'preview-solutions' | 'preview-barem');
+      const blob = res.data as Blob;
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
       setMsg(null);
@@ -328,7 +301,7 @@ export default function VariantBuilderAuto() {
           </div>
 
           {showCreate && (
-            <form className="vx-form" onSubmit={createVariant}>
+              <form className="vx-form" onSubmit={handleCreateVariant}>
               <div className="vx-form-title">Creare variantă</div>
 
               <div className="vx-field">

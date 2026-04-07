@@ -1,6 +1,16 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000'; // FastAPI default port
+const DEFAULT_API_BASE_URL = 'http://localhost:8000';
+
+export const API_BASE_URL =
+  (import.meta as ImportMeta & { env?: { VITE_API_URL?: string } }).env?.VITE_API_URL?.replace(/\/$/, '') ||
+  DEFAULT_API_BASE_URL;
+
+export function buildApiUrl(path?: string | null): string {
+  if (!path) return '';
+  if (/^https?:\/\//i.test(path)) return path;
+  return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -132,6 +142,25 @@ export interface HelpResponse {
 export const authRegister = (data: { email: string; password: string; full_name: string; role: string; school_name?: string }) =>
   api.post<AuthToken>('/auth/register', data);
 export const getMyVariants = () => api.get<any[]>('/variants/my');
+export const getVariants = () => api.get<any[]>('/variants/');
+export const getVariantExercises = (variantId: string) => api.get<any[]>(`/variants/${variantId}/exercises/`);
+export const createVariant = (data: {
+  name: string;
+  exam_type: string;
+  profile: string;
+  year: number;
+  session: string;
+  duration_minutes: number;
+  instructions: string;
+}) => api.post<any>('/variants/', data);
+export const addExercisesToVariant = (variantId: string, exerciseIds: string[]) =>
+  api.post(`/variants/${variantId}/exercises/`, exerciseIds);
+export const removeExerciseFromVariant = (variantId: string, exerciseId: string) =>
+  api.delete(`/variants/${variantId}/exercises/${exerciseId}`);
+export const generateVariant = (variantId: string) =>
+  api.post('/variants/generate', { variant_id: variantId });
+export const getVariantDocument = (variantId: string, endpoint: 'preview-exam' | 'preview-solutions' | 'preview-barem' | 'download-pdf') =>
+  api.get(`/variants/${variantId}/${endpoint}`, { responseType: 'blob' });
 export const getNotifications = () => api.get<any[]>('/notifications/');
 export const markNotificationRead = (id: string) => api.put(`/notifications/${id}/read`);
 export const markAllNotificationsRead = () => api.put('/notifications/read-all');

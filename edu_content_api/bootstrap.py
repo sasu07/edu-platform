@@ -1,0 +1,85 @@
+import os
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+
+from database import close_db_pool
+
+UPLOAD_DIR = "uploaded_files"
+
+ORIGINS = [
+    "http://localhost",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:8080",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+]
+
+
+def configure_app(app: FastAPI) -> None:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["Content-Disposition"],
+    )
+
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+    app.add_event_handler("startup", run_pending_migrations)
+    app.add_event_handler("shutdown", close_db_pool)
+
+
+def run_pending_migrations() -> None:
+    import glob as glob_mod
+
+    from database import conn_pool
+
+    if conn_pool is None:
+        return
+
+    migrations_dir = os.path.join(os.path.dirname(__file__), "migrations")
+    sql_files = sorted(glob_mod.glob(os.path.join(migrations_dir, "*.sql")))
+
+    with conn_pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    filename VARCHAR(255) PRIMARY KEY,
+                    applied_at TIMESTAMPTZ DEFAULT NOW()
+                )
+                """
+            )
+        conn.commit()
+
+        with conn.cursor() as cur:
+            cur.execute("SELECT filename FROM schema_migrations")
+            applied = {row[0] for row in cur.fetchall()}
+
+        for sql_file in sql_files:
+            filename = os.path.basename(sql_file)
+            if filename in applied:
+                continue
+            with open(sql_file, "r") as file_obj:
+                sql = file_obj.read()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(sql)
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO schema_migrations (filename) VALUES (%s)",
+                        (filename,),
+                    )
+                conn.commit()
+            except Exception as exc:
+                conn.rollback()
+                print(f"Migration {filename} failed: {exc}")
+                raise RuntimeError(f"Migration {filename} failed") from exc
+

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import React from 'react';
 import { Flag, CheckCircle, Clock, AlertCircle, ExternalLink, BookCheck, ThumbsUp, ThumbsDown, Paperclip, Hourglass } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import api from '../api';
+import api, { buildApiUrl } from '../api';
 import LatexRenderer from './LatexRenderer';
 import './MyRequests.css';
 
@@ -141,7 +141,7 @@ function HelpRequestsTab() {
                     {req.video_path && (
                       <div className="my-req-video">
                         <video controls style={{ maxWidth: '100%', borderRadius: 8 }}>
-                          <source src={`http://localhost:8000/files/${req.video_path}`} />
+                          <source src={buildApiUrl(req.video_path)} />
                           Browser-ul tău nu suportă video.
                         </video>
                       </div>
@@ -279,7 +279,7 @@ function SolutionsTab() {
                     <div className="my-req-section-label">Soluția ta</div>
                     <a
                       className="sol-file-btn"
-                      href={`http://localhost:8000${sub.photo_path}`}
+                      href={buildApiUrl(sub.photo_path)}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -309,7 +309,7 @@ function SolutionsTab() {
                     {sub.teacher_file_path && (
                       <a
                         className="sol-file-btn sol-file-teacher"
-                        href={`http://localhost:8000${sub.teacher_file_path}`}
+                        href={buildApiUrl(sub.teacher_file_path)}
                         target="_blank"
                         rel="noopener noreferrer"
                       >

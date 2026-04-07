@@ -7,6 +7,7 @@ import {
   getCompletedExerciseIds,
   submitExercise, uploadSubmissionPhoto, getMySubmission,
   linkParent, getMyParents, removeParentLink,
+  buildApiUrl,
   type Exercise, type GenLimits, type ExerciseSet, type ExerciseSetDetail, type FilterOptions,
   type ParentStudentLink, type SelfEval, type ExerciseSubmission,
 } from '../api';
@@ -245,7 +246,7 @@ function EvalModal({ exerciseId, existing, onDone, onClose }: {
                 {existing.teacher_file_path && (
                   <a
                     className="eval-teacher-file-btn"
-                    href={`http://localhost:8000${existing.teacher_file_path}`}
+                    href={buildApiUrl(existing.teacher_file_path)}
                     target="_blank"
                     rel="noopener noreferrer"
                   >

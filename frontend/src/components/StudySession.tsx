@@ -27,9 +27,9 @@ const SESSION_CONFIG = {
 
 const SUBIECT_OPTIONS = [
   { value: '',   label: 'Toate subiectele' },
-  { value: 'S1', label: 'Subiectul I'  },
-  { value: 'S2', label: 'Subiectul II' },
-  { value: 'S3', label: 'Subiectul III'},
+  { value: '1', label: 'Subiectul I'  },
+  { value: '2', label: 'Subiectul II' },
+  { value: '3', label: 'Subiectul III'},
 ];
 
 // ─── Countdown ────────────────────────────────────────────────────────────────

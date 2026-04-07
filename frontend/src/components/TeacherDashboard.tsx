@@ -6,6 +6,7 @@ import {
   uploadTeacherFile,
   assignPendingSubmissions,
   getSubmissionStats,
+  buildApiUrl,
 } from '../api';
 import './TeacherDashboard.css';
 
@@ -165,7 +166,7 @@ function SubmissionsTab() {
               {sub.photo_path && (
                 <div className="sub-photo-row">
                   <Camera size={14} />
-                  <button className="sub-photo-btn" onClick={() => setPhotoModal(`http://localhost:8000${sub.photo_path}`)}>
+                  <button className="sub-photo-btn" onClick={() => setPhotoModal(buildApiUrl(sub.photo_path))}>
                     <Eye size={13} /> Vezi fișier elev
                   </button>
                   {sub.photo_uploaded_at && (
@@ -179,7 +180,7 @@ function SubmissionsTab() {
               {sub.teacher_file_path && (
                 <div className="sub-photo-row">
                   <Paperclip size={14} />
-                  <a className="sub-photo-btn" href={`http://localhost:8000${sub.teacher_file_path}`} target="_blank" rel="noopener noreferrer">
+                  <a className="sub-photo-btn" href={buildApiUrl(sub.teacher_file_path)} target="_blank" rel="noopener noreferrer">
                     <Eye size={13} /> Fișier tău încărcat
                   </a>
                 </div>

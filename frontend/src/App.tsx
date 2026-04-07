@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -9,26 +9,31 @@ import {
   useNavigate,
 } from "react-router-dom";
 
-import SourceList from "./components/SourceList";
-import ExerciseList from "./components/ExerciseList";
-import ExerciseEditor from "./components/ExerciseEditor";
-import JSONImport from "./components/JSONImport";
-import VariantBuilderAuto from "./components/VariantBuilderAuto";
-import SourceDetails from "./components/SourceDetails";
 import Login from "./components/Login";
 import Register from "./components/Register";
-import StudentExercises from "./components/StudentExercises";
-import TeacherDashboard from "./components/TeacherDashboard";
-import AdminPanel from "./components/AdminPanel";
-import MyRequests from "./components/MyRequests";
-import ParentDashboard from "./components/ParentDashboard";
-import StudySession from "./components/StudySession";
-import StudyPlan from "./components/StudyPlan";
-
 import { AuthProvider, useAuth } from "./AuthContext";
 import NotificationBell from "./components/NotificationBell";
-import LandingPage from "./components/LandingPage";
+import { buildApiUrl } from "./api";
 import "./App.css";
+
+const LandingPage = lazy(() => import("./components/LandingPage"));
+const SourceList = lazy(() => import("./components/SourceList"));
+const ExerciseList = lazy(() => import("./components/ExerciseList"));
+const ExerciseEditor = lazy(() => import("./components/ExerciseEditor"));
+const JSONImport = lazy(() => import("./components/JSONImport"));
+const VariantBuilderAuto = lazy(() => import("./components/VariantBuilderAuto"));
+const SourceDetails = lazy(() => import("./components/SourceDetails"));
+const StudentExercises = lazy(() => import("./components/StudentExercises"));
+const TeacherDashboard = lazy(() => import("./components/TeacherDashboard"));
+const AdminPanel = lazy(() => import("./components/AdminPanel"));
+const MyRequests = lazy(() => import("./components/MyRequests"));
+const ParentDashboard = lazy(() => import("./components/ParentDashboard"));
+const StudySession = lazy(() => import("./components/StudySession"));
+const StudyPlan = lazy(() => import("./components/StudyPlan"));
+
+function RouteLoader() {
+  return <div className="auth-loading">Se încarcă...</div>;
+}
 
 // --- Route guard pentru utilizatori autentificați ---
 function RequireAuth({ children }: { children: React.ReactElement }) {
@@ -139,7 +144,9 @@ function SourcesPage({ refreshKey }: { refreshKey: number }) {
       </header>
 
       <div className="content-grid single-column">
-        <SourceList refreshKey={refreshKey} />
+        <Suspense fallback={<RouteLoader />}>
+          <SourceList refreshKey={refreshKey} />
+        </Suspense>
       </div>
     </>
   );
@@ -188,14 +195,37 @@ function ContentShell({
         <Route
           path="import"
           element={
-            <div className="content-grid single-column">
-              <JSONImport onImportSuccess={onImportSuccess} />
-            </div>
+            <Suspense fallback={<RouteLoader />}>
+              <div className="content-grid single-column">
+                <JSONImport onImportSuccess={onImportSuccess} />
+              </div>
+            </Suspense>
           }
         />
-        <Route path="exercises" element={<ExerciseList refreshKey={refreshKey} />} />
-        <Route path="exercises/:id" element={<ExerciseEditor />} />
-        <Route path="sources/:sourceId" element={<SourceDetails />} />
+        <Route
+          path="exercises"
+          element={
+            <Suspense fallback={<RouteLoader />}>
+              <ExerciseList refreshKey={refreshKey} />
+            </Suspense>
+          }
+        />
+        <Route
+          path="exercises/:id"
+          element={
+            <Suspense fallback={<RouteLoader />}>
+              <ExerciseEditor />
+            </Suspense>
+          }
+        />
+        <Route
+          path="sources/:sourceId"
+          element={
+            <Suspense fallback={<RouteLoader />}>
+              <SourceDetails />
+            </Suspense>
+          }
+        />
         <Route path="sources" element={<SourcesPage refreshKey={refreshKey} />} />
         <Route path="*" element={<Navigate to="/app/content/import" replace />} />
       </Routes>
@@ -236,7 +266,7 @@ function AppShell() {
   useEffect(() => {
     const checkConnection = async () => {
       try {
-        const response = await fetch("http://localhost:8000/");
+        const response = await fetch(buildApiUrl("/health"));
         setIsOnline(response.ok);
       } catch {
         setIsOnline(false);
@@ -383,14 +413,70 @@ function AppShell() {
             path="content/*"
             element={<ContentShell refreshKey={refreshKey} onImportSuccess={bumpRefresh} />}
           />
-          <Route path="variants" element={<VariantBuilderAuto />} />
-          <Route path="exercises" element={<StudentExercises />} />
-          <Route path="teacher/requests" element={<TeacherDashboard />} />
-          <Route path="my-requests" element={<MyRequests />} />
-          <Route path="study-session" element={<StudySession />} />
-          <Route path="study-plan" element={<StudyPlan />} />
-          <Route path="admin" element={<AdminPanel />} />
-          <Route path="parent" element={<ParentDashboard />} />
+          <Route
+            path="variants"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <VariantBuilderAuto />
+              </Suspense>
+            }
+          />
+          <Route
+            path="exercises"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <StudentExercises />
+              </Suspense>
+            }
+          />
+          <Route
+            path="teacher/requests"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <TeacherDashboard />
+              </Suspense>
+            }
+          />
+          <Route
+            path="my-requests"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <MyRequests />
+              </Suspense>
+            }
+          />
+          <Route
+            path="study-session"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <StudySession />
+              </Suspense>
+            }
+          />
+          <Route
+            path="study-plan"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <StudyPlan />
+              </Suspense>
+            }
+          />
+          <Route
+            path="admin"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <AdminPanel />
+              </Suspense>
+            }
+          />
+          <Route
+            path="parent"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <ParentDashboard />
+              </Suspense>
+            }
+          />
           <Route path="*" element={<Navigate to="/app" replace />} />
         </Routes>
       </main>
@@ -413,7 +499,14 @@ export default function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          <Route
+            path="/"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <LandingPage />
+              </Suspense>
+            }
+          />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route

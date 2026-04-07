@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Download, FileText, BookOpen, ChevronDown, ChevronRight } from "lucide-react";
-import api from "../api";
+import api, { buildApiUrl } from "../api";
 import "./SourceList.css";
 
 interface Source {
@@ -62,8 +62,8 @@ function SourceRow({ source, stats }: { source: Source; stats: SourceStats | und
     setDlLoading(type);
     const url =
       type === "varianta"
-        ? `http://localhost:8000/sources/${source.id}/download`
-        : `http://localhost:8000/sources/${source.id}/download-barem`;
+        ? buildApiUrl(`/sources/${source.id}/download`)
+        : buildApiUrl(`/sources/${source.id}/download-barem`);
     const label =
       type === "varianta"
         ? `Varianta_${source.name}`
