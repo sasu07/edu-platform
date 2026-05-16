@@ -1,16 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Eye, EyeOff, Flag, ChevronDown, ChevronUp, BookOpen, Zap, Layers, Trash2, ChevronRight, ChevronLeft, SlidersHorizontal, X, CalendarDays, Play, Pencil } from 'lucide-react';
 import {
   getExercises, getBatchChildren, createHelpRequest,
   getMyLimits, logExerciseGeneration, saveExerciseSet, getExerciseSets,
   getExerciseSet, updateExerciseSet, deleteExerciseSet, getExerciseFilterOptions,
-  getCompletedExerciseIds,
+  getCompletedExerciseIds, getReviewItems, openReviewItem,
+  resolveReviewItem,
   submitExercise, uploadSubmissionPhoto, getMySubmission,
   linkParent, getMyParents, removeParentLink,
   createStudyPlanDay,
   buildApiUrl,
   type Exercise, type GenLimits, type ExerciseSet, type ExerciseSetDetail, type FilterOptions,
-  type ParentStudentLink, type SelfEval, type ExerciseSubmission, type SessionType,
+  type ParentStudentLink, type SelfEval, type ExerciseSubmission, type SessionType, type ReviewItem,
 } from '../api';
 import { useAuth } from '../AuthContext';
 import LatexRenderer from './LatexRenderer';
@@ -19,37 +20,129 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import './StudentExercises.css';
 
 const PAGE_SIZE = 22;
+const WORKSPACE_SAVE_DEBOUNCE_MS = 350;
 
-const FLAG_OPTIONS = [
-  { type: 'WRITTEN', icon: '✍️', label: 'Rezolvare scrisă',  desc: 'Profesorul îți trimite rezolvarea detaliată în scris' },
-  { type: 'VIDEO',   icon: '🎥', label: 'Rezolvare video',    desc: 'Profesorul înregistrează un clip explicativ' },
-  { type: 'LIVE',    icon: '🎙️', label: 'Sesiune live',       desc: 'Intri online cu un profesor în timp real (Zoom)' },
+const MATH_TEMPLATES = [
+  { label: 'Fracție', snippet: '\\frac{a}{b}' },
+  { label: 'Putere', snippet: 'x^{2}' },
+  { label: 'Radical', snippet: '\\sqrt{x}' },
+  { label: 'Integrală', snippet: '\\int_a^b f(x)\\,dx' },
+  { label: 'Limită', snippet: '\\lim_{x \\to a} f(x)' },
+  { label: 'Vector', snippet: '\\overrightarrow{AB}' },
+  { label: 'Sistem', snippet: '\\begin{cases} x + y = 1 \\\\ x - y = 3 \\end{cases}' },
 ];
 
-interface FlagModalProps {
-  exerciseId: string;
-  onClose: () => void;
-  onSuccess: () => void;
+interface ExerciseWorkspaceDraft {
+  notes: string;
+  finalAnswer: string;
+  updatedAt: string;
 }
 
-function FlagModal({ exerciseId, onClose, onSuccess }: FlagModalProps) {
-  const [selected, setSelected] = useState<string | null>(null);
-  const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+function getWorkspaceStorageKey(userId: string, exerciseId: string) {
+  return `exercise-workspace:${userId}:${exerciseId}`;
+}
 
-  const handleSubmit = async () => {
-    if (!selected) return;
-    setLoading(true);
-    setError('');
+function readWorkspaceDraft(userId: string | undefined, exerciseId: string): ExerciseWorkspaceDraft | null {
+  if (!userId || typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(getWorkspaceStorageKey(userId, exerciseId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<ExerciseWorkspaceDraft>;
+    return {
+      notes: parsed.notes || '',
+      finalAnswer: parsed.finalAnswer || '',
+      updatedAt: parsed.updatedAt || '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveWorkspaceDraft(userId: string | undefined, exerciseId: string, draft: ExerciseWorkspaceDraft) {
+  if (!userId || typeof window === 'undefined') return;
+  window.localStorage.setItem(getWorkspaceStorageKey(userId, exerciseId), JSON.stringify(draft));
+}
+
+function clearWorkspaceDraft(userId: string | undefined, exerciseId: string) {
+  if (!userId || typeof window === 'undefined') return;
+  window.localStorage.removeItem(getWorkspaceStorageKey(userId, exerciseId));
+}
+
+const BLOCK_REASONS = [
+  {
+    key: 'statement',
+    label: 'Nu înțeleg cerința',
+    tips: [
+      'Recitește enunțul și separă datele de ce se cere efectiv.',
+      'Deschide rezolvarea doar după ce încerci să reformulezi cerința în cuvintele tale.',
+      'Caută în aceeași listă un exercițiu cu structură asemănătoare.',
+    ],
+  },
+  {
+    key: 'start',
+    label: 'Nu știu de unde să încep',
+    tips: [
+      'Încearcă să identifici formula, teorema sau metoda care apare cel mai des pe tipul acesta de exercițiu.',
+      'Lucrează mai întâi pe un exemplu mai ușor din același subiect.',
+      'Scrie primul pas posibil, chiar dacă nu vezi toată rezolvarea.',
+    ],
+  },
+  {
+    key: 'calculation',
+    label: 'Mă pierd la calcule',
+    tips: [
+      'Verifică dacă ai simplificat prea devreme sau ai omis o paranteză.',
+      'Împarte rezolvarea în pași scurți și validează fiecare transformare.',
+      'Compară cu baremul doar punctul unde simți că se rupe logica.',
+    ],
+  },
+  {
+    key: 'method',
+    label: 'Nu înțeleg metoda',
+    tips: [
+      'Uită-te dacă exercițiul cere o tehnică pe care ai mai întâlnit-o: substituție, funcții, sisteme, trigonometrie.',
+      'Încearcă un exercițiu similar mai ușor înainte de a reveni aici.',
+      'Dacă te blochezi repetat, salvează-l în lista de revăzut și escaladează doar după încă o încercare.',
+    ],
+  },
+];
+
+function BlockedModal({ exerciseId, onClose, isPremium }: { exerciseId: string; onClose: () => void; isPremium: boolean }) {
+  const [selectedReason, setSelectedReason] = useState(BLOCK_REASONS[0].key);
+  const [notes, setNotes] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  const reason = BLOCK_REASONS.find((item) => item.key === selectedReason) || BLOCK_REASONS[0];
+
+  const handleSaveForReview = async () => {
+    setBusy(true);
+    setMessage('');
     try {
-      await createHelpRequest({ exercise_id: exerciseId, flag_type: selected, notes });
-      onSuccess();
-      onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Eroare la trimiterea cererii');
+      await openReviewItem(exerciseId, 'blocked');
+      setMessage('Exercițiul a fost adăugat în lista ta de revizuit.');
+    } catch {
+      setMessage('Nu am putut salva exercițiul în jurnalul de erori.');
     } finally {
-      setLoading(false);
+      setBusy(false);
+    }
+  };
+
+  const handleEscalate = async () => {
+    if (!isPremium) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      await openReviewItem(exerciseId, 'blocked');
+      await createHelpRequest({
+        exercise_id: exerciseId,
+        flag_type: 'WRITTEN',
+        notes: `Blocaj: ${reason.label}${notes.trim() ? `\n\nDetalii elev: ${notes.trim()}` : ''}`,
+      });
+      setMessage('Cererea a fost trimisă profesorului, iar exercițiul a rămas în lista ta de revizuit.');
+    } catch (err: any) {
+      setMessage(err?.response?.data?.detail || 'Nu am putut trimite cererea către profesor.');
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -57,43 +150,54 @@ function FlagModal({ exerciseId, onClose, onSuccess }: FlagModalProps) {
     <div className="flag-modal-overlay" onClick={onClose}>
       <div className="flag-modal" onClick={(e) => e.stopPropagation()}>
         <div className="flag-modal-header">
-          <h3>Cere ajutor pentru acest exercițiu</h3>
+          <h3>M-am blocat</h3>
           <button className="flag-modal-close" onClick={onClose}>×</button>
         </div>
-        <p className="flag-modal-subtitle">Alege cum vrei să primești ajutorul:</p>
 
-        <div className="flag-options">
-          {FLAG_OPTIONS.map((opt) => (
+        <p className="flag-modal-subtitle">Spune-ne unde te-ai blocat. Mai întâi îl salvăm pentru revizuire, iar dacă încă rămâi blocat poți escalada către profesor.</p>
+
+        <div className="eval-options">
+          {BLOCK_REASONS.map((item) => (
             <button
-              key={opt.type}
-              className={`flag-option ${selected === opt.type ? 'selected' : ''}`}
-              onClick={() => setSelected(opt.type)}
+              key={item.key}
+              className={`eval-option ${selectedReason === item.key ? 'selected' : ''}`}
+              onClick={() => setSelectedReason(item.key)}
             >
-              <span className="flag-option-icon">{opt.icon}</span>
-              <div className="flag-option-text">
-                <div className="flag-option-label">{opt.label}</div>
-                <div className="flag-option-desc">{opt.desc}</div>
+              <div className="eval-option-text">
+                <div className="eval-option-label">{item.label}</div>
+                <div className="eval-option-desc">Alege varianta care descrie cel mai bine blocajul tău.</div>
               </div>
             </button>
           ))}
         </div>
 
+        <div className="review-summary-card" style={{ marginTop: 12 }}>
+          <div className="review-summary-text">
+            {reason.tips.map((tip) => (
+              <div key={tip}>• {tip}</div>
+            ))}
+          </div>
+        </div>
+
         <div className="flag-notes">
-          <label>Mesaj pentru profesor (opțional)</label>
+          <label>Ce ai încercat până acum? (opțional)</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Ex: Nu înțeleg pasul de la integrare..."
+            placeholder="Ex: am încercat metoda cu substituție, dar nu-mi iese pasul 2"
             rows={3}
           />
         </div>
 
-        {error && <div className="flag-error">{error}</div>}
+        {message && <div className={`parents-msg ${message.includes('nu') || message.includes('Nu') ? 'err' : 'ok'}`}>{message}</div>}
 
         <div className="flag-modal-actions">
-          <button className="flag-cancel-btn" onClick={onClose}>Anulează</button>
-          <button className="flag-submit-btn" disabled={!selected || loading} onClick={handleSubmit}>
-            {loading ? 'Se trimite...' : 'Trimite cererea'}
+          <button className="flag-cancel-btn" onClick={onClose}>Închide</button>
+          <button className="flag-submit-btn" onClick={handleSaveForReview} disabled={busy}>
+            {busy ? 'Se salvează...' : 'Adaugă la revizuit'}
+          </button>
+          <button className="flag-submit-btn" onClick={handleEscalate} disabled={busy || !isPremium}>
+            Escaladează la profesor
           </button>
         </div>
       </div>
@@ -101,37 +205,361 @@ function FlagModal({ exerciseId, onClose, onSuccess }: FlagModalProps) {
   );
 }
 
-function HelpButton({ exerciseId, isPremium }: { exerciseId: string; isPremium: boolean }) {
+function BlockedButton({ exerciseId, isPremium }: { exerciseId: string; isPremium: boolean }) {
   const [showModal, setShowModal] = useState(false);
-  const [sent, setSent] = useState(false);
+  return (
+    <>
+      <button className="student-btn-flag" onClick={() => setShowModal(true)} title="Salvează blocajul sau cere sprijin">
+        <Flag size={15} />
+        M-am blocat
+      </button>
+      {showModal && <BlockedModal exerciseId={exerciseId} onClose={() => setShowModal(false)} isPremium={isPremium} />}
+    </>
+  );
+}
 
-  if (!isPremium) {
-    return (
-      <span className="student-flag-locked" title="Necesită abonament Premium">
-        <Flag size={15} /> Premium
-      </span>
-    );
-  }
+function CorrectionButton({ exerciseId, completedIds, onToggleComplete }: {
+  exerciseId: string;
+  completedIds: Set<string>;
+  onToggleComplete: (id: string, val: boolean, xp: number, badges: string[]) => void;
+}) {
+  const [showModal, setShowModal] = useState(false);
+  const [existing, setExisting] = useState<ExerciseSubmission | null>(null);
+  const isCompleted = completedIds.has(exerciseId);
+
+  const handleOpen = async () => {
+    try {
+      const res = await getMySubmission(exerciseId);
+      setExisting(res.data ?? null);
+    } catch {
+      setExisting(null);
+    }
+    setShowModal(true);
+  };
+
+  const handleDone = (xp: number) => {
+    setShowModal(false);
+    onToggleComplete(exerciseId, true, xp, []);
+  };
 
   return (
     <>
       <button
-        className={`student-btn-flag ${sent ? 'sent' : ''}`}
-        onClick={() => !sent && setShowModal(true)}
-        disabled={sent}
-        title="Cere ajutor de la un profesor"
+        className={`student-btn-correction ${isCompleted ? 'active' : ''}`}
+        onClick={handleOpen}
+        title="Trimite soluția pentru corectare"
       >
         <Flag size={15} />
-        {sent ? 'Trimis ✓' : 'Ajutor'}
+        Vreau corectare
       </button>
       {showModal && (
-        <FlagModal
+        <EvalModal
           exerciseId={exerciseId}
+          existing={existing}
+          onDone={handleDone}
           onClose={() => setShowModal(false)}
-          onSuccess={() => setSent(true)}
+          initialSelfEval={existing?.self_eval ?? 'partial'}
+          preferPhotoFlow
         />
       )}
     </>
+  );
+}
+
+function buildMatrixLatex(values: string[][]) {
+  const rows = values
+    .map((row) => row.map((cell) => cell.trim() || '\\square').join(' & '))
+    .join(' \\\\ ');
+  return `\\begin{bmatrix} ${rows} \\end{bmatrix}`;
+}
+
+function buildValueTableLatex(xValues: string[], yValues: string[], yLabel: string) {
+  const cols = 'c|' + 'c'.repeat(Math.max(xValues.length, 1));
+  const xRow = ['x', ...xValues.map((value) => value.trim() || '\\square')].join(' & ');
+  const yRow = [yLabel || 'f(x)', ...yValues.map((value) => value.trim() || '\\square')].join(' & ');
+  return `\\begin{array}{${cols}} ${xRow} \\\\ \\hline ${yRow} \\end{array}`;
+}
+
+function wrapForPreview(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const mathy = /\\|[_^{}]|\\begin|\\frac|\\sqrt|\\int|\\lim|\\sum/.test(trimmed);
+  return mathy ? `$$${trimmed}$$` : trimmed;
+}
+
+function ExerciseWorkspace({ exerciseId }: { exerciseId: string }) {
+  const { user } = useAuth();
+  const [open, setOpen] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [finalAnswer, setFinalAnswer] = useState('');
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [hydrated, setHydrated] = useState(false);
+  const [activeField, setActiveField] = useState<'notes' | 'final'>('notes');
+  const [showMatrixBuilder, setShowMatrixBuilder] = useState(false);
+  const [showTableBuilder, setShowTableBuilder] = useState(false);
+  const [matrixValues, setMatrixValues] = useState([
+    ['', ''],
+    ['', ''],
+  ]);
+  const [tableXValues, setTableXValues] = useState(['', '', '']);
+  const [tableYValues, setTableYValues] = useState(['', '', '']);
+  const [tableYLabel, setTableYLabel] = useState('f(x)');
+  const notesRef = useRef<HTMLTextAreaElement | null>(null);
+  const finalRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const draft = readWorkspaceDraft(user?.id, exerciseId);
+    if (draft) {
+      setNotes(draft.notes);
+      setFinalAnswer(draft.finalAnswer);
+    } else {
+      setNotes('');
+      setFinalAnswer('');
+    }
+    setHydrated(true);
+  }, [exerciseId, user?.id]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const hasContent = notes.trim() || finalAnswer.trim();
+    if (!hasContent) {
+      clearWorkspaceDraft(user?.id, exerciseId);
+      setSaveState('idle');
+      return;
+    }
+    setSaveState('saving');
+    const timer = window.setTimeout(() => {
+      saveWorkspaceDraft(user?.id, exerciseId, {
+        notes,
+        finalAnswer,
+        updatedAt: new Date().toISOString(),
+      });
+      setSaveState('saved');
+    }, WORKSPACE_SAVE_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [exerciseId, finalAnswer, hydrated, notes, user?.id]);
+
+  const hasDraft = notes.trim().length > 0 || finalAnswer.trim().length > 0;
+
+  const handleReset = () => {
+    setNotes('');
+    setFinalAnswer('');
+    clearWorkspaceDraft(user?.id, exerciseId);
+    setSaveState('idle');
+  };
+
+  const insertIntoActiveField = (snippet: string) => {
+    const targetRef = activeField === 'notes' ? notesRef.current : finalRef.current;
+    const currentValue = activeField === 'notes' ? notes : finalAnswer;
+    const start = targetRef?.selectionStart ?? currentValue.length;
+    const end = targetRef?.selectionEnd ?? currentValue.length;
+    const nextValue = `${currentValue.slice(0, start)}${snippet}${currentValue.slice(end)}`;
+    if (activeField === 'notes') {
+      setNotes(nextValue);
+    } else {
+      setFinalAnswer(nextValue);
+    }
+    window.setTimeout(() => {
+      targetRef?.focus();
+      const pos = start + snippet.length;
+      targetRef?.setSelectionRange(pos, pos);
+    }, 0);
+  };
+
+  const resizeMatrix = (size: number) => {
+    setMatrixValues(Array.from({ length: size }, (_, rowIdx) =>
+      Array.from({ length: size }, (_, colIdx) => matrixValues[rowIdx]?.[colIdx] || '')
+    ));
+  };
+
+  const insertMatrix = () => {
+    insertIntoActiveField(buildMatrixLatex(matrixValues));
+    setShowMatrixBuilder(false);
+  };
+
+  const insertValueTable = () => {
+    insertIntoActiveField(buildValueTableLatex(tableXValues, tableYValues, tableYLabel));
+    setShowTableBuilder(false);
+  };
+
+  return (
+    <div className={`exercise-workspace ${open ? 'open' : ''}`}>
+      <div className="exercise-workspace-header">
+        <button
+          className={`exercise-workspace-toggle ${hasDraft ? 'has-draft' : ''}`}
+          onClick={() => setOpen((value) => !value)}
+        >
+          <Pencil size={15} />
+          {open ? 'Ascunde schița' : hasDraft ? 'Continuă schița' : 'Rezolv aici'}
+        </button>
+        {hasDraft && (
+          <span className="exercise-workspace-status">
+            {saveState === 'saving' ? 'Se salvează...' : 'Salvat automat'}
+          </span>
+        )}
+      </div>
+
+      {open && (
+        <div className="exercise-workspace-panel">
+          <div className="exercise-workspace-hint">
+            Lucrează direct aici, fără să ieși din exercițiu. Ciorna rămâne salvată automat pe dispozitivul tău.
+          </div>
+
+          <div className="exercise-workspace-toolbar">
+            <div className="exercise-workspace-targets">
+              <button
+                className={`exercise-workspace-target ${activeField === 'notes' ? 'active' : ''}`}
+                onClick={() => setActiveField('notes')}
+              >
+                Inserează în ciornă
+              </button>
+              <button
+                className={`exercise-workspace-target ${activeField === 'final' ? 'active' : ''}`}
+                onClick={() => setActiveField('final')}
+              >
+                Inserează în răspuns
+              </button>
+            </div>
+
+            <div className="exercise-workspace-template-list">
+              {MATH_TEMPLATES.map((template) => (
+                <button
+                  key={template.label}
+                  className="exercise-workspace-chip"
+                  onClick={() => insertIntoActiveField(template.snippet)}
+                >
+                  {template.label}
+                </button>
+              ))}
+              <button className="exercise-workspace-chip special" onClick={() => setShowMatrixBuilder((value) => !value)}>
+                Matrice
+              </button>
+              <button className="exercise-workspace-chip special" onClick={() => setShowTableBuilder((value) => !value)}>
+                Tabel valori
+              </button>
+            </div>
+          </div>
+
+          {showMatrixBuilder && (
+            <div className="exercise-builder-card">
+              <div className="exercise-builder-header">
+                <strong>Builder matrice</strong>
+                <div className="exercise-builder-size">
+                  <button onClick={() => resizeMatrix(2)}>2x2</button>
+                  <button onClick={() => resizeMatrix(3)}>3x3</button>
+                </div>
+              </div>
+              <div className="exercise-matrix-grid" style={{ gridTemplateColumns: `repeat(${matrixValues[0]?.length || 2}, minmax(0, 1fr))` }}>
+                {matrixValues.flatMap((row, rowIdx) =>
+                  row.map((cell, colIdx) => (
+                    <input
+                      key={`${rowIdx}-${colIdx}`}
+                      value={cell}
+                      onChange={(e) => {
+                        const next = matrixValues.map((matrixRow) => [...matrixRow]);
+                        next[rowIdx][colIdx] = e.target.value;
+                        setMatrixValues(next);
+                      }}
+                      placeholder="0"
+                    />
+                  ))
+                )}
+              </div>
+              <div className="exercise-builder-actions">
+                <button onClick={() => setShowMatrixBuilder(false)}>Închide</button>
+                <button className="primary" onClick={insertMatrix}>Inserează matricea</button>
+              </div>
+            </div>
+          )}
+
+          {showTableBuilder && (
+            <div className="exercise-builder-card">
+              <div className="exercise-builder-header">
+                <strong>Builder tabel de valori</strong>
+              </div>
+              <div className="exercise-value-table">
+                <div className="exercise-value-row">
+                  <span>x</span>
+                  {tableXValues.map((value, idx) => (
+                    <input
+                      key={`x-${idx}`}
+                      value={value}
+                      onChange={(e) => {
+                        const next = [...tableXValues];
+                        next[idx] = e.target.value;
+                        setTableXValues(next);
+                      }}
+                      placeholder={`x${idx + 1}`}
+                    />
+                  ))}
+                </div>
+                <div className="exercise-value-row">
+                  <input
+                    className="exercise-value-label"
+                    value={tableYLabel}
+                    onChange={(e) => setTableYLabel(e.target.value)}
+                    placeholder="f(x)"
+                  />
+                  {tableYValues.map((value, idx) => (
+                    <input
+                      key={`y-${idx}`}
+                      value={value}
+                      onChange={(e) => {
+                        const next = [...tableYValues];
+                        next[idx] = e.target.value;
+                        setTableYValues(next);
+                      }}
+                      placeholder={`y${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="exercise-builder-actions">
+                <button onClick={() => setShowTableBuilder(false)}>Închide</button>
+                <button className="primary" onClick={insertValueTable}>Inserează tabelul</button>
+              </div>
+            </div>
+          )}
+
+          <div className="exercise-workspace-field">
+            <label>Ciornă / pași de rezolvare</label>
+            <textarea
+              ref={notesRef}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              onFocus={() => setActiveField('notes')}
+              placeholder="Scrie ideea, calculele și pașii tăi aici..."
+              rows={8}
+            />
+          </div>
+
+          <div className="exercise-workspace-field">
+            <label>Răspuns final</label>
+            <textarea
+              ref={finalRef}
+              value={finalAnswer}
+              onChange={(e) => setFinalAnswer(e.target.value)}
+              onFocus={() => setActiveField('final')}
+              placeholder="Ex: x = 2 sau P(AB) = 1/3"
+              rows={2}
+            />
+          </div>
+
+          {finalAnswer.trim() && (
+            <div className="exercise-workspace-preview">
+              <div className="exercise-workspace-preview-label">Preview</div>
+              <LatexRenderer text={wrapForPreview(finalAnswer)} />
+            </div>
+          )}
+
+          <div className="exercise-workspace-actions">
+            <button className="exercise-workspace-clear" onClick={handleReset}>
+              Șterge schița
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -169,18 +597,44 @@ const SELF_EVAL_OPTIONS: { value: SelfEval; label: string; icon: string; desc: s
   { value: 'complete', label: 'Rezolvat complet',   icon: '✅', desc: '10% XP + poți încărca foto pentru +40% XP', color: '#22c55e' },
 ];
 
-function EvalModal({ exerciseId, existing, onDone, onClose }: {
+function EvalModal({ exerciseId, existing, onDone, onClose, initialSelfEval = 'complete', preferPhotoFlow = false }: {
   exerciseId: string;
   existing: ExerciseSubmission | null;
   onDone: (xp: number) => void;
   onClose: () => void;
+  initialSelfEval?: SelfEval;
+  preferPhotoFlow?: boolean;
 }) {
   const [step, setStep] = useState<'eval' | 'photo'>(existing ? 'photo' : 'eval');
-  const [selfEval, setSelfEval] = useState<SelfEval>(existing?.self_eval ?? 'complete');
+  const [selfEval, setSelfEval] = useState<SelfEval>(existing?.self_eval ?? initialSelfEval);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [totalXp, setTotalXp] = useState(0);
+
+  useEffect(() => {
+    setStep(existing ? 'photo' : 'eval');
+    setSelfEval(existing?.self_eval ?? initialSelfEval);
+  }, [existing, initialSelfEval, preferPhotoFlow, exerciseId]);
+
+  const handlePreparePhotoFlow = async () => {
+    setBusy(true);
+    setMsg('');
+    try {
+      if (existing) {
+        setTotalXp(existing.xp_self_eval ?? 0);
+        setStep('photo');
+        return;
+      }
+      const res = await submitExercise(exerciseId, selfEval);
+      setTotalXp(res.data.xp_self_eval);
+      setStep('photo');
+    } catch {
+      setMsg('Nu am putut pregăti exercițiul pentru corectare. Încearcă din nou.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleEvalSubmit = async () => {
     setBusy(true);
@@ -208,12 +662,21 @@ function EvalModal({ exerciseId, existing, onDone, onClose }: {
     <div className="eval-modal-overlay" onClick={onClose}>
       <div className="eval-modal" onClick={e => e.stopPropagation()}>
         <div className="eval-modal-header">
-          <span>{step === 'eval' ? 'Cum te-ai descurcat?' : 'Adaugă fotografia soluției'}</span>
+          <span>
+            {step === 'eval'
+              ? (preferPhotoFlow ? 'Pregătește soluția pentru corectare' : 'Cum te-ai descurcat?')
+              : 'Adaugă fotografia soluției'}
+          </span>
           <button className="eval-modal-close" onClick={onClose}>×</button>
         </div>
 
         {step === 'eval' && (
           <div className="eval-modal-body">
+            {preferPhotoFlow && (
+              <div className="eval-photo-hint">
+                Profesorul corectează doar soluțiile încărcate, nu fiecare blocaj punctual. Alege mai jos cât ai reușit și apoi încarcă fotografia sau PDF-ul rezolvării tale.
+              </div>
+            )}
             <div className="eval-options">
               {SELF_EVAL_OPTIONS.map(opt => (
                 <button
@@ -231,8 +694,12 @@ function EvalModal({ exerciseId, existing, onDone, onClose }: {
               ))}
             </div>
             {msg && <div className="eval-msg">{msg}</div>}
-            <button className="eval-submit-btn" onClick={handleEvalSubmit} disabled={busy}>
-              {busy ? 'Se trimite...' : 'Confirmă →'}
+            <button
+              className="eval-submit-btn"
+              onClick={preferPhotoFlow ? handlePreparePhotoFlow : handleEvalSubmit}
+              disabled={busy}
+            >
+              {busy ? 'Se pregătește...' : preferPhotoFlow ? 'Continuă către upload' : 'Confirmă →'}
             </button>
           </div>
         )}
@@ -259,7 +726,7 @@ function EvalModal({ exerciseId, existing, onDone, onClose }: {
             )}
             <p className="eval-photo-hint">
               Încarcă o fotografie sau PDF cu rezolvarea pentru <strong>+40% XP</strong> suplimentar.
-              Un profesor EtoX o va verifica și îți va acorda încă <strong>+50% XP</strong> dacă e corectă.
+              După upload, soluția intră în coada de corectare a profesorilor și poate primi încă <strong>+50% XP</strong> dacă este corectă.
             </p>
             {existing?.photo_path && (
               <div className="eval-photo-existing">📷 Ai deja un fișier încărcat</div>
@@ -314,9 +781,9 @@ function CompleteButton({ exerciseId, completedIds, onToggleComplete }: {
       <button
         className={`student-btn-complete ${isCompleted ? 'completed' : ''}`}
         onClick={handleOpen}
-        title={isCompleted ? 'Actualizează evaluarea' : 'Marchează ca rezolvat'}
+        title={isCompleted ? 'Actualizează autoevaluarea' : 'Deschide autoevaluarea'}
       >
-        {isCompleted ? '✓ Rezolvat' : '○ Rezolvat'}
+        {isCompleted ? '✓ Autoevaluat' : '○ Autoevaluează'}
       </button>
       {showModal && (
         <EvalModal
@@ -350,6 +817,8 @@ function SimpleExerciseCard({ exercise, index, isPremium, completedIds, onToggle
         </div>
         <div className="student-ex-actions">
           <CompleteButton exerciseId={exercise.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
+          <BlockedButton exerciseId={exercise.id} isPremium={isPremium} />
+          <CorrectionButton exerciseId={exercise.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
           {hasSolution && (
             <button
               className={`student-btn-solution ${showSolution ? 'active' : ''}`}
@@ -359,13 +828,14 @@ function SimpleExerciseCard({ exercise, index, isPremium, completedIds, onToggle
               {showSolution ? 'Ascunde' : 'Rezolvare'}
             </button>
           )}
-          <HelpButton exerciseId={exercise.id} isPremium={isPremium} />
         </div>
       </div>
 
       <div className="student-ex-statement">
         <LatexRenderer text={exercise.statement_latex || exercise.statement_text || ''} />
       </div>
+
+      <ExerciseWorkspace exerciseId={exercise.id} />
 
       {showSolution && <SolutionBlock exercise={exercise} />}
     </div>
@@ -429,6 +899,8 @@ function GroupedExerciseCard({ parent, children, index, isPremium, completedIds,
                     <span className="student-ex-points">{child.points} pct</span>
                   )}
                   <CompleteButton exerciseId={child.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
+                  <BlockedButton exerciseId={child.id} isPremium={isPremium} />
+                  <CorrectionButton exerciseId={child.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
                   {hasSolution && (
                     <button
                       className={`student-btn-solution ${isOpen ? 'active' : ''}`}
@@ -438,9 +910,10 @@ function GroupedExerciseCard({ parent, children, index, isPremium, completedIds,
                       {isOpen ? 'Ascunde' : 'Rezolvare'}
                     </button>
                   )}
-                  <HelpButton exerciseId={child.id} isPremium={isPremium} />
                 </div>
               </div>
+
+              <ExerciseWorkspace exerciseId={child.id} />
 
               {isOpen && <SolutionBlock exercise={child} />}
             </div>
@@ -979,6 +1452,96 @@ function ParentsTab() {
   );
 }
 
+function ReviewTab({ canHelpRequests, completedIds, onToggleComplete }: {
+  canHelpRequests: boolean;
+  completedIds: Set<string>;
+  onToggleComplete: (id: string, val: boolean, xp: number, badges: string[]) => void;
+}) {
+  const [items, setItems] = useState<ReviewItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const loadItems = () => {
+    setLoading(true);
+    getReviewItems()
+      .then((res) => setItems(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadItems();
+  }, []);
+
+  const handleResolved = async (exerciseId: string) => {
+    setBusyId(exerciseId);
+    try {
+      await resolveReviewItem(exerciseId);
+      setItems((prev) => prev.filter((item) => item.id !== exerciseId));
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const reasonLabel = (reason: ReviewItem['source_reason']) => {
+    if (reason === 'failed') return 'Nerezolvat';
+    if (reason === 'partial') return 'Parțial';
+    return 'De revăzut';
+  };
+
+  if (loading) return <div className="student-empty">Se încarcă jurnalul de erori...</div>;
+  if (items.length === 0) {
+    return (
+      <div className="student-empty">
+        Nu ai exerciții în lista de revizuit. Când marchezi un exercițiu ca nerezolvat, îl vei vedea aici.
+      </div>
+    );
+  }
+
+  return (
+    <div className="review-tab">
+      <div className="review-summary-card">
+        <div className="review-summary-value">{items.length}</div>
+        <div className="review-summary-text">
+          exerciții de revăzut. Ține flow-ul simplu: vezi rezolvarea, retrimite la corectare dacă vrei feedback, apoi apasă pe „Am clarificat”.
+        </div>
+      </div>
+
+      <div className="review-list">
+        {items.map((item, index) => (
+          <div key={item.id} className="review-item-shell">
+            <div className="review-item-meta">
+              <span className={`review-reason-badge reason-${item.source_reason}`}>{reasonLabel(item.source_reason)}</span>
+              <span>reveniri: {item.revisit_count}</span>
+              <span>încercări grele: {item.fail_count}</span>
+              <span>ultima dată: {new Date(item.last_flagged_at).toLocaleDateString('ro-RO')}</span>
+            </div>
+            <div className="review-item-toolbar">
+              <button
+                className="review-item-resolve-btn"
+                onClick={() => handleResolved(item.id)}
+                disabled={busyId === item.id}
+              >
+                {busyId === item.id ? 'Se actualizează...' : 'Am clarificat'}
+              </button>
+            </div>
+            <SimpleExerciseCard
+              exercise={item}
+              index={index + 1}
+              isPremium={canHelpRequests}
+              completedIds={completedIds}
+              onToggleComplete={(id, val, xp, badges) => {
+                onToggleComplete(id, val, xp, badges);
+                loadItems();
+              }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // --- Main Component ---
 
 export default function StudentExercises() {
@@ -987,7 +1550,11 @@ export default function StudentExercises() {
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [gamRefresh, setGamRefresh] = useState(0);
   const [xpToast, setXpToast] = useState<{ xp: number; badges: string[] } | null>(null);
-  const [activeTab, setActiveTab] = useState<'generate' | 'sets' | 'parents'>('generate');
+  const initialTab = searchParams.get('tab');
+  const normalizeTab = (value: string | null) => (
+    value === 'sets' || value === 'parents' || value === 'review' ? value : 'generate'
+  ) as 'generate' | 'sets' | 'parents' | 'review';
+  const [activeTab, setActiveTab] = useState<'generate' | 'sets' | 'parents' | 'review'>(normalizeTab(initialTab));
   const [groups, setGroups] = useState<ExerciseGroup[]>([]);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1044,6 +1611,10 @@ export default function StudentExercises() {
       .then((res) => setCompletedIds(new Set(res.data)))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setActiveTab(normalizeTab(searchParams.get('tab')));
+  }, [searchParams]);
 
   // Refresh topics & methods when context filters change
   useEffect(() => {
@@ -1199,6 +1770,12 @@ export default function StudentExercises() {
           <Layers size={15} /> Seturile mele
         </button>
         <button
+          className={`student-tab ${activeTab === 'review' ? 'active' : ''}`}
+          onClick={() => setActiveTab('review')}
+        >
+          ↺ Greșelile mele
+        </button>
+        <button
           className={`student-tab ${activeTab === 'parents' ? 'active' : ''}`}
           onClick={() => setActiveTab('parents')}
         >
@@ -1207,6 +1784,7 @@ export default function StudentExercises() {
       </div>
 
       {activeTab === 'sets' && <SavedSetsTab canHelpRequests={canHelpRequests} completedIds={completedIds} onToggleComplete={onToggleComplete} />}
+      {activeTab === 'review' && <ReviewTab canHelpRequests={canHelpRequests} completedIds={completedIds} onToggleComplete={onToggleComplete} />}
       {activeTab === 'parents' && <ParentsTab />}
 
       <GamificationBar refreshTrigger={gamRefresh} />

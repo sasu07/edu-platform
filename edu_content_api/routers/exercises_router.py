@@ -8,6 +8,7 @@ from psycopg import Connection
 from psycopg.rows import dict_row
 
 from ai_tagger import get_ai_tagger
+from answer_numeric import evaluate_numeric_answer
 from auth import get_current_user, get_optional_user
 from database import get_db_conn
 from models import (
@@ -19,21 +20,56 @@ from models import (
     TagCreate,
     TagDB,
     UserDB,
+    UserRole,
 )
 
 router = APIRouter()
 
 
+def _open_review_item(conn: Connection, student_id: str, exercise_id: str, source_reason: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO exercise_review_items
+                (student_id, exercise_id, status, source_reason, fail_count, revisit_count, first_flagged_at, last_flagged_at, resolved_at)
+            VALUES
+                (%s, %s, 'open', %s, 0, 1, NOW(), NOW(), NULL)
+            ON CONFLICT (student_id, exercise_id) DO UPDATE
+            SET status='open',
+                source_reason=EXCLUDED.source_reason,
+                revisit_count=exercise_review_items.revisit_count + 1,
+                last_flagged_at=NOW(),
+                resolved_at=NULL
+            """,
+            (student_id, exercise_id, source_reason),
+        )
+
+
+def _resolve_review_item(conn: Connection, student_id: str, exercise_id: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE exercise_review_items
+            SET status='resolved', resolved_at=NOW()
+            WHERE student_id=%s AND exercise_id=%s AND status='open'
+            """,
+            (student_id, exercise_id),
+        )
+
+
 def create_exercise_record(exercise: ExerciseCreate, conn: Connection) -> dict:
+    answer_numeric_value, answer_numeric_expression = evaluate_numeric_answer(exercise.answer_latex)
     query = """
     INSERT INTO exercises (
         exam_type, profile, subject_part, item_type, statement_latex, statement_text,
-        answer_latex, solution_latex, scoring_guide_latex, scoring_guide_text,
+        answer_latex, answer_numeric_value, answer_numeric_expression,
+        solution_latex, scoring_guide_latex, scoring_guide_text,
         difficulty, estimated_time_sec, points, metadata, status, created_by_user_id
     )
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     RETURNING id, exam_type, profile, subject_part, item_type, statement_latex, statement_text,
-              answer_latex, solution_latex, scoring_guide_latex, scoring_guide_text,
+              answer_latex, answer_numeric_value, answer_numeric_expression,
+              solution_latex, scoring_guide_latex, scoring_guide_text,
               difficulty, estimated_time_sec, points, metadata, status, created_by_user_id,
               created_at, updated_at;
     """
@@ -54,6 +90,8 @@ def create_exercise_record(exercise: ExerciseCreate, conn: Connection) -> dict:
                 exercise.statement_latex,
                 exercise.statement_text,
                 exercise.answer_latex,
+                answer_numeric_value,
+                answer_numeric_expression,
                 exercise.solution_latex,
                 exercise.scoring_guide_latex,
                 exercise.scoring_guide_text,
@@ -482,6 +520,40 @@ def read_exercise(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn
         return exercise
 
 
+@router.post("/exercises/{exercise_id}/review/open")
+def open_exercise_review_item(
+    exercise_id: uuid.UUID,
+    reason: str = "blocked",
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    if current_user.role not in (UserRole.STUDENT, UserRole.SCHOOL_TEACHER):
+        raise HTTPException(status_code=403, detail="Doar elevii pot salva exerciții pentru revizuire")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT id FROM exercises WHERE id=%s", (str(exercise_id),))
+        if not cur.fetchone():
+            raise HTTPException(status_code=404, detail="Exercițiu inexistent")
+
+    _open_review_item(conn, str(current_user.id), str(exercise_id), reason)
+    conn.commit()
+    return {"ok": True}
+
+
+@router.post("/exercises/{exercise_id}/review/resolve")
+def resolve_exercise_review_item(
+    exercise_id: uuid.UUID,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    if current_user.role not in (UserRole.STUDENT, UserRole.SCHOOL_TEACHER):
+        raise HTTPException(status_code=403, detail="Doar elevii pot gestiona jurnalul de revizuire")
+
+    _resolve_review_item(conn, str(current_user.id), str(exercise_id))
+    conn.commit()
+    return {"ok": True}
+
+
 @router.put("/exercises/{exercise_id}", response_model=ExerciseDB)
 def update_exercise(exercise_id: uuid.UUID, exercise: ExerciseUpdate, conn: Connection = Depends(get_db_conn)):
     updates = []
@@ -489,6 +561,11 @@ def update_exercise(exercise_id: uuid.UUID, exercise: ExerciseUpdate, conn: Conn
     update_data = exercise.model_dump(exclude_unset=True)
     if not update_data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields provided for update")
+
+    if "answer_latex" in update_data and "answer_numeric_value" not in update_data and "answer_numeric_expression" not in update_data:
+        numeric_value, numeric_expression = evaluate_numeric_answer(update_data.get("answer_latex"))
+        update_data["answer_numeric_value"] = numeric_value
+        update_data["answer_numeric_expression"] = numeric_expression
 
     for key, value in update_data.items():
         updates.append(f"{key} = %s")
@@ -504,7 +581,8 @@ def update_exercise(exercise_id: uuid.UUID, exercise: ExerciseUpdate, conn: Conn
     UPDATE exercises SET {', '.join(updates)}
     WHERE id = %s
     RETURNING id, exam_type, profile, subject_part, item_type, statement_latex, statement_text,
-              answer_latex, solution_latex, scoring_guide_latex, scoring_guide_text,
+              answer_latex, answer_numeric_value, answer_numeric_expression,
+              solution_latex, scoring_guide_latex, scoring_guide_text,
               difficulty, estimated_time_sec, points, metadata, status, created_by_user_id,
               created_at, updated_at;
     """

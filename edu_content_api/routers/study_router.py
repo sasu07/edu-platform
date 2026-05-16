@@ -54,7 +54,8 @@ def _build_session_selection(filters: dict, ex_count: int) -> tuple[str, list]:
     query = f"""
         SELECT * FROM (
             SELECT DISTINCT e.id, e.statement_latex, e.statement_text,
-                   e.answer_latex, e.solution_latex, e.difficulty, e.metadata
+                   e.answer_latex, e.answer_numeric_value, e.answer_numeric_expression,
+                   e.solution_latex, e.difficulty, e.metadata
             FROM exercises e{where_clause}
         ) study_candidates
         ORDER BY RANDOM() LIMIT {ex_count}
@@ -68,7 +69,8 @@ def _load_exact_exercise_set(conn: Connection, user_id: str, exercise_set_id: st
             """
             SELECT s.id as set_id, s.name, s.filters,
                    e.id as exercise_id, e.statement_latex, e.statement_text,
-                   e.answer_latex, e.solution_latex, e.difficulty, e.metadata
+                   e.answer_latex, e.answer_numeric_value, e.answer_numeric_expression,
+                   e.solution_latex, e.difficulty, e.metadata
             FROM user_exercise_sets s
             JOIN user_exercise_set_items si ON si.set_id = s.id
             JOIN exercises e ON e.id = si.exercise_id
@@ -89,6 +91,8 @@ def _load_exact_exercise_set(conn: Connection, user_id: str, exercise_set_id: st
             "statement_latex": row["statement_latex"],
             "statement_text": row["statement_text"],
             "answer_latex": row["answer_latex"],
+            "answer_numeric_value": row["answer_numeric_value"],
+            "answer_numeric_expression": row["answer_numeric_expression"],
             "solution_latex": row["solution_latex"],
             "difficulty": row["difficulty"],
             "metadata": row["metadata"],
@@ -287,7 +291,8 @@ def get_study_session(
         if session["exercise_set_id"]:
             cur.execute(
                 """SELECT e.id, e.statement_latex, e.statement_text, e.difficulty, e.points,
-                          e.metadata, e.solution_latex, e.answer_latex
+                          e.metadata, e.solution_latex, e.answer_latex,
+                          e.answer_numeric_value, e.answer_numeric_expression
                    FROM user_exercise_set_items si
                    JOIN exercises e ON e.id = si.exercise_id
                    WHERE si.set_id=%s""",

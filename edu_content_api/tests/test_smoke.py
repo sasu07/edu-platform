@@ -20,6 +20,7 @@ class ApiSmokeTests(unittest.TestCase):
             "app.include_router(auth_router)",
             "app.include_router(exercises_router)",
             "app.include_router(help_router)",
+            "app.include_router(league_router)",
             "app.include_router(parent_router)",
             "app.include_router(study_router)",
             "app.include_router(system_router)",
@@ -41,6 +42,9 @@ class ApiSmokeTests(unittest.TestCase):
             "/parent/link-student",
             "/admin/parent-student",
             "/study-sessions/start",
+            "/teacher/classes",
+            "/student/classes/join",
+            "/league/classes/",
         ]
 
         for path in expected_paths:

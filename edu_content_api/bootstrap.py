@@ -33,6 +33,7 @@ def configure_app(app: FastAPI) -> None:
     app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
     app.add_event_handler("startup", run_pending_migrations)
+    app.add_event_handler("startup", backfill_numeric_answers)
     app.add_event_handler("shutdown", close_db_pool)
 
 
@@ -83,3 +84,47 @@ def run_pending_migrations() -> None:
                 print(f"Migration {filename} failed: {exc}")
                 raise RuntimeError(f"Migration {filename} failed") from exc
 
+
+def backfill_numeric_answers() -> None:
+    from answer_numeric import evaluate_numeric_answer
+    from database import conn_pool
+
+    if conn_pool is None:
+        return
+
+    with conn_pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, answer_latex
+                FROM exercises
+                WHERE answer_latex IS NOT NULL
+                  AND (answer_numeric_value IS NULL OR answer_numeric_expression IS NULL)
+                """
+            )
+            rows = cur.fetchall()
+
+        if not rows:
+            conn.commit()
+            return
+
+        updated = 0
+        with conn.cursor() as cur:
+            for exercise_id, answer_latex in rows:
+                numeric_value, numeric_expression = evaluate_numeric_answer(answer_latex)
+                if numeric_value is None or not numeric_expression:
+                    continue
+                cur.execute(
+                    """
+                    UPDATE exercises
+                    SET answer_numeric_value = %s,
+                        answer_numeric_expression = %s,
+                        updated_at = NOW()
+                    WHERE id = %s
+                    """,
+                    (numeric_value, numeric_expression, exercise_id),
+                )
+                updated += 1
+        conn.commit()
+        if updated:
+            print(f"Backfilled numeric answers for {updated} exercises")

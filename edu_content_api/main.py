@@ -55,6 +55,7 @@ from routers.exercises_router import (
     tag_exercise_in_db,
 )
 from routers.help_router import router as help_router
+from routers.league_router import router as league_router
 from routers.parent_router import router as parent_router
 from routers.study_router import router as study_router
 from routers.system_router import router as system_router
@@ -70,12 +71,50 @@ configure_app(app)
 app.include_router(auth_router)
 app.include_router(exercises_router)
 app.include_router(help_router)
+app.include_router(league_router)
 app.include_router(parent_router)
 app.include_router(study_router)
 app.include_router(system_router)
 app.include_router(variants_router)
 
 # --- Helper functions ---
+
+def _upsert_review_item(conn: Connection, student_id: str, exercise_id: str, source_reason: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO exercise_review_items
+                (student_id, exercise_id, status, source_reason, fail_count, revisit_count, first_flagged_at, last_flagged_at, resolved_at)
+            VALUES
+                (%s, %s, 'open', %s, %s, 0, NOW(), NOW(), NULL)
+            ON CONFLICT (student_id, exercise_id) DO UPDATE
+            SET status='open',
+                source_reason=EXCLUDED.source_reason,
+                fail_count=exercise_review_items.fail_count + %s,
+                revisit_count=exercise_review_items.revisit_count + 1,
+                last_flagged_at=NOW(),
+                resolved_at=NULL
+            """,
+            (
+                student_id,
+                exercise_id,
+                source_reason,
+                1 if source_reason in ("failed", "partial") else 0,
+                1 if source_reason in ("failed", "partial") else 0,
+            ),
+        )
+
+
+def _resolve_review_item(conn: Connection, student_id: str, exercise_id: str) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE exercise_review_items
+            SET status='resolved', resolved_at=NOW()
+            WHERE student_id=%s AND exercise_id=%s AND status='open'
+            """,
+            (student_id, exercise_id),
+        )
 
 def _create_source_in_db(source: SourceCreate, conn: Connection) -> dict:
     """Internal function to create source entry in database."""
@@ -974,6 +1013,36 @@ def get_notifications(
 ):
     """Returnează notificările utilizatorului curent (neacceptate primele)."""
     with conn.cursor(row_factory=dict_row) as cur:
+        if current_user.role in (UserRole.STUDENT, UserRole.SCHOOL_TEACHER) and datetime.now().weekday() == 4:
+            cur.execute(
+                "SELECT COUNT(*) as cnt FROM exercise_review_items WHERE student_id=%s AND status='open'",
+                (str(current_user.id),),
+            )
+            review_count = cur.fetchone()["cnt"]
+
+            if review_count > 0:
+                cur.execute(
+                    """
+                    SELECT 1 FROM notifications
+                    WHERE user_id=%s AND type='review_reminder' AND DATE(created_at)=CURRENT_DATE
+                    """,
+                    (str(current_user.id),),
+                )
+                already_sent = cur.fetchone()
+                if not already_sent:
+                    cur.execute(
+                        """
+                        INSERT INTO notifications (user_id, type, title, body, related_id)
+                        VALUES (%s, 'review_reminder', %s, %s, NULL)
+                        """,
+                        (
+                            str(current_user.id),
+                            "Vineri de revizuire",
+                            f"Ai {review_count} exerciții nerezolvate de revăzut.",
+                        ),
+                    )
+                    conn.commit()
+
         cur.execute(
             """
             SELECT id, user_id, type, title, body, is_read, related_id, created_at
@@ -1018,7 +1087,7 @@ def mark_all_notifications_read(
 @app.get("/teacher/stats", response_model=TeacherStats, tags=["Teacher"])
 def teacher_stats(
     teacher_id: Optional[str] = None,
-    current_user: UserDB = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN)),
+    current_user: UserDB = Depends(require_role(UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN)),
     conn: Connection = Depends(get_db_conn),
 ):
     """
@@ -1129,6 +1198,7 @@ def mark_exercise_complete(
         xp_gained = 0
         new_badges = []
         if new_val:
+            _resolve_review_item(conn, str(current_user.id), exercise_id)
             # XP bazat pe dificultate exercițiu
             cur.execute("SELECT difficulty, metadata FROM exercises WHERE id=%s", (exercise_id,))
             ex_row = cur.fetchone()
@@ -1209,6 +1279,7 @@ def mark_exercise_complete(
                 ("first_s2",        "2" in completed_subiects),
                 ("first_s3",        "3" in completed_subiects),
                 ("streak_3",        streak >= 3),
+                ("streak_5",        streak >= 5),
                 ("streak_7",        streak >= 7),
                 ("streak_14",       streak >= 14),
                 ("streak_30",       streak >= 30),
@@ -1223,6 +1294,8 @@ def mark_exercise_complete(
                         (str(current_user.id), badge_key),
                     )
                     new_badges.append(badge_key)
+        else:
+            _upsert_review_item(conn, str(current_user.id), exercise_id, "marked_unresolved")
 
         conn.commit()
     return {"exercise_id": exercise_id, "completed": new_val, "xp_gained": xp_gained, "new_badges": new_badges}
@@ -1413,6 +1486,11 @@ async def submit_exercise(
                SET completed=TRUE, completed_at=NOW(), last_seen_at=NOW()""",
             (str(current_user.id), exercise_id),
         )
+
+        if body.self_eval in (SelfEval.FAILED, SelfEval.PARTIAL):
+            _upsert_review_item(conn, str(current_user.id), exercise_id, body.self_eval.value)
+        else:
+            _resolve_review_item(conn, str(current_user.id), exercise_id)
         conn.commit()
 
     return ExerciseSubmissionDB(**row)
@@ -1533,6 +1611,49 @@ def get_my_submissions(
         return cur.fetchall()
 
 
+@app.get("/student/review-items", tags=["Student"])
+def get_review_items(
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT
+                ri.id,
+                ri.exercise_id,
+                ri.source_reason,
+                ri.fail_count,
+                ri.revisit_count,
+                ri.first_flagged_at,
+                ri.last_flagged_at,
+                e.exam_type,
+                e.profile,
+                e.subject_part,
+                e.item_type,
+                e.statement_latex,
+                e.statement_text,
+                e.answer_latex,
+                e.solution_latex,
+                e.scoring_guide_latex,
+                e.scoring_guide_text,
+                e.difficulty,
+                e.estimated_time_sec,
+                e.points,
+                e.metadata,
+                e.status,
+                e.created_at,
+                e.updated_at
+            FROM exercise_review_items ri
+            JOIN exercises e ON e.id = ri.exercise_id
+            WHERE ri.student_id=%s AND ri.status='open'
+            ORDER BY ri.last_flagged_at DESC
+            """,
+            (str(current_user.id),),
+        )
+        return cur.fetchall()
+
+
 # =============================================================================
 # --- Teacher: Verificare soluții (doar EtoX teachers + admin) ---
 # =============================================================================
@@ -1544,7 +1665,7 @@ def get_pending_submissions(
     current_user=Depends(get_current_user),
 ):
     """Lista submisiilor care așteaptă corecție — doar profesori EtoX și admin."""
-    if current_user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+    if current_user.role not in (UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN):
         raise HTTPException(status_code=403, detail="Acces interzis")
 
     with conn.cursor(row_factory=dict_row) as cur:
@@ -1565,9 +1686,34 @@ def get_pending_submissions(
             LEFT JOIN users at ON at.id = es.assigned_teacher_id
         """
         params = []
-        if status and status != "all":
-            query += " WHERE es.teacher_status = %s"
+        conditions = []
+
+        if current_user.role != UserRole.ADMIN:
+            if status == "pending":
+                conditions.append("(es.teacher_status = 'pending' AND (es.assigned_teacher_id = %s OR es.assigned_teacher_id IS NULL))")
+                params.append(str(current_user.id))
+            elif status in ("correct", "incorrect"):
+                conditions.append("es.teacher_status = %s")
+                params.append(status)
+                conditions.append("(es.reviewed_by = %s OR es.assigned_teacher_id = %s)")
+                params.extend([str(current_user.id), str(current_user.id)])
+            elif status and status != "all":
+                conditions.append("es.teacher_status = %s")
+                params.append(status)
+                conditions.append("(es.assigned_teacher_id = %s OR es.reviewed_by = %s)")
+                params.extend([str(current_user.id), str(current_user.id)])
+            else:
+                conditions.append(
+                    "((es.teacher_status = 'pending' AND (es.assigned_teacher_id = %s OR es.assigned_teacher_id IS NULL)) "
+                    "OR (es.teacher_status IN ('correct', 'incorrect') AND (es.reviewed_by = %s OR es.assigned_teacher_id = %s)))"
+                )
+                params.extend([str(current_user.id), str(current_user.id), str(current_user.id)])
+        elif status and status != "all":
+            conditions.append("es.teacher_status = %s")
             params.append(status)
+
+        if conditions:
+            query += " WHERE " + " AND ".join(conditions)
         query += " ORDER BY es.created_at ASC"
         cur.execute(query, params)
         return cur.fetchall()
@@ -1579,7 +1725,7 @@ def assign_pending_submissions(
     current_user=Depends(get_current_user),
 ):
     """Profesorul preia toate submisiile fără profesor atribuit."""
-    if current_user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+    if current_user.role not in (UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN):
         raise HTTPException(status_code=403, detail="Acces interzis")
 
     with conn.cursor(row_factory=dict_row) as cur:
@@ -1604,7 +1750,7 @@ def review_submission(
     current_user=Depends(get_current_user),
 ):
     """Profesorul EtoX marchează submisia ca corectă sau incorectă."""
-    if current_user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+    if current_user.role not in (UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN):
         raise HTTPException(status_code=403, detail="Acces interzis")
 
     with conn.cursor(row_factory=dict_row) as cur:
@@ -1660,7 +1806,7 @@ async def upload_teacher_file(
     current_user=Depends(get_current_user),
 ):
     """Profesorul încarcă un fișier (PDF/imagine) cu rezolvarea detaliată."""
-    if current_user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+    if current_user.role not in (UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN):
         raise HTTPException(status_code=403, detail="Acces interzis")
 
     with conn.cursor(row_factory=dict_row) as cur:
@@ -1707,17 +1853,53 @@ def get_submission_stats(
     conn: Connection = Depends(get_db_conn),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role not in (UserRole.TEACHER, UserRole.ADMIN):
+    if current_user.role not in (UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN):
         raise HTTPException(status_code=403, detail="Acces interzis")
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute("""
-            SELECT
-                COUNT(*) FILTER (WHERE teacher_status='pending') as pending,
-                COUNT(*) FILTER (WHERE teacher_status='correct') as correct,
-                COUNT(*) FILTER (WHERE teacher_status='incorrect') as incorrect,
-                COUNT(*) as total
-            FROM exercise_submissions WHERE photo_path IS NOT NULL
-        """)
+        if current_user.role == UserRole.ADMIN:
+            cur.execute("""
+                SELECT
+                    COUNT(*) FILTER (WHERE teacher_status='pending') as pending,
+                    COUNT(*) FILTER (WHERE teacher_status='correct') as correct,
+                    COUNT(*) FILTER (WHERE teacher_status='incorrect') as incorrect,
+                    COUNT(*) as total
+                FROM exercise_submissions
+                WHERE photo_path IS NOT NULL
+            """)
+        else:
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*) FILTER (
+                        WHERE teacher_status='pending'
+                          AND (assigned_teacher_id = %s OR assigned_teacher_id IS NULL)
+                    ) as pending,
+                    COUNT(*) FILTER (
+                        WHERE teacher_status='correct'
+                          AND (reviewed_by = %s OR assigned_teacher_id = %s)
+                    ) as correct,
+                    COUNT(*) FILTER (
+                        WHERE teacher_status='incorrect'
+                          AND (reviewed_by = %s OR assigned_teacher_id = %s)
+                    ) as incorrect,
+                    COUNT(*) FILTER (
+                        WHERE (teacher_status='pending' AND (assigned_teacher_id = %s OR assigned_teacher_id IS NULL))
+                           OR (teacher_status IN ('correct', 'incorrect') AND (reviewed_by = %s OR assigned_teacher_id = %s))
+                    ) as total
+                FROM exercise_submissions
+                WHERE photo_path IS NOT NULL
+                """,
+                (
+                    str(current_user.id),
+                    str(current_user.id),
+                    str(current_user.id),
+                    str(current_user.id),
+                    str(current_user.id),
+                    str(current_user.id),
+                    str(current_user.id),
+                    str(current_user.id),
+                ),
+            )
         return cur.fetchone()
 
 

@@ -36,6 +36,7 @@ const VariantBuilderAuto = lazy(() => import("./components/VariantBuilderAuto"))
 const SourceDetails = lazy(() => import("./components/SourceDetails"));
 const StudentExercises = lazy(() => import("./components/StudentExercises"));
 const TeacherDashboard = lazy(() => import("./components/TeacherDashboard"));
+const LeagueHub = lazy(() => import("./components/LeagueHub"));
 const AdminPanel = lazy(() => import("./components/AdminPanel"));
 const MyRequests = lazy(() => import("./components/MyRequests"));
 const ParentDashboard = lazy(() => import("./components/ParentDashboard"));
@@ -326,6 +327,16 @@ function AppHub() {
           </Link>
         )}
 
+        {!isParent && (
+          <Link to="/app/league" className="hub-card">
+            <div className="hub-card-title">Liga BAC</div>
+            <div className="hub-card-sub">
+              Clasament săptămânal, cod de clasă și provocări care țin ritmul viu
+            </div>
+            <div className="hub-card-cta">Intră →</div>
+          </Link>
+        )}
+
         <Link to="/app/variants" className="hub-card">
           <div className="hub-card-title">Variante BAC</div>
           <div className="hub-card-sub">
@@ -578,6 +589,14 @@ function AppShell() {
                   </NavLink>
                 )}
                 <NavLink
+                  to="/app/league"
+                  className={({ isActive }) =>
+                    isActive ? "nav-link active" : "nav-link"
+                  }
+                >
+                  Liga BAC
+                </NavLink>
+                <NavLink
                   to="/app/variants"
                   className={({ isActive }) =>
                     isActive ? "nav-link active" : "nav-link"
@@ -691,6 +710,14 @@ function AppShell() {
             element={
               <Suspense fallback={<RouteLoader />}>
                 <StudyPlan />
+              </Suspense>
+            }
+          />
+          <Route
+            path="league"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <LeagueHub />
               </Suspense>
             }
           />

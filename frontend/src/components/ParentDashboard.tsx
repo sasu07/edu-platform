@@ -109,6 +109,10 @@ function StudentCard({ link }: { link: ParentStudentLink }) {
               <span className="pd-stat-val pd-stat-amber">{stats.total_flags_sent}</span>
               <span className="pd-stat-label">Întrebări</span>
             </div>
+            <div className="pd-stat">
+              <span className="pd-stat-val pd-stat-red">{stats.total_review_items_open}</span>
+              <span className="pd-stat-label">De revăzut</span>
+            </div>
           </div>
 
           <div className="pd-section-title">Activitate — ultimele 30 zile</div>

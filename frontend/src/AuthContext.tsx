@@ -74,7 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         canHelpRequests: access.can_help_requests,
         canDownloadPdf: access.can_download_pdf,
         canUnlimitedGen: access.can_unlimited_gen,
-        isTeacher: user?.role === 'teacher' || user?.role === 'admin',
+        isTeacher: user?.role === 'teacher' || user?.role === 'school_teacher' || user?.role === 'admin',
         isAdmin: user?.role === 'admin',
         isParent: user?.role === 'parent',
         loading,

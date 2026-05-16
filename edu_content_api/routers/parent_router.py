@@ -175,6 +175,9 @@ def get_student_stats(student_id: str, conn: Connection = Depends(get_db_conn), 
         cur.execute("SELECT COUNT(*) as cnt FROM help_requests WHERE student_id=%s", (student_id,))
         total_flags = cur.fetchone()["cnt"]
 
+        cur.execute("SELECT COUNT(*) as cnt FROM exercise_review_items WHERE student_id=%s AND status='open'", (student_id,))
+        total_review_items_open = cur.fetchone()["cnt"]
+
         cur.execute("SELECT MAX(last_seen_at) as last_active FROM student_progress WHERE student_id=%s", (student_id,))
         last_active_row = cur.fetchone()
         last_active = last_active_row["last_active"].isoformat() if last_active_row and last_active_row["last_active"] else None
@@ -249,6 +252,7 @@ def get_student_stats(student_id: str, conn: Connection = Depends(get_db_conn), 
         total_exercises_completed=total_completed,
         total_variants_generated=total_variants,
         total_flags_sent=total_flags,
+        total_review_items_open=total_review_items_open,
         last_active_at=last_active,
         activity_last_30_days=all_days,
         completion_by_subiect=completion_by_subiect,

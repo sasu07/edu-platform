@@ -152,6 +152,8 @@ class ExerciseBase(BaseModel):
     statement_latex: str
     statement_text: Optional[str] = None
     answer_latex: Optional[str] = None
+    answer_numeric_value: Optional[float] = None
+    answer_numeric_expression: Optional[str] = None
     solution_latex: Optional[str] = None
     scoring_guide_latex: Optional[str] = None
     scoring_guide_text: Optional[str] = None
@@ -175,6 +177,8 @@ class ExerciseUpdate(BaseModel):
     statement_latex: Optional[str] = None
     statement_text: Optional[str] = None
     answer_latex: Optional[str] = None
+    answer_numeric_value: Optional[float] = None
+    answer_numeric_expression: Optional[str] = None
     solution_latex: Optional[str] = None
     scoring_guide_latex: Optional[str] = None
     scoring_guide_text: Optional[str] = None
@@ -682,6 +686,7 @@ class ParentStudentStats(BaseModel):
     total_exercises_completed: int
     total_variants_generated: int
     total_flags_sent: int
+    total_review_items_open: int
     last_active_at: Optional[str]
     activity_last_30_days: List[StudentActivityDay]
     completion_by_subiect: Dict[str, int]   # {"1": 12, "2": 5, "3": 3}
@@ -699,6 +704,7 @@ LEVELS = [
 BADGES = {
     "first_exercise":   {"label": "Primul exercițiu",       "icon": "🎯", "desc": "Ai rezolvat primul exercițiu"},
     "streak_3":         {"label": "3 zile consecutive",     "icon": "🔥", "desc": "Activ 3 zile la rând"},
+    "streak_5":         {"label": "5 zile consecutive",     "icon": "⚔️", "desc": "Ai ținut ritmul 5 zile la rând"},
     "streak_7":         {"label": "O săptămână",            "icon": "📅", "desc": "Activ 7 zile la rând"},
     "streak_14":        {"label": "Două săptămâni",         "icon": "🌟", "desc": "Activ 14 zile la rând"},
     "streak_30":        {"label": "Luna de foc",            "icon": "🌙", "desc": "Activ 30 zile la rând"},
@@ -852,3 +858,26 @@ class StudyPlanDayCreateRequest(BaseModel):
 class AdminParentStudentLinkRequest(BaseModel):
     parent_id: str
     student_id: str
+
+
+class ClassGroupCreateRequest(BaseModel):
+    name: str
+    allow_anonymous: bool = True
+
+
+class ClassGroupJoinRequest(BaseModel):
+    class_code: str
+    pseudonym: Optional[str] = None
+    is_anonymous: bool = False
+
+
+class ClassMembershipUpdateRequest(BaseModel):
+    pseudonym: Optional[str] = None
+    is_anonymous: bool = False
+
+
+class WeeklyChallengeCreateRequest(BaseModel):
+    title: str
+    description: Optional[str] = None
+    target_count: int = Field(default=1, ge=1, le=500)
+    subiect_tag: Optional[str] = None

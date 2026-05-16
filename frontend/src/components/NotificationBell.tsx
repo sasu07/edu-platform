@@ -19,6 +19,7 @@ const TYPE_ROUTES: Record<string, string> = {
   new_request:          '/app/teacher/requests',
   submission_reviewed:  '/app/my-requests?tab=solutions',
   teacher_file:         '/app/my-requests?tab=solutions',
+  review_reminder:      '/app/exercises?tab=review',
 };
 
 export default function NotificationBell() {

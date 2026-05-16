@@ -139,6 +139,7 @@
 .pd-stat-green { color: #4ade80; }
 .pd-stat-blue  { color: #60a5fa; }
 .pd-stat-amber { color: #fbbf24; }
+.pd-stat-red   { color: #f87171; }
 
 .pd-stat-label {
   display: block;

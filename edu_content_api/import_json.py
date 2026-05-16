@@ -25,6 +25,7 @@ from typing import Dict, List, Optional, Any
 from pathlib import Path
 from copy import deepcopy
 
+from answer_numeric import evaluate_numeric_answer
 from database import get_db_conn
 from psycopg.rows import dict_row
 
@@ -704,12 +705,12 @@ class JSONImporter:
         upsert_query = """
         INSERT INTO exercises (
             id, exam_type, profile, subject_part, item_type,
-            statement_latex, statement_text, answer_latex, solution_latex,
+            statement_latex, statement_text, answer_latex, answer_numeric_value, answer_numeric_expression, solution_latex,
             scoring_guide_latex, scoring_guide_text,
             difficulty, estimated_time_sec, points, metadata, status,
             created_at, updated_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (id) DO UPDATE SET
             exam_type = EXCLUDED.exam_type,
             profile = EXCLUDED.profile,
@@ -718,6 +719,8 @@ class JSONImporter:
             statement_latex = EXCLUDED.statement_latex,
             statement_text = EXCLUDED.statement_text,
             answer_latex = EXCLUDED.answer_latex,
+            answer_numeric_value = EXCLUDED.answer_numeric_value,
+            answer_numeric_expression = EXCLUDED.answer_numeric_expression,
             solution_latex = EXCLUDED.solution_latex,
             scoring_guide_latex = EXCLUDED.scoring_guide_latex,
             scoring_guide_text = EXCLUDED.scoring_guide_text,
@@ -765,6 +768,7 @@ class JSONImporter:
                 scoring_guide_text = ex.get('scoring_guide_text') or self._pick(ex, ['barem_text', 'barem'])
                 if scoring_guide_text and not isinstance(scoring_guide_text, str):
                     scoring_guide_text = json.dumps(scoring_guide_text, ensure_ascii=False)
+                answer_numeric_value, answer_numeric_expression = evaluate_numeric_answer(ex.get('answer_latex'))
 
                 cur.execute(upsert_query, (
                     exercise_id,
@@ -775,6 +779,8 @@ class JSONImporter:
                     ex.get('statement_latex', ''),
                     ex.get('statement_text'),
                     ex.get('answer_latex'),
+                    answer_numeric_value,
+                    answer_numeric_expression,
                     solution_latex,
                     scoring_guide_latex,
                     scoring_guide_text,

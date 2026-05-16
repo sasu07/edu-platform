@@ -62,6 +62,8 @@ export interface Exercise {
   statement_latex: string;
   statement_text?: string;
   answer_latex?: string;
+  answer_numeric_value?: number | null;
+  answer_numeric_expression?: string | null;
   solution_latex?: string;
   scoring_guide_latex?: string;
   scoring_guide_text?: string;
@@ -325,6 +327,95 @@ export const getMyGamification = () =>
 export const getStudentGamification = (studentId: string) =>
   api.get<GamificationProfile>(`/student/gamification/${studentId}`);
 
+// --- Liga BAC ---
+export interface LeagueClass {
+  id: string;
+  name: string;
+  class_code: string;
+  allow_anonymous: boolean;
+  created_at: string;
+  teacher_name?: string;
+  member_count?: number;
+  membership_id?: string;
+  pseudonym?: string | null;
+  is_anonymous?: boolean;
+  joined_at?: string;
+}
+
+export interface LeagueMembership {
+  id: string;
+  class_id: string;
+  student_id: string;
+  pseudonym?: string | null;
+  is_anonymous: boolean;
+  joined_at: string;
+}
+
+export interface LeagueLeaderboardEntry {
+  student_id: string;
+  display_name: string;
+  xp_week: number;
+  rank: number;
+  is_you: boolean;
+  is_anonymous: boolean;
+}
+
+export interface LeagueChallengeProgress {
+  student_id: string;
+  display_name: string;
+  progress_count: number;
+  completed: boolean;
+  is_you: boolean;
+}
+
+export interface LeagueChallenge {
+  id: string;
+  title: string;
+  description?: string | null;
+  target_count: number;
+  filters: Record<string, any>;
+  week_start: string;
+  week_end: string;
+  participant_progress: LeagueChallengeProgress[];
+}
+
+export interface LeagueOverview {
+  class_info: {
+    id: string;
+    name: string;
+    class_code: string;
+    allow_anonymous: boolean;
+    teacher_name: string;
+    member_count: number;
+  };
+  week: { start: string; end: string };
+  my_membership?: {
+    id: string;
+    class_id: string;
+    student_id: string;
+    pseudonym?: string | null;
+    is_anonymous: boolean;
+    allow_anonymous?: boolean;
+  } | null;
+  leaderboard: LeagueLeaderboardEntry[];
+  challenges: LeagueChallenge[];
+}
+
+export const createTeacherClass = (data: { name: string; allow_anonymous?: boolean }) =>
+  api.post<LeagueClass>('/teacher/classes', data);
+export const getTeacherClasses = () =>
+  api.get<LeagueClass[]>('/teacher/classes');
+export const createWeeklyClassChallenge = (classId: string, data: { title: string; description?: string; target_count: number; subiect_tag?: string }) =>
+  api.post<LeagueChallenge>(`/teacher/classes/${classId}/challenges`, data);
+export const joinLeagueClass = (data: { class_code: string; pseudonym?: string; is_anonymous?: boolean }) =>
+  api.post<{ class: LeagueClass; membership: LeagueMembership }>('/student/classes/join', data);
+export const getStudentLeagueClasses = () =>
+  api.get<LeagueClass[]>('/student/classes');
+export const updateLeagueMembership = (classId: string, data: { pseudonym?: string; is_anonymous?: boolean }) =>
+  api.put<LeagueMembership>(`/student/classes/${classId}/membership`, data);
+export const getLeagueOverview = (classId: string, params?: { week_start?: string }) =>
+  api.get<LeagueOverview>(`/league/classes/${classId}/overview`, { params });
+
 // --- Exercise Submissions ---
 export type SelfEval = 'failed' | 'partial' | 'complete';
 export type TeacherStatus = 'pending' | 'correct' | 'incorrect';
@@ -345,6 +436,14 @@ export interface ExerciseSubmission {
   created_at: string;
 }
 
+export interface ReviewItem extends Exercise {
+  source_reason: 'failed' | 'partial' | 'marked_unresolved';
+  fail_count: number;
+  revisit_count: number;
+  first_flagged_at: string;
+  last_flagged_at: string;
+}
+
 export const submitExercise = (exerciseId: string, self_eval: SelfEval) =>
   api.post<ExerciseSubmission>(`/exercises/${exerciseId}/submit`, { self_eval });
 export const uploadSubmissionPhoto = (exerciseId: string, photo: File) => {
@@ -358,6 +457,12 @@ export const getMySubmission = (exerciseId: string) =>
   api.get<ExerciseSubmission | null>(`/exercises/${exerciseId}/submission`);
 export const getMySubmissions = () =>
   api.get<any[]>('/student/submissions');
+export const getReviewItems = () =>
+  api.get<ReviewItem[]>('/student/review-items');
+export const openReviewItem = (exerciseId: string, reason: string = 'blocked') =>
+  api.post(`/exercises/${exerciseId}/review/open`, null, { params: { reason } });
+export const resolveReviewItem = (exerciseId: string) =>
+  api.post(`/exercises/${exerciseId}/review/resolve`);
 
 // Teacher
 export const getTeacherSubmissions = (status = 'pending') =>
@@ -403,6 +508,7 @@ export interface ParentStudentStats {
   total_exercises_completed: number;
   total_variants_generated: number;
   total_flags_sent: number;
+  total_review_items_open: number;
   last_active_at?: string;
   activity_last_30_days: StudentActivityDay[];
   completion_by_subiect: Record<string, number>;

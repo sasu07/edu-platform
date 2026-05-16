@@ -18,6 +18,11 @@
 - Add direct CTA from history/summary into the next recommended exercise flow.
 - Connect study plan entries with generated exercise sets for repeatable practice.
 
+## Sprint 3.5: Liga BAC
+- Add class codes so students can join the teacher's class directly from the app.
+- Show a weekly XP leaderboard that resets every Monday for a healthier competition loop.
+- Add weekly class challenges with visible completion progress for every student.
+
 ## Sprint 4: Teacher workflow
 - Reframe `Import JSON`, `Sources`, and `Exercises` into a single content pipeline.
 - Prioritize teacher requests by urgency, age, and ownership.

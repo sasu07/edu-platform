@@ -82,6 +82,68 @@ function formatTime(sec: number) {
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
+function normalizeNumericExpression(value: string) {
+  let expr = value.trim();
+  if (!expr) return '';
+  expr = expr.replace(/\$/g, '');
+  expr = expr.replace(/^\s*[a-zA-Z]\s*=\s*/, '');
+  if (expr.includes('=')) {
+    const parts = expr.split('=').map((part) => part.trim()).filter(Boolean);
+    expr = parts[parts.length - 1] || expr;
+  }
+  expr = expr.replace(/,/g, '.');
+  expr = expr.replace(/\\left|\\right/g, '');
+  expr = expr.replace(/\\text\{[^}]*\}/g, '');
+  expr = expr.replace(/\\mathrm\{([^}]*)\}/g, '$1');
+  expr = expr.replace(/\\cdot|\\times/g, '*');
+  expr = expr.replace(/\\div/g, '/');
+  expr = expr.replace(/\\pi/g, 'Math.PI');
+  expr = expr.replace(/\bpi\b/gi, 'Math.PI');
+  expr = expr.replace(/\bsqrt\s*\(/gi, 'Math.sqrt(');
+
+  const fracPattern = /\\(?:d)?frac\s*\{([^{}]+)\}\{([^{}]+)\}/g;
+  while (fracPattern.test(expr)) {
+    expr = expr.replace(fracPattern, '(($1)/($2))');
+  }
+
+  const sqrtPattern = /\\sqrt\s*\{([^{}]+)\}/g;
+  while (sqrtPattern.test(expr)) {
+    expr = expr.replace(sqrtPattern, 'Math.sqrt($1)');
+  }
+
+  expr = expr.replace(/\{/g, '(').replace(/\}/g, ')');
+  expr = expr.replace(/\s+/g, '');
+  return expr;
+}
+
+function evaluateNumericExpression(value: string): number | null {
+  const expr = normalizeNumericExpression(value);
+  if (!expr) return null;
+  if (/[a-zA-Z]/.test(expr.replace(/Math|PI|sqrt/g, ''))) {
+    const fallbackMatch = expr.match(/([\-]?\d+(?:\.\d+)?(?:\/[\-]?\d+(?:\.\d+)?)?)$/);
+    if (!fallbackMatch) return null;
+    return evaluateNumericExpression(fallbackMatch[1]);
+  }
+  if (!/^[0-9+\-*/().MathPIsqrt]+$/.test(expr)) return null;
+  try {
+    const result = Function(`"use strict"; return (${expr});`)();
+    if (typeof result !== 'number' || !Number.isFinite(result)) return null;
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+function isNumericAutoCheckAvailable(answer: string | undefined | null, numericValue?: number | null) {
+  if (typeof numericValue === 'number' && Number.isFinite(numericValue)) return true;
+  if (!answer) return false;
+  return evaluateNumericExpression(answer) !== null;
+}
+
+function isCloseEnough(actual: number, expected: number) {
+  return Math.abs(actual - expected) < 1e-6;
+}
+
 // ─── Configure Phase ──────────────────────────────────────────────────────────
 
 interface ConfigureProps {
@@ -191,9 +253,18 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
   const elapsed = useTimer(true);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [revealedAnswers, setRevealedAnswers] = useState<Set<string>>(new Set());
+  const [answerInputs, setAnswerInputs] = useState<Record<string, string>>({});
+  const [answerChecks, setAnswerChecks] = useState<Record<string, { status: 'correct' | 'incorrect' | 'invalid' | 'pending'; message: string }>>({});
   const [completing, setCompleting] = useState(false);
   const limitSec = SESSION_CONFIG[session.session_type].minutes * 60;
   const exercises = session.exercises || [];
+
+  useEffect(() => {
+    if (exercises.length > 0) {
+      setExpanded(exercises[0].id);
+    }
+  }, [session.id]);
 
   useEffect(() => {
     // load already-completed from API to sync with existing progress
@@ -210,6 +281,57 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
       setCompletedIds(prev => new Set([...prev, exerciseId]));
     } catch {}
   }, [completedIds]);
+
+  const handleQuickCheck = async (exerciseId: string, expectedAnswer: string | undefined | null, expectedNumericValue?: number | null) => {
+    const expected = typeof expectedNumericValue === 'number' && Number.isFinite(expectedNumericValue)
+      ? expectedNumericValue
+      : evaluateNumericExpression(expectedAnswer || '');
+    const userValue = evaluateNumericExpression(answerInputs[exerciseId] || '');
+
+    if (userValue === null) {
+      setAnswerChecks((prev) => ({
+        ...prev,
+        [exerciseId]: {
+          status: 'invalid',
+          message: 'Scrie o valoare numerică simplă, de tip 2, 1/3, 2.5 sau sqrt(3).',
+        },
+      }));
+      return;
+    }
+
+    if (expected === null) {
+      setAnswerChecks((prev) => ({
+        ...prev,
+        [exerciseId]: {
+          status: 'pending',
+          message: 'Încă nu pot verifica automat acest răspuns. Poți continua și apoi compara cu răspunsul oficial.',
+        },
+      }));
+      return;
+    }
+
+    if (isCloseEnough(userValue, expected)) {
+      setAnswerChecks((prev) => ({
+        ...prev,
+        [exerciseId]: {
+          status: 'correct',
+          message: 'Corect. Valoarea finală este bună.',
+        },
+      }));
+      if (!completedIds.has(exerciseId)) {
+        await toggleDone(exerciseId);
+      }
+      return;
+    }
+
+    setAnswerChecks((prev) => ({
+      ...prev,
+      [exerciseId]: {
+        status: 'incorrect',
+        message: 'Nu pare să fie valoarea corectă. Mai verifică încă o dată calculele.',
+      },
+    }));
+  };
 
   const handleComplete = async () => {
     setCompleting(true);
@@ -248,6 +370,9 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
         {exercises.map((ex: any, idx: number) => {
           const done = completedIds.has(ex.id);
           const open = expanded === ex.id;
+          const canAutoCheck = isNumericAutoCheckAvailable(ex.answer_latex, ex.answer_numeric_value);
+          const revealed = revealedAnswers.has(ex.id);
+          const checkResult = answerChecks[ex.id];
           return (
             <div key={ex.id} className={`ss-ex-item${done ? ' done' : ''}`}>
               <div className="ss-ex-row" onClick={() => setExpanded(open ? null : ex.id)}>
@@ -256,19 +381,80 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
                   <LatexRenderer text={(ex.statement_text || ex.statement_latex || '').slice(0, 120)} />
                 </div>
                 <div className="ss-ex-actions">
+                  {canAutoCheck && <span className="ss-ex-quick-badge">Verificare rapidă</span>}
                   {done
                     ? <span className="ss-ex-done-badge"><CheckCircle size={15} /> Rezolvat</span>
                     : <button className="ss-ex-done-btn" onClick={e => { e.stopPropagation(); toggleDone(ex.id); }}>
-                        <CheckCircle size={14} /> Marchează
+                        <CheckCircle size={14} /> Am terminat
                       </button>
                   }
+                  <button
+                    className="ss-ex-open-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpanded(open ? null : ex.id);
+                    }}
+                  >
+                    {open ? 'Ascunde' : 'Deschide'}
+                  </button>
                   <ChevronRight size={14} className={`ss-ex-chevron${open ? ' open' : ''}`} />
                 </div>
               </div>
               {open && (
                 <div className="ss-ex-body">
                   <LatexRenderer text={ex.statement_latex || ex.statement_text || ''} />
+
+                  <div className={`ss-answer-checker${canAutoCheck ? '' : ' disabled'}`}>
+                    <div className="ss-answer-checker-label">Răspunsul meu</div>
+                    <div className="ss-answer-checker-hint">
+                      {canAutoCheck
+                        ? 'Dacă răspunsul final este o valoare numerică, scrie aici unde ai ajuns și îți spun imediat dacă este corect.'
+                        : 'Poți nota aici răspunsul final la care ai ajuns. Pentru acest exercițiu nu am încă verificare automată disponibilă.'}
+                    </div>
+                    <div className="ss-answer-checker-row">
+                      <input
+                        className="ss-answer-input"
+                        value={answerInputs[ex.id] || ''}
+                        onChange={(e) => setAnswerInputs((prev) => ({ ...prev, [ex.id]: e.target.value }))}
+                        placeholder={canAutoCheck ? 'Ex: 2, 1/3, 2.5, sqrt(3)' : 'Scrie răspunsul final aici'}
+                      />
+                      <button
+                        className="ss-answer-check-btn"
+                        onClick={() => handleQuickCheck(ex.id, ex.answer_latex, ex.answer_numeric_value)}
+                        disabled={!answerInputs[ex.id]?.trim()}
+                      >
+                        Verifică
+                      </button>
+                    </div>
+                    {!canAutoCheck && !checkResult && (
+                      <div className="ss-answer-feedback pending">
+                        Verificarea automată merge acum doar pentru răspunsuri finale numerice clare.
+                      </div>
+                    )}
+                    {checkResult && (
+                      <div className={`ss-answer-feedback ${checkResult.status}`}>
+                        {checkResult.message}
+                      </div>
+                    )}
+                  </div>
+
                   {ex.answer_latex && (
+                    <div className="ss-answer-toggle-wrap">
+                      <button
+                        className="ss-answer-toggle-btn"
+                        onClick={() => setRevealedAnswers((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(ex.id)) next.delete(ex.id);
+                          else next.add(ex.id);
+                          return next;
+                        })}
+                      >
+                        {revealed ? 'Ascunde răspunsul oficial' : 'Vezi răspunsul oficial'}
+                      </button>
+                    </div>
+                  )}
+
+                  {revealed && ex.answer_latex && (
                     <div className="ss-ex-answer">
                       <span className="ss-ex-answer-label">Răspuns:</span>
                       <LatexRenderer text={ex.answer_latex} />
