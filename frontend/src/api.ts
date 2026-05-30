@@ -480,6 +480,12 @@ export const assignPendingSubmissions = () =>
   api.post<{ assigned: number }>('/teacher/submissions/assign-pending');
 export const getSubmissionStats = () =>
   api.get<{ pending: number; correct: number; incorrect: number; total: number }>('/teacher/submissions/stats');
+export const getPendingExerciseIds = () =>
+  api.get<string[]>('/student/pending-exercise-ids');
+export const getLiveHelpRequests = () =>
+  api.get<any[]>('/teacher/help-requests/live');
+export const scheduleLiveHelp = (requestId: string, data: { scheduled_at: string; zoom_link?: string }) =>
+  api.post(`/teacher/help-requests/${requestId}/schedule`, data);
 
 // --- Parent-Student ---
 export interface ParentStudentLink {

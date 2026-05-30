@@ -4,14 +4,14 @@ import {
   getExercises, getBatchChildren, createHelpRequest,
   getMyLimits, logExerciseGeneration, saveExerciseSet, getExerciseSets,
   getExerciseSet, updateExerciseSet, deleteExerciseSet, getExerciseFilterOptions,
-  getCompletedExerciseIds, getReviewItems, openReviewItem,
+  getCompletedExerciseIds, getPendingExerciseIds, getReviewItems, openReviewItem,
   resolveReviewItem,
   submitExercise, uploadSubmissionPhoto, getMySubmission,
   linkParent, getMyParents, removeParentLink,
   createStudyPlanDay,
   buildApiUrl,
   type Exercise, type GenLimits, type ExerciseSet, type ExerciseSetDetail, type FilterOptions,
-  type ParentStudentLink, type SelfEval, type ExerciseSubmission, type SessionType, type ReviewItem,
+  type ParentStudentLink, type ExerciseSubmission, type SessionType, type ReviewItem, type SelfEval,
 } from '../api';
 import { useAuth } from '../AuthContext';
 import LatexRenderer from './LatexRenderer';
@@ -68,66 +68,13 @@ function clearWorkspaceDraft(userId: string | undefined, exerciseId: string) {
   window.localStorage.removeItem(getWorkspaceStorageKey(userId, exerciseId));
 }
 
-const BLOCK_REASONS = [
-  {
-    key: 'statement',
-    label: 'Nu înțeleg cerința',
-    tips: [
-      'Recitește enunțul și separă datele de ce se cere efectiv.',
-      'Deschide rezolvarea doar după ce încerci să reformulezi cerința în cuvintele tale.',
-      'Caută în aceeași listă un exercițiu cu structură asemănătoare.',
-    ],
-  },
-  {
-    key: 'start',
-    label: 'Nu știu de unde să încep',
-    tips: [
-      'Încearcă să identifici formula, teorema sau metoda care apare cel mai des pe tipul acesta de exercițiu.',
-      'Lucrează mai întâi pe un exemplu mai ușor din același subiect.',
-      'Scrie primul pas posibil, chiar dacă nu vezi toată rezolvarea.',
-    ],
-  },
-  {
-    key: 'calculation',
-    label: 'Mă pierd la calcule',
-    tips: [
-      'Verifică dacă ai simplificat prea devreme sau ai omis o paranteză.',
-      'Împarte rezolvarea în pași scurți și validează fiecare transformare.',
-      'Compară cu baremul doar punctul unde simți că se rupe logica.',
-    ],
-  },
-  {
-    key: 'method',
-    label: 'Nu înțeleg metoda',
-    tips: [
-      'Uită-te dacă exercițiul cere o tehnică pe care ai mai întâlnit-o: substituție, funcții, sisteme, trigonometrie.',
-      'Încearcă un exercițiu similar mai ușor înainte de a reveni aici.',
-      'Dacă te blochezi repetat, salvează-l în lista de revăzut și escaladează doar după încă o încercare.',
-    ],
-  },
-];
-
 function BlockedModal({ exerciseId, onClose, isPremium }: { exerciseId: string; onClose: () => void; isPremium: boolean }) {
-  const [selectedReason, setSelectedReason] = useState(BLOCK_REASONS[0].key);
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const reason = BLOCK_REASONS.find((item) => item.key === selectedReason) || BLOCK_REASONS[0];
+  const [sent, setSent] = useState(false);
 
-  const handleSaveForReview = async () => {
-    setBusy(true);
-    setMessage('');
-    try {
-      await openReviewItem(exerciseId, 'blocked');
-      setMessage('Exercițiul a fost adăugat în lista ta de revizuit.');
-    } catch {
-      setMessage('Nu am putut salva exercițiul în jurnalul de erori.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleEscalate = async () => {
+  const handleLiveRequest = async () => {
     if (!isPremium) return;
     setBusy(true);
     setMessage('');
@@ -135,71 +82,75 @@ function BlockedModal({ exerciseId, onClose, isPremium }: { exerciseId: string; 
       await openReviewItem(exerciseId, 'blocked');
       await createHelpRequest({
         exercise_id: exerciseId,
-        flag_type: 'WRITTEN',
-        notes: `Blocaj: ${reason.label}${notes.trim() ? `\n\nDetalii elev: ${notes.trim()}` : ''}`,
+        flag_type: 'LIVE',
+        notes: notes.trim() || undefined,
       });
-      setMessage('Cererea a fost trimisă profesorului, iar exercițiul a rămas în lista ta de revizuit.');
+      setSent(true);
+      setMessage('Cererea a fost trimisă! Profesorul va stabili o oră pentru sesiunea live.');
     } catch (err: any) {
-      setMessage(err?.response?.data?.detail || 'Nu am putut trimite cererea către profesor.');
+      setMessage(err?.response?.data?.detail || 'Eroare la trimiterea cererii.');
     } finally {
       setBusy(false);
     }
   };
 
+  const handleSaveReview = async () => {
+    setBusy(true);
+    try {
+      await openReviewItem(exerciseId, 'blocked');
+      onClose();
+    } catch { /* ignore */ } finally { setBusy(false); }
+  };
+
   return (
     <div className="flag-modal-overlay" onClick={onClose}>
-      <div className="flag-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="flag-modal" onClick={e => e.stopPropagation()}>
         <div className="flag-modal-header">
           <h3>M-am blocat</h3>
           <button className="flag-modal-close" onClick={onClose}>×</button>
         </div>
 
-        <p className="flag-modal-subtitle">Spune-ne unde te-ai blocat. Mai întâi îl salvăm pentru revizuire, iar dacă încă rămâi blocat poți escalada către profesor.</p>
+        {!sent ? (
+          <>
+            <p className="flag-modal-subtitle">
+              Exercițiul va fi adăugat în lista ta de revizuit. Dacă ai nevoie de explicații live, poți cere sprijin direct de la un profesor.
+            </p>
 
-        <div className="eval-options">
-          {BLOCK_REASONS.map((item) => (
-            <button
-              key={item.key}
-              className={`eval-option ${selectedReason === item.key ? 'selected' : ''}`}
-              onClick={() => setSelectedReason(item.key)}
-            >
-              <div className="eval-option-text">
-                <div className="eval-option-label">{item.label}</div>
-                <div className="eval-option-desc">Alege varianta care descrie cel mai bine blocajul tău.</div>
-              </div>
-            </button>
-          ))}
-        </div>
+            <div className="flag-notes">
+              <label>Ce ai încercat? (opțional)</label>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Ex: am încercat cu substituție, dar nu îmi iese pasul 2..."
+                rows={3}
+              />
+            </div>
 
-        <div className="review-summary-card" style={{ marginTop: 12 }}>
-          <div className="review-summary-text">
-            {reason.tips.map((tip) => (
-              <div key={tip}>• {tip}</div>
-            ))}
+            {message && <div className="flag-msg-err">{message}</div>}
+
+            <div className="flag-modal-actions">
+              <button className="flag-cancel-btn" onClick={handleSaveReview} disabled={busy}>
+                Adaugă la revizuit
+              </button>
+              {isPremium ? (
+                <button className="flag-live-btn" onClick={handleLiveRequest} disabled={busy}>
+                  📹 Cer ajutor live
+                </button>
+              ) : (
+                <div className="flag-premium-lock">
+                  🔒 <span>Ajutor live disponibil doar cu abonament premium</span>
+                </div>
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flag-sent">
+            <div className="flag-sent-icon">✅</div>
+            <div className="flag-sent-text">Cerere trimisă!</div>
+            <p>{message}</p>
+            <button className="flag-cancel-btn" onClick={onClose}>Închide</button>
           </div>
-        </div>
-
-        <div className="flag-notes">
-          <label>Ce ai încercat până acum? (opțional)</label>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Ex: am încercat metoda cu substituție, dar nu-mi iese pasul 2"
-            rows={3}
-          />
-        </div>
-
-        {message && <div className={`parents-msg ${message.includes('nu') || message.includes('Nu') ? 'err' : 'ok'}`}>{message}</div>}
-
-        <div className="flag-modal-actions">
-          <button className="flag-cancel-btn" onClick={onClose}>Închide</button>
-          <button className="flag-submit-btn" onClick={handleSaveForReview} disabled={busy}>
-            {busy ? 'Se salvează...' : 'Adaugă la revizuit'}
-          </button>
-          <button className="flag-submit-btn" onClick={handleEscalate} disabled={busy || !isPremium}>
-            Escaladează la profesor
-          </button>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -258,8 +209,6 @@ function CorrectionButton({ exerciseId, completedIds, onToggleComplete }: {
           existing={existing}
           onDone={handleDone}
           onClose={() => setShowModal(false)}
-          initialSelfEval={existing?.self_eval ?? 'partial'}
-          preferPhotoFlow
         />
       )}
     </>
@@ -591,177 +540,124 @@ function SolutionBlock({ exercise }: { exercise: Exercise }) {
   );
 }
 
-const SELF_EVAL_OPTIONS: { value: SelfEval; label: string; icon: string; desc: string; color: string }[] = [
-  { value: 'failed',   label: 'Nu am reușit',       icon: '❌', desc: '0% XP — exercițiul merge în lista de revăzut', color: '#ef4444' },
-  { value: 'partial',  label: 'Parțial rezolvat',   icon: '⚠️', desc: '10% XP — ai rezolvat o parte', color: '#f59e0b' },
-  { value: 'complete', label: 'Rezolvat complet',   icon: '✅', desc: '10% XP + poți încărca foto pentru +40% XP', color: '#22c55e' },
-];
-
-function EvalModal({ exerciseId, existing, onDone, onClose, initialSelfEval = 'complete', preferPhotoFlow = false }: {
+// EvalModal — student trimite soluția; marcarea ca "rezolvat" vine DOAR de la profesor
+function EvalModal({ exerciseId, existing, onDone, onClose }: {
   exerciseId: string;
   existing: ExerciseSubmission | null;
   onDone: (xp: number) => void;
   onClose: () => void;
-  initialSelfEval?: SelfEval;
-  preferPhotoFlow?: boolean;
 }) {
-  const [step, setStep] = useState<'eval' | 'photo'>(existing ? 'photo' : 'eval');
-  const [selfEval, setSelfEval] = useState<SelfEval>(existing?.self_eval ?? initialSelfEval);
-  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
-  const [totalXp, setTotalXp] = useState(0);
 
-  useEffect(() => {
-    setStep(existing ? 'photo' : 'eval');
-    setSelfEval(existing?.self_eval ?? initialSelfEval);
-  }, [existing, initialSelfEval, preferPhotoFlow, exerciseId]);
+  const status = existing?.teacher_status ?? null;
+  const canResubmit = !status || status === 'incorrect';
 
-  const handlePreparePhotoFlow = async () => {
+  const handleSubmit = async () => {
+    if (!file) return;
     setBusy(true);
     setMsg('');
     try {
-      if (existing) {
-        setTotalXp(existing.xp_self_eval ?? 0);
-        setStep('photo');
-        return;
+      // Pasul 1: crează/actualizează submission cu self_eval='complete'
+      if (!existing || status === 'incorrect') {
+        await submitExercise(exerciseId, 'complete' as SelfEval);
       }
-      const res = await submitExercise(exerciseId, selfEval);
-      setTotalXp(res.data.xp_self_eval);
-      setStep('photo');
-    } catch {
-      setMsg('Nu am putut pregăti exercițiul pentru corectare. Încearcă din nou.');
-    } finally {
+      // Pasul 2: upload fișier soluție
+      await uploadSubmissionPhoto(exerciseId, file);
+      onDone(0); // XP-ul vine de la profesor la aprobare
+    } catch (e: any) {
+      setMsg(e?.response?.data?.detail || 'Eroare la upload. Încearcă din nou.');
       setBusy(false);
     }
-  };
-
-  const handleEvalSubmit = async () => {
-    setBusy(true);
-    try {
-      const res = await submitExercise(exerciseId, selfEval);
-      const xp = res.data.xp_self_eval;
-      setTotalXp(xp);
-      if (selfEval === 'failed') { onDone(xp); return; }
-      setStep('photo');
-    } catch { setMsg('Eroare. Încearcă din nou.'); }
-    finally { setBusy(false); }
-  };
-
-  const handlePhotoUpload = async () => {
-    if (!photoFile) { onDone(totalXp); return; }
-    setBusy(true);
-    try {
-      const res = await uploadSubmissionPhoto(exerciseId, photoFile);
-      onDone(totalXp + (res.data.xp_awarded ?? 0));
-    } catch { setMsg('Eroare la upload. Încearcă din nou.'); }
-    finally { setBusy(false); }
   };
 
   return (
     <div className="eval-modal-overlay" onClick={onClose}>
       <div className="eval-modal" onClick={e => e.stopPropagation()}>
         <div className="eval-modal-header">
-          <span>
-            {step === 'eval'
-              ? (preferPhotoFlow ? 'Pregătește soluția pentru corectare' : 'Cum te-ai descurcat?')
-              : 'Adaugă fotografia soluției'}
-          </span>
+          <span>Trimite soluția pentru verificare</span>
           <button className="eval-modal-close" onClick={onClose}>×</button>
         </div>
+        <div className="eval-modal-body">
 
-        {step === 'eval' && (
-          <div className="eval-modal-body">
-            {preferPhotoFlow && (
-              <div className="eval-photo-hint">
-                Profesorul corectează doar soluțiile încărcate, nu fiecare blocaj punctual. Alege mai jos cât ai reușit și apoi încarcă fotografia sau PDF-ul rezolvării tale.
-              </div>
-            )}
-            <div className="eval-options">
-              {SELF_EVAL_OPTIONS.map(opt => (
-                <button
-                  key={opt.value}
-                  className={`eval-option ${selfEval === opt.value ? 'selected' : ''}`}
-                  style={selfEval === opt.value ? { borderColor: opt.color } : {}}
-                  onClick={() => setSelfEval(opt.value)}
-                >
-                  <span className="eval-option-icon">{opt.icon}</span>
-                  <div className="eval-option-text">
-                    <div className="eval-option-label">{opt.label}</div>
-                    <div className="eval-option-desc">{opt.desc}</div>
-                  </div>
-                </button>
-              ))}
+          {/* Stare curentă */}
+          {status === 'pending' && (
+            <div className="eval-review-result eval-review-pending">
+              ⏳ Soluția ta este în așteptarea verificării profesorului.
+              {existing?.teacher_note && <div className="eval-review-note">Notă: {existing.teacher_note}</div>}
             </div>
-            {msg && <div className="eval-msg">{msg}</div>}
-            <button
-              className="eval-submit-btn"
-              onClick={preferPhotoFlow ? handlePreparePhotoFlow : handleEvalSubmit}
-              disabled={busy}
-            >
-              {busy ? 'Se pregătește...' : preferPhotoFlow ? 'Continuă către upload' : 'Confirmă →'}
-            </button>
-          </div>
-        )}
+          )}
+          {status === 'correct' && (
+            <div className="eval-review-result eval-review-correct">
+              ✅ Profesorul a marcat soluția ca <strong>CORECTĂ</strong> — exercițiu rezolvat!
+              {existing?.teacher_note && <div className="eval-review-note">Notă: {existing.teacher_note}</div>}
+              {existing?.teacher_file_path && (
+                <a className="eval-teacher-file-btn" href={buildApiUrl(existing.teacher_file_path)} target="_blank" rel="noopener noreferrer">
+                  📎 Vezi fișierul profesorului
+                </a>
+              )}
+            </div>
+          )}
+          {status === 'incorrect' && (
+            <div className="eval-review-result eval-review-incorrect">
+              ❌ Soluția marcată ca <strong>INCORECTĂ</strong> — poți retrimite mai jos.
+              {existing?.teacher_note && <div className="eval-review-note">Notă: {existing.teacher_note}</div>}
+              {existing?.teacher_file_path && (
+                <a className="eval-teacher-file-btn" href={buildApiUrl(existing.teacher_file_path)} target="_blank" rel="noopener noreferrer">
+                  📎 Vezi fișierul profesorului
+                </a>
+              )}
+            </div>
+          )}
 
-        {step === 'photo' && (
-          <div className="eval-modal-body">
-            {existing?.teacher_status && (
-              <div className={`eval-review-result eval-review-${existing.teacher_status}`}>
-                {existing.teacher_status === 'correct' && '✅ Profesorul a marcat soluția ca CORECTĂ'}
-                {existing.teacher_status === 'incorrect' && '❌ Profesorul a marcat soluția ca INCORECTĂ'}
-                {existing.teacher_status === 'pending' && '⏳ Soluția ta este în așteptare pentru corecție'}
-                {existing.teacher_note && <div className="eval-review-note">Notă: {existing.teacher_note}</div>}
-                {existing.teacher_file_path && (
-                  <a
-                    className="eval-teacher-file-btn"
-                    href={buildApiUrl(existing.teacher_file_path)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    📎 Vezi fișierul profesorului
-                  </a>
-                )}
-              </div>
-            )}
-            <p className="eval-photo-hint">
-              Încarcă o fotografie sau PDF cu rezolvarea pentru <strong>+40% XP</strong> suplimentar.
-              După upload, soluția intră în coada de corectare a profesorilor și poate primi încă <strong>+50% XP</strong> dacă este corectă.
-            </p>
-            {existing?.photo_path && (
-              <div className="eval-photo-existing">📷 Ai deja un fișier încărcat</div>
-            )}
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              className="eval-photo-input"
-              onChange={e => setPhotoFile(e.target.files?.[0] ?? null)}
-            />
-            {photoFile && <div className="eval-photo-name">📎 {photoFile.name}</div>}
-            {msg && <div className="eval-msg">{msg}</div>}
-            <div className="eval-photo-actions">
-              <button className="eval-skip-btn" onClick={() => onDone(totalXp)} disabled={busy}>
-                Finalizează fără fișier
+          {/* Upload — activ dacă nu e deja pending/correct */}
+          {canResubmit && (
+            <>
+              <p className="eval-photo-hint">
+                {status === 'incorrect'
+                  ? 'Încearcă din nou — încarcă o nouă soluție pentru reverificare.'
+                  : 'Fotografiază sau scanează rezolvarea ta și trimite-o profesorului pentru verificare. Vei fi notificat când primești răspunsul.'}
+              </p>
+              {existing?.photo_path && !status && (
+                <div className="eval-photo-existing">📷 Ai deja un fișier încărcat</div>
+              )}
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                className="eval-photo-input"
+                onChange={e => setFile(e.target.files?.[0] ?? null)}
+              />
+              {file && <div className="eval-photo-name">📎 {file.name}</div>}
+              {msg && <div className="eval-msg">{msg}</div>}
+              <button className="eval-submit-btn" onClick={handleSubmit} disabled={busy || !file}>
+                {busy ? 'Se trimite...' : '📤 Trimite soluția'}
               </button>
-              <button className="eval-submit-btn" onClick={handlePhotoUpload} disabled={busy || !photoFile}>
-                {busy ? 'Se încarcă...' : '📤 Încarcă și finalizează'}
-              </button>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+
+          {status === 'pending' && (
+            <button className="eval-skip-btn" onClick={onClose} style={{ marginTop: 12 }}>Închide</button>
+          )}
+          {status === 'correct' && (
+            <button className="eval-skip-btn" onClick={onClose} style={{ marginTop: 12 }}>Închide</button>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function CompleteButton({ exerciseId, completedIds, onToggleComplete }: {
+function CompleteButton({ exerciseId, completedIds, pendingIds, onToggleComplete }: {
   exerciseId: string;
   completedIds: Set<string>;
+  pendingIds: Set<string>;
   onToggleComplete: (id: string, val: boolean, xp: number, badges: string[]) => void;
 }) {
   const [showModal, setShowModal] = useState(false);
   const [existing, setExisting] = useState<ExerciseSubmission | null>(null);
   const isCompleted = completedIds.has(exerciseId);
+  const isPending = pendingIds.has(exerciseId);
 
   const handleOpen = async () => {
     try {
@@ -773,17 +669,20 @@ function CompleteButton({ exerciseId, completedIds, onToggleComplete }: {
 
   const handleDone = (xp: number) => {
     setShowModal(false);
-    onToggleComplete(exerciseId, true, xp, []);
+    // la trimitere soluție, adaugă în pendingIds local (refresh real la reload)
+    onToggleComplete(exerciseId, false, xp, []);
   };
+
+  let label: string;
+  let cls = 'student-btn-complete';
+  if (isCompleted) { label = '✓ Rezolvat'; cls += ' completed'; }
+  else if (isPending) { label = '⏳ În verificare'; cls += ' pending'; }
+  else { label = '○ Trimite soluția'; }
 
   return (
     <>
-      <button
-        className={`student-btn-complete ${isCompleted ? 'completed' : ''}`}
-        onClick={handleOpen}
-        title={isCompleted ? 'Actualizează autoevaluarea' : 'Deschide autoevaluarea'}
-      >
-        {isCompleted ? '✓ Autoevaluat' : '○ Autoevaluează'}
+      <button className={cls} onClick={handleOpen} title="Trimite soluția pentru verificare">
+        {label}
       </button>
       {showModal && (
         <EvalModal
@@ -797,13 +696,18 @@ function CompleteButton({ exerciseId, completedIds, onToggleComplete }: {
   );
 }
 
-function SimpleExerciseCard({ exercise, index, isPremium, completedIds, onToggleComplete }: { exercise: Exercise; index: number; isPremium: boolean; completedIds: Set<string>; onToggleComplete: (id: string, val: boolean, xp: number, badges: string[]) => void }) {
+function SimpleExerciseCard({ exercise, index, isPremium, completedIds, pendingIds, onToggleComplete }: {
+  exercise: Exercise; index: number; isPremium: boolean;
+  completedIds: Set<string>; pendingIds: Set<string>;
+  onToggleComplete: (id: string, val: boolean, xp: number, badges: string[]) => void;
+}) {
   const [showSolution, setShowSolution] = useState(false);
   const path = exercise.metadata?.path;
   const hasSolution = !!(exercise.solution_latex || exercise.answer_latex);
+  const isPending = pendingIds.has(exercise.id);
 
   return (
-    <div className={`student-exercise-card ${completedIds.has(exercise.id) ? 'card-completed' : ''}`}>
+    <div className={`student-exercise-card ${completedIds.has(exercise.id) ? 'card-completed' : isPending ? 'card-pending' : ''}`}>
       <div className="student-ex-header">
         <div className="student-ex-meta">
           <span className="student-ex-index">{index}</span>
@@ -816,7 +720,7 @@ function SimpleExerciseCard({ exercise, index, isPremium, completedIds, onToggle
           {exercise.points != null && <span className="student-ex-points">{exercise.points} pct</span>}
         </div>
         <div className="student-ex-actions">
-          <CompleteButton exerciseId={exercise.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
+          <CompleteButton exerciseId={exercise.id} completedIds={completedIds} pendingIds={pendingIds} onToggleComplete={onToggleComplete} />
           <BlockedButton exerciseId={exercise.id} isPremium={isPremium} />
           <CorrectionButton exerciseId={exercise.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
           {hasSolution && (
@@ -848,10 +752,11 @@ interface GroupedCardProps {
   index: number;
   isPremium: boolean;
   completedIds: Set<string>;
+  pendingIds: Set<string>;
   onToggleComplete: (id: string, val: boolean, xp: number, badges: string[]) => void;
 }
 
-function GroupedExerciseCard({ parent, children, index, isPremium, completedIds, onToggleComplete }: GroupedCardProps) {
+function GroupedExerciseCard({ parent, children, index, isPremium, completedIds, pendingIds, onToggleComplete }: GroupedCardProps) {
   const [showSolutions, setShowSolutions] = useState<Record<string, boolean>>({});
   const path = parent.metadata?.path;
 
@@ -898,7 +803,7 @@ function GroupedExerciseCard({ parent, children, index, isPremium, completedIds,
                   {child.points != null && (
                     <span className="student-ex-points">{child.points} pct</span>
                   )}
-                  <CompleteButton exerciseId={child.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
+                  <CompleteButton exerciseId={child.id} completedIds={completedIds} pendingIds={pendingIds} onToggleComplete={onToggleComplete} />
                   <BlockedButton exerciseId={child.id} isPremium={isPremium} />
                   <CorrectionButton exerciseId={child.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
                   {hasSolution && (
@@ -1230,9 +1135,10 @@ function SetCard({ set, onOpen, onDelete, onPlan, onPractice, onRename }: {
   );
 }
 
-function SavedSetsTab({ canHelpRequests, completedIds, onToggleComplete }: {
+function SavedSetsTab({ canHelpRequests, completedIds, pendingIds, onToggleComplete }: {
   canHelpRequests: boolean;
   completedIds: Set<string>;
+  pendingIds: Set<string>;
   onToggleComplete: (id: string, val: boolean, xp: number, badges: string[]) => void;
 }) {
   const navigate = useNavigate();
@@ -1334,7 +1240,7 @@ function SavedSetsTab({ canHelpRequests, completedIds, onToggleComplete }: {
           <div className="student-exercises-list">
             {openSet.exercises.map((ex, i) => (
               ex.metadata?.is_container ? null :
-              <SimpleExerciseCard key={ex.id} exercise={ex} index={i + 1} isPremium={canHelpRequests} completedIds={completedIds} onToggleComplete={onToggleComplete} />
+              <SimpleExerciseCard key={ex.id} exercise={ex} index={i + 1} isPremium={canHelpRequests} completedIds={completedIds} pendingIds={pendingIds} onToggleComplete={onToggleComplete} />
             ))}
           </div>
         </div>
@@ -1452,9 +1358,10 @@ function ParentsTab() {
   );
 }
 
-function ReviewTab({ canHelpRequests, completedIds, onToggleComplete }: {
+function ReviewTab({ canHelpRequests, completedIds, pendingIds, onToggleComplete }: {
   canHelpRequests: boolean;
   completedIds: Set<string>;
+  pendingIds: Set<string>;
   onToggleComplete: (id: string, val: boolean, xp: number, badges: string[]) => void;
 }) {
   const [items, setItems] = useState<ReviewItem[]>([]);
@@ -1530,6 +1437,7 @@ function ReviewTab({ canHelpRequests, completedIds, onToggleComplete }: {
               index={index + 1}
               isPremium={canHelpRequests}
               completedIds={completedIds}
+              pendingIds={pendingIds}
               onToggleComplete={(id, val, xp, badges) => {
                 onToggleComplete(id, val, xp, badges);
                 loadItems();
@@ -1548,6 +1456,7 @@ export default function StudentExercises() {
   const { canHelpRequests, canUnlimitedGen } = useAuth();
   const [searchParams] = useSearchParams();
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [gamRefresh, setGamRefresh] = useState(0);
   const [xpToast, setXpToast] = useState<{ xp: number; badges: string[] } | null>(null);
   const initialTab = searchParams.get('tab');
@@ -1609,6 +1518,9 @@ export default function StudentExercises() {
     refreshLimits();
     getCompletedExerciseIds()
       .then((res) => setCompletedIds(new Set(res.data)))
+      .catch(() => {});
+    getPendingExerciseIds()
+      .then((res) => setPendingIds(new Set(res.data)))
       .catch(() => {});
   }, []);
 
@@ -1783,8 +1695,8 @@ export default function StudentExercises() {
         </button>
       </div>
 
-      {activeTab === 'sets' && <SavedSetsTab canHelpRequests={canHelpRequests} completedIds={completedIds} onToggleComplete={onToggleComplete} />}
-      {activeTab === 'review' && <ReviewTab canHelpRequests={canHelpRequests} completedIds={completedIds} onToggleComplete={onToggleComplete} />}
+      {activeTab === 'sets' && <SavedSetsTab canHelpRequests={canHelpRequests} completedIds={completedIds} pendingIds={pendingIds} onToggleComplete={onToggleComplete} />}
+      {activeTab === 'review' && <ReviewTab canHelpRequests={canHelpRequests} completedIds={completedIds} pendingIds={pendingIds} onToggleComplete={onToggleComplete} />}
       {activeTab === 'parents' && <ParentsTab />}
 
       <GamificationBar refreshTrigger={gamRefresh} />
@@ -1973,9 +1885,9 @@ export default function StudentExercises() {
             )}
             {!loading && pageGroups.map((g, i) =>
               g.type === 'simple' ? (
-                <SimpleExerciseCard key={g.exercise.id} exercise={g.exercise} index={(page - 1) * PAGE_SIZE + i + 1} isPremium={canHelpRequests} completedIds={completedIds} onToggleComplete={onToggleComplete} />
+                <SimpleExerciseCard key={g.exercise.id} exercise={g.exercise} index={(page - 1) * PAGE_SIZE + i + 1} isPremium={canHelpRequests} completedIds={completedIds} pendingIds={pendingIds} onToggleComplete={onToggleComplete} />
               ) : (
-                <GroupedExerciseCard key={g.exercise.id} parent={g.exercise} children={g.children || []} index={(page - 1) * PAGE_SIZE + i + 1} isPremium={canHelpRequests} completedIds={completedIds} onToggleComplete={onToggleComplete} />
+                <GroupedExerciseCard key={g.exercise.id} parent={g.exercise} children={g.children || []} index={(page - 1) * PAGE_SIZE + i + 1} isPremium={canHelpRequests} completedIds={completedIds} pendingIds={pendingIds} onToggleComplete={onToggleComplete} />
               )
             )}
           </div>

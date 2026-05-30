@@ -1330,6 +1330,21 @@ def get_completed_exercise_ids(
         rows = cur.fetchall()
     return [str(r[0]) for r in rows]
 
+
+@app.get("/student/pending-exercise-ids", tags=["Student"])
+def get_pending_exercise_ids(
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Returnează id-urile exercițiilor cu soluție trimisă dar neverificată de profesor."""
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT exercise_id FROM exercise_submissions WHERE user_id=%s AND teacher_status='pending'",
+            (str(current_user.id),),
+        )
+        rows = cur.fetchall()
+    return [str(r[0]) for r in rows]
+
 # =============================================================================
 # --- Gamification Endpoints ---
 # =============================================================================
@@ -1478,19 +1493,9 @@ async def submit_exercise(
         # Acordă XP self_eval doar dacă e prima dată
         xp_awarded = _award_xp(conn, str(current_user.id), xp_self, "self_eval", exercise_id)
 
-        # Marchează și în student_progress
-        cur.execute(
-            """INSERT INTO student_progress (student_id, exercise_id, completed, completed_at, last_seen_at)
-               VALUES (%s, %s, TRUE, NOW(), NOW())
-               ON CONFLICT (student_id, exercise_id) DO UPDATE
-               SET completed=TRUE, completed_at=NOW(), last_seen_at=NOW()""",
-            (str(current_user.id), exercise_id),
-        )
-
-        if body.self_eval in (SelfEval.FAILED, SelfEval.PARTIAL):
-            _upsert_review_item(conn, str(current_user.id), exercise_id, body.self_eval.value)
-        else:
-            _resolve_review_item(conn, str(current_user.id), exercise_id)
+        # NU marcăm completed în student_progress — asta se face la aprobare profesor
+        # Marcăm în review_items ca să fie vizibil în lista de revăzut
+        _upsert_review_item(conn, str(current_user.id), exercise_id, body.self_eval.value)
         conn.commit()
 
     return ExerciseSubmissionDB(**row)
@@ -1762,13 +1767,25 @@ def review_submission(
         if not sub:
             raise HTTPException(status_code=404, detail="Submisie inexistentă")
 
+        cur.execute("SELECT difficulty FROM exercises WHERE id=%s", (str(sub["exercise_id"]),))
+        ex = cur.fetchone()
+        base_xp = _calc_base_xp((ex["difficulty"] or 5) if ex else 5)
+
         xp_teacher = 0
         if body.status == TeacherReviewStatus.CORRECT and sub["xp_teacher"] == 0:
-            cur.execute("SELECT difficulty FROM exercises WHERE id=%s", (str(sub["exercise_id"]),))
-            ex = cur.fetchone()
-            base_xp = _calc_base_xp((ex["difficulty"] or 5) if ex else 5)
-            xp_teacher = max(1, round(base_xp * 0.50))
+            # Acordă XP complet la aprobare (100% din baza)
+            xp_teacher = max(10, base_xp)
             _award_xp(conn, str(sub["user_id"]), xp_teacher, "teacher_correct", str(sub["exercise_id"]))
+
+            # Marchează exercițiul ca rezolvat în student_progress
+            cur.execute(
+                """INSERT INTO student_progress (student_id, exercise_id, completed, completed_at, last_seen_at)
+                   VALUES (%s, %s, TRUE, NOW(), NOW())
+                   ON CONFLICT (student_id, exercise_id) DO UPDATE
+                   SET completed=TRUE, completed_at=NOW(), last_seen_at=NOW()""",
+                (str(sub["user_id"]), str(sub["exercise_id"])),
+            )
+            _resolve_review_item(conn, str(sub["user_id"]), str(sub["exercise_id"]))
 
         cur.execute(
             """UPDATE exercise_submissions
@@ -1779,10 +1796,9 @@ def review_submission(
         )
         row = cur.fetchone()
 
-        # Notifică studentul cu rezultatul corecției
         is_correct = body.status == TeacherReviewStatus.CORRECT
-        notif_title = "Soluție corectată ✅" if is_correct else "Soluție incorectă ❌"
-        notif_body = f"Profesorul a evaluat soluția ta: {'Corectă' if is_correct else 'Incorectă'}."
+        notif_title = "Soluție aprobată ✅" if is_correct else "Soluție incorectă ❌"
+        notif_body = f"{'Exercițiul a fost marcat ca rezolvat' if is_correct else 'Soluția ta este incorectă — poți retrimite'}."
         if body.note:
             notif_body += f" Notă: {body.note}"
         if xp_teacher > 0:
@@ -1846,6 +1862,121 @@ async def upload_teacher_file(
         conn.commit()
 
     return {"status": "ok", "file_url": file_url}
+
+
+@app.post("/teacher/help-requests/{request_id}/schedule", tags=["Teacher"])
+def schedule_live_help(
+    request_id: str,
+    body: dict,
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Profesorul programează o sesiune live pentru un elev care a cerut ajutor."""
+    if current_user.role not in (UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Acces interzis")
+
+    scheduled_at = body.get("scheduled_at")  # ISO datetime string
+    zoom_link = body.get("zoom_link", "")
+    if not scheduled_at:
+        raise HTTPException(status_code=400, detail="scheduled_at este obligatoriu")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT * FROM help_requests WHERE id=%s", (request_id,))
+        req = cur.fetchone()
+        if not req:
+            raise HTTPException(status_code=404, detail="Cerere inexistentă")
+
+        # Actualizează cererea cu programarea
+        cur.execute(
+            """UPDATE help_requests
+               SET status='assigned', assigned_teacher_id=%s,
+                   scheduled_at=%s, zoom_link=%s
+               WHERE id=%s""",
+            (str(current_user.id), scheduled_at, zoom_link, request_id),
+        )
+
+        # Data formatată
+        from datetime import datetime as dt
+        try:
+            sched_dt = dt.fromisoformat(scheduled_at.replace("Z", "+00:00"))
+            date_str = sched_dt.strftime("%d.%m.%Y la %H:%M")
+        except Exception:
+            date_str = scheduled_at
+
+        # Notifică elevul
+        cur.execute(
+            """INSERT INTO notifications (user_id, type, title, body, related_id)
+               VALUES (%s, 'live_scheduled', %s, %s, %s)""",
+            (
+                str(req["student_id"]),
+                "Sesiune live programată 📅",
+                f"Profesorul ți-a programat o sesiune live pe {date_str}."
+                + (f" Link: {zoom_link}" if zoom_link else ""),
+                request_id,
+            ),
+        )
+
+        # Notifică părintele dacă există
+        cur.execute(
+            "SELECT parent_id FROM parent_student WHERE student_id=%s",
+            (str(req["student_id"]),),
+        )
+        for parent_row in cur.fetchall():
+            cur.execute("SELECT full_name FROM users WHERE id=%s", (str(req["student_id"]),))
+            student = cur.fetchone()
+            student_name = student["full_name"] if student else "Elevul"
+            cur.execute(
+                """INSERT INTO notifications (user_id, type, title, body, related_id)
+                   VALUES (%s, 'live_scheduled', %s, %s, %s)""",
+                (
+                    str(parent_row["parent_id"]),
+                    f"Sesiune live programată pentru {student_name}",
+                    f"{student_name} are o sesiune live cu profesorul pe {date_str}.",
+                    request_id,
+                ),
+            )
+
+        # Adaugă în calendarul elevului
+        import json as _json
+        plan_date = sched_dt.strftime("%Y-%m-%d") if 'sched_dt' in dir() else scheduled_at[:10]
+        cur.execute(
+            """INSERT INTO study_plan_days
+               (user_id, plan_date, session_type, filters, note, created_by, teacher_id)
+               VALUES (%s, %s, 'live_session', %s, %s, 'teacher', %s)""",
+            (
+                str(req["student_id"]),
+                plan_date,
+                _json.dumps({}),
+                f"Sesiune live cu profesorul la {date_str}" + (f"\nLink: {zoom_link}" if zoom_link else ""),
+                str(current_user.id),
+            ),
+        )
+
+        conn.commit()
+
+    return {"status": "scheduled", "scheduled_at": scheduled_at}
+
+
+@app.get("/teacher/help-requests/live", tags=["Teacher"])
+def get_live_help_requests(
+    conn: Connection = Depends(get_db_conn),
+    current_user=Depends(get_current_user),
+):
+    """Returnează cererile de ajutor live nerezolvate."""
+    if current_user.role not in (UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN):
+        raise HTTPException(status_code=403, detail="Acces interzis")
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """SELECT hr.*, u.full_name as student_name, u.email as student_email,
+                      e.statement_text, e.statement_latex, e.difficulty
+               FROM help_requests hr
+               JOIN users u ON u.id = hr.student_id
+               LEFT JOIN exercises e ON e.id = hr.exercise_id
+               WHERE hr.flag_type = 'LIVE' AND hr.status IN ('pending', 'assigned')
+               ORDER BY hr.created_at DESC""",
+        )
+        return cur.fetchall()
 
 
 @app.get("/teacher/submissions/stats", tags=["Teacher"])

@@ -16,9 +16,10 @@ import './StudyPlan.css';
 
 const BAC_DATE = new Date('2026-07-01');
 
-const SESSION_LABELS: Record<SessionType, { label: string; icon: string }> = {
-  test_scurt: { label: 'Test Scurt', icon: '⚡' },
-  test_bac:   { label: 'Test BAC',   icon: '🏆' },
+const SESSION_LABELS: Record<string, { label: string; icon: string }> = {
+  test_scurt:   { label: 'Test Scurt',  icon: '⚡' },
+  test_bac:     { label: 'Test BAC',    icon: '🏆' },
+  live_session: { label: 'Live cu prof', icon: '📹' },
 };
 
 const DAYS_RO = ['Lun', 'Mar', 'Mie', 'Joi', 'Vin', 'Sâm', 'Dum'];
@@ -184,7 +185,7 @@ function DayCell({ date, entries, isToday, isPast, onAdd, onDelete, onStart }: D
         {entries.map(entry => {
           const cfg = SESSION_LABELS[entry.session_type];
           return (
-            <div key={entry.id} className={`sp-entry${entry.completed ? ' done' : ''}${entry.created_by === 'teacher' ? ' by-teacher' : ''}`}>
+            <div key={entry.id} className={`sp-entry${entry.completed ? ' done' : ''}${(entry.session_type as string) === 'live_session' ? ' live-session' : entry.created_by === 'teacher' ? ' by-teacher' : ''}`}>
               <div className="sp-entry-top">
                 <span className="sp-entry-icon">{cfg.icon}</span>
                 <span className="sp-entry-label">{cfg.label}</span>

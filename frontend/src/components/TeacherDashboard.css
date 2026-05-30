@@ -749,3 +749,133 @@
   padding: 2px 8px;
   margin-bottom: 8px;
 }
+
+/* ─── Dashboard Tabs ─── */
+.teacher-dash-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.td-tab-btn {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.td-tab-btn:hover { color: #111827; }
+.td-tab-btn.active { color: #7c3aed; border-bottom-color: #7c3aed; }
+
+/* ─── Live Requests ─── */
+.live-requests-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.live-req-card {
+  background: #fff;
+  border: 1.5px solid #e5e7eb;
+  border-left: 4px solid #7c3aed;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.live-req-card.scheduled {
+  border-left-color: #22c55e;
+  opacity: 0.85;
+}
+
+.live-req-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.live-req-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.live-req-scheduled-badge {
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: #dcfce7;
+  color: #166534;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.live-req-notes {
+  font-size: 0.875rem;
+  color: #374151;
+  background: #f9fafb;
+  border-radius: 6px;
+  padding: 8px 12px;
+}
+
+.live-req-zoom {
+  font-size: 0.82rem;
+  color: #2563eb;
+}
+.live-req-zoom a { color: #2563eb; }
+
+.live-req-schedule-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  width: fit-content;
+  transition: background 0.15s;
+}
+.live-req-schedule-btn:hover { background: #6d28d9; }
+
+.live-sched-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.live-sched-row {
+  display: flex;
+  gap: 8px;
+}
+
+.live-sched-input {
+  padding: 8px 10px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 7px;
+  font-size: 0.875rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.live-sched-btns {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}

@@ -75,12 +75,16 @@ def run_pending_migrations() -> None:
                     cur.execute(sql)
                 with conn.cursor() as cur:
                     cur.execute(
-                        "INSERT INTO schema_migrations (filename) VALUES (%s)",
+                        "INSERT INTO schema_migrations (filename) VALUES (%s) ON CONFLICT DO NOTHING",
                         (filename,),
                     )
                 conn.commit()
             except Exception as exc:
                 conn.rollback()
+                # Dacă alt worker a rulat deja migrația (race condition), ignorăm
+                if "duplicate key" in str(exc).lower() or "already exists" in str(exc).lower():
+                    print(f"Migration {filename} skipped: already applied by another worker")
+                    continue
                 print(f"Migration {filename} failed: {exc}")
                 raise RuntimeError(f"Migration {filename} failed") from exc
 

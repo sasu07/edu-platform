@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, Camera, ThumbsUp, ThumbsDown, Eye, Paperclip, Users } from 'lucide-react';
+import { CheckCircle, Camera, ThumbsUp, ThumbsDown, Eye, Paperclip, Users, Video, Calendar } from 'lucide-react';
 import {
   getTeacherSubmissions,
   reviewSubmission,
   uploadTeacherFile,
   assignPendingSubmissions,
   getSubmissionStats,
+  getLiveHelpRequests,
+  scheduleLiveHelp,
   buildApiUrl,
 } from '../api';
+import LatexRenderer from './LatexRenderer';
 import './TeacherDashboard.css';
 
 interface SubmissionItem {
@@ -258,13 +261,153 @@ function SubmissionsTab() {
   );
 }
 
+// ─── Live Help Requests Tab ───────────────────────────────────────────────────
+
+interface LiveRequest {
+  id: string;
+  student_name: string;
+  student_email: string;
+  exercise_id: string;
+  statement_text: string | null;
+  statement_latex: string | null;
+  difficulty: number | null;
+  notes: string | null;
+  status: string;
+  scheduled_at: string | null;
+  zoom_link: string | null;
+  created_at: string;
+}
+
+function LiveRequestsTab() {
+  const [requests, setRequests] = useState<LiveRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [schedulingId, setSchedulingId] = useState<string | null>(null);
+  const [schedDate, setSchedDate] = useState('');
+  const [schedTime, setSchedTime] = useState('');
+  const [schedZoom, setSchedZoom] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  const load = () => {
+    setLoading(true);
+    getLiveHelpRequests()
+      .then(r => setRequests(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setRequests([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const handleSchedule = async (id: string) => {
+    if (!schedDate || !schedTime) { setMsg('Selectează data și ora.'); return; }
+    setSaving(true);
+    setMsg('');
+    try {
+      const iso = `${schedDate}T${schedTime}:00`;
+      await scheduleLiveHelp(id, { scheduled_at: iso, zoom_link: schedZoom || undefined });
+      setSchedulingId(null);
+      setSchedDate(''); setSchedTime(''); setSchedZoom('');
+      load();
+    } catch (e: any) {
+      setMsg(e?.response?.data?.detail || 'Eroare la programare.');
+    } finally { setSaving(false); }
+  };
+
+  if (loading) return <div className="teacher-empty">Se încarcă...</div>;
+
+  if (requests.length === 0) return (
+    <div className="teacher-empty">
+      <Video size={40} />
+      <p>Nu există cereri de ajutor live.</p>
+    </div>
+  );
+
+  return (
+    <div className="live-requests-list">
+      {requests.map(req => (
+        <div key={req.id} className={`live-req-card${req.scheduled_at ? ' scheduled' : ''}`}>
+          <div className="live-req-header">
+            <div>
+              <strong>{req.student_name}</strong>
+              <span className="sub-card-email">{req.student_email}</span>
+            </div>
+            <div className="live-req-meta">
+              {req.difficulty && <span className="sub-diff">Dif: {req.difficulty}/10</span>}
+              <span className="sub-date">{new Date(req.created_at).toLocaleDateString('ro-RO')}</span>
+              {req.scheduled_at && (
+                <span className="live-req-scheduled-badge">
+                  📅 {new Date(req.scheduled_at).toLocaleString('ro-RO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {(req.statement_text || req.statement_latex) && (
+            <div className="sub-statement">
+              <LatexRenderer text={req.statement_latex || req.statement_text || ''} />
+            </div>
+          )}
+
+          {req.notes && (
+            <div className="live-req-notes">💬 <em>{req.notes}</em></div>
+          )}
+
+          {req.zoom_link && (
+            <div className="live-req-zoom">
+              🔗 <a href={req.zoom_link} target="_blank" rel="noopener noreferrer">{req.zoom_link}</a>
+            </div>
+          )}
+
+          {!req.scheduled_at && (
+            schedulingId === req.id ? (
+              <div className="live-sched-form">
+                <div className="live-sched-row">
+                  <input type="date" className="live-sched-input" value={schedDate}
+                    min={new Date().toISOString().split('T')[0]}
+                    onChange={e => setSchedDate(e.target.value)} />
+                  <input type="time" className="live-sched-input" value={schedTime}
+                    onChange={e => setSchedTime(e.target.value)} />
+                </div>
+                <input type="url" className="live-sched-input" placeholder="Link Zoom/Meet (opțional)"
+                  value={schedZoom} onChange={e => setSchedZoom(e.target.value)} />
+                {msg && <div className="flag-msg-err">{msg}</div>}
+                <div className="live-sched-btns">
+                  <button className="sub-btn-cancel" onClick={() => { setSchedulingId(null); setMsg(''); }}>Anulează</button>
+                  <button className="sub-btn-correct" onClick={() => handleSchedule(req.id)} disabled={saving}>
+                    <Calendar size={14} /> {saving ? 'Se salvează...' : 'Confirmă programarea'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button className="live-req-schedule-btn" onClick={() => { setSchedulingId(req.id); setMsg(''); }}>
+                <Video size={14} /> Programează sesiunea live
+              </button>
+            )
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function TeacherDashboard() {
+  const [tab, setTab] = useState<'submissions' | 'live'>('submissions');
+
   return (
     <div className="teacher-dashboard">
       <div className="teacher-dash-header">
-        <h2><Camera size={20} /> Verificare soluții elevi</h2>
+        <h2><Camera size={20} /> Dashboard Profesor</h2>
       </div>
-      <SubmissionsTab />
+      <div className="teacher-dash-tabs">
+        <button className={`td-tab-btn${tab === 'submissions' ? ' active' : ''}`} onClick={() => setTab('submissions')}>
+          📝 Verificare soluții
+        </button>
+        <button className={`td-tab-btn${tab === 'live' ? ' active' : ''}`} onClick={() => setTab('live')}>
+          📹 Cereri ajutor live
+        </button>
+      </div>
+      {tab === 'submissions' && <SubmissionsTab />}
+      {tab === 'live' && <LiveRequestsTab />}
     </div>
   );
 }

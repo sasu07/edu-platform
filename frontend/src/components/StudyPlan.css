@@ -567,3 +567,9 @@
   color: #9ca3af;
   font-size: 0.9rem;
 }
+
+.sp-entry.live-session {
+  background: #f5f3ff;
+  border-color: #c4b5fd;
+}
+.sp-entry.live-session .sp-entry-label { color: #7c3aed; }
