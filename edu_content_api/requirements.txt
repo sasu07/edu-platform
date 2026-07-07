@@ -31,3 +31,4 @@ reportlab
 matplotlib
 python-jose[cryptography]
 bcrypt
+anthropic

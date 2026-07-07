@@ -60,6 +60,7 @@ from routers.parent_router import router as parent_router
 from routers.study_router import router as study_router
 from routers.system_router import router as system_router
 from routers.variants_router import router as variants_router
+from routers.learning_path_router import router as learning_path_router
 from services.xp_service import award_xp as _award_xp, calc_base_xp as _calc_base_xp
 
 app = FastAPI(
@@ -76,6 +77,7 @@ app.include_router(parent_router)
 app.include_router(study_router)
 app.include_router(system_router)
 app.include_router(variants_router)
+app.include_router(learning_path_router)
 
 # --- Helper functions ---
 

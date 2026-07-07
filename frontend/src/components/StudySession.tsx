@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Play, Clock, CheckCircle, XCircle, Zap, BarChart2, ChevronRight, BookOpen, Timer } from 'lucide-react';
+import { Play, Clock, CheckCircle, XCircle, Zap, BarChart2, ChevronRight, BookOpen, Timer, Database } from 'lucide-react';
 import {
   startStudySession,
   completeStudySession,
@@ -10,9 +10,11 @@ import {
   getStudySession,
   markExerciseComplete,
   getCompletedExerciseIds,
+  getExerciseSets,
   type SessionType,
   type StudySession as StudySessionType,
   type StudyStats,
+  type ExerciseSet,
 } from '../api';
 import LatexRenderer from './LatexRenderer';
 import './StudySession.css';
@@ -164,19 +166,37 @@ function getStartErrorMessage(error: any) {
   return 'Eroare la pornirea sesiunii.';
 }
 
+type SourceMode = 'auto' | 'set';
+
 function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaultFilters = {} }: ConfigureProps) {
   const [sessionType, setSessionType] = useState<SessionType>(defaultType);
   const [subiect, setSubiect] = useState<string>(defaultFilters.subiect_tag || '');
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
-  const exactSetMode = Boolean(defaultFilters.exercise_set_id);
+
+  const forcedSetId = defaultFilters.exercise_set_id as string | undefined;
+  const [sourceMode, setSourceMode] = useState<SourceMode>(forcedSetId ? 'set' : 'auto');
+  const [savedSets, setSavedSets] = useState<ExerciseSet[]>([]);
+  const [selectedSetId, setSelectedSetId] = useState<string>(forcedSetId || '');
+  const [setsLoading, setSetsLoading] = useState(false);
+
+  useEffect(() => {
+    if (sourceMode !== 'set') return;
+    setSetsLoading(true);
+    getExerciseSets()
+      .then(r => setSavedSets(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setSavedSets([]))
+      .finally(() => setSetsLoading(false));
+  }, [sourceMode]);
 
   const handleStart = async () => {
     setStarting(true);
     setError('');
     try {
-      const filters: Record<string, any> = { ...defaultFilters };
-      if (!exactSetMode) {
+      const filters: Record<string, any> = {};
+      if (sourceMode === 'set' && selectedSetId) {
+        filters.exercise_set_id = selectedSetId;
+      } else if (sourceMode === 'auto') {
         if (subiect) filters.subiect_tag = subiect;
       }
       const res = await startStudySession({ session_type: sessionType, filters, plan_day_id: planDayId });
@@ -188,6 +208,8 @@ function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaul
   };
 
   const cfg = SESSION_CONFIG[sessionType];
+  const canStart = sourceMode === 'auto' || Boolean(selectedSetId);
+  const selectedSet = savedSets.find(s => s.id === selectedSetId);
 
   return (
     <div className="ss-configure">
@@ -211,19 +233,66 @@ function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaul
         ))}
       </div>
 
-      <div className="ss-section-title">Filtre exerciții</div>
-      <div className="ss-filters">
-        <label className="ss-filter-label">Subiect
-          <select className="ss-select" value={subiect} onChange={e => setSubiect(e.target.value)} disabled={exactSetMode}>
-            {SUBIECT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-          </select>
-        </label>
+      <div className="ss-section-title">Exercițiile vin din</div>
+      <div className="ss-source-toggle">
+        <button
+          className={`ss-source-btn${sourceMode === 'auto' ? ' active' : ''}`}
+          onClick={() => { if (!forcedSetId) setSourceMode('auto'); }}
+          disabled={Boolean(forcedSetId)}
+        >
+          Generare automată
+        </button>
+        <button
+          className={`ss-source-btn${sourceMode === 'set' ? ' active' : ''}`}
+          onClick={() => setSourceMode('set')}
+        >
+          <Database size={14} /> Set salvat
+        </button>
       </div>
 
-      {exactSetMode && (
-        <div className="ss-info-row">
-          <BookOpen size={15} />
-          <span>Sesiunea va folosi exact setul salvat pe care l-ai planificat.</span>
+      {sourceMode === 'auto' && (
+        <div className="ss-filters">
+          <label className="ss-filter-label">Subiect
+            <select className="ss-select" value={subiect} onChange={e => setSubiect(e.target.value)}>
+              {SUBIECT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+        </div>
+      )}
+
+      {sourceMode === 'set' && (
+        <div className="ss-set-picker">
+          {setsLoading ? (
+            <div className="ss-set-picker-loading">Se încarcă seturile salvate…</div>
+          ) : savedSets.length === 0 ? (
+            <div className="ss-set-picker-empty">
+              Nu ai seturi salvate. Mergi la <strong>Exerciții</strong>, filtrează și salvează un set.
+            </div>
+          ) : (
+            <>
+              <select
+                className="ss-select"
+                value={selectedSetId}
+                onChange={e => setSelectedSetId(e.target.value)}
+              >
+                <option value="">— Alege un set —</option>
+                {savedSets.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} ({s.exercise_count} ex.)
+                  </option>
+                ))}
+              </select>
+              {selectedSet && (
+                <div className="ss-set-preview">
+                  <span>{selectedSet.exercise_count} exerciții</span>
+                  {selectedSet.linked_plan && <span className="ss-set-tag">Planificat</span>}
+                  <span className="ss-set-date">
+                    {new Date(selectedSet.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </span>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -234,7 +303,7 @@ function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaul
 
       {error && <div className="ss-error">{error}</div>}
 
-      <button className="ss-start-btn" onClick={handleStart} disabled={starting}>
+      <button className="ss-start-btn" onClick={handleStart} disabled={starting || !canStart}>
         {starting ? 'Se generează…' : <><Play size={16} /> Pornește sesiunea</>}
       </button>
     </div>

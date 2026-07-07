@@ -792,30 +792,29 @@ function GroupedExerciseCard({ parent, children, index, isPremium, completedIds,
 
           return (
             <div key={child.id} className="subpoint-item">
-              <div className="subpoint-header">
-                <div className="subpoint-left">
-                  <span className="subpoint-letter">{subpoint})</span>
-                  <div className="subpoint-statement">
-                    <LatexRenderer text={child.statement_latex || child.statement_text || ''} />
-                  </div>
+              <div className="subpoint-left">
+                <span className="subpoint-letter">{subpoint})</span>
+                <div className="subpoint-statement">
+                  <LatexRenderer text={child.statement_latex || child.statement_text || ''} />
                 </div>
-                <div className="subpoint-actions">
-                  {child.points != null && (
-                    <span className="student-ex-points">{child.points} pct</span>
-                  )}
-                  <CompleteButton exerciseId={child.id} completedIds={completedIds} pendingIds={pendingIds} onToggleComplete={onToggleComplete} />
-                  <BlockedButton exerciseId={child.id} isPremium={isPremium} />
-                  <CorrectionButton exerciseId={child.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
-                  {hasSolution && (
-                    <button
-                      className={`student-btn-solution ${isOpen ? 'active' : ''}`}
-                      onClick={() => toggleSolution(child.id)}
-                    >
-                      {isOpen ? <EyeOff size={14} /> : <Eye size={14} />}
-                      {isOpen ? 'Ascunde' : 'Rezolvare'}
-                    </button>
-                  )}
-                </div>
+              </div>
+
+              <div className="subpoint-actions">
+                {child.points != null && (
+                  <span className="student-ex-points">{child.points} pct</span>
+                )}
+                <CompleteButton exerciseId={child.id} completedIds={completedIds} pendingIds={pendingIds} onToggleComplete={onToggleComplete} />
+                <BlockedButton exerciseId={child.id} isPremium={isPremium} />
+                <CorrectionButton exerciseId={child.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
+                {hasSolution && (
+                  <button
+                    className={`student-btn-solution ${isOpen ? 'active' : ''}`}
+                    onClick={() => toggleSolution(child.id)}
+                  >
+                    {isOpen ? <EyeOff size={14} /> : <Eye size={14} />}
+                    {isOpen ? 'Ascunde' : 'Rezolvare'}
+                  </button>
+                )}
               </div>
 
               <ExerciseWorkspace exerciseId={child.id} />
@@ -1094,28 +1093,28 @@ function SetCard({ set, onOpen, onDelete, onPlan, onPractice, onRename }: {
       </div>
       <div className="saved-set-actions">
         <button
-          className="saved-set-delete"
+          className="saved-set-action"
           onClick={(e) => { e.stopPropagation(); onPractice(set, 'test_scurt'); }}
-          title="Pornește Test Scurt din aceste filtre"
+          title="Pornește Test Scurt"
         >
           <Play size={15} />
         </button>
         <button
-          className="saved-set-delete"
+          className="saved-set-action"
           onClick={(e) => { e.stopPropagation(); onPractice(set, 'test_bac'); }}
-          title="Pornește Test BAC din aceste filtre"
+          title="Pornește Test BAC"
         >
           BAC
         </button>
         <button
-          className="saved-set-delete"
+          className="saved-set-action"
           onClick={(e) => { e.stopPropagation(); onPlan(set); }}
           title="Adaugă în planul de studiu"
         >
           <CalendarDays size={15} />
         </button>
         <button
-          className="saved-set-delete"
+          className="saved-set-action"
           onClick={(e) => { e.stopPropagation(); onRename(set); }}
           title="Redenumește setul"
         >
@@ -1123,7 +1122,7 @@ function SetCard({ set, onOpen, onDelete, onPlan, onPractice, onRename }: {
         </button>
         <ChevronRight size={18} className="saved-set-arrow" />
         <button
-          className="saved-set-delete"
+          className="saved-set-action danger"
           onClick={handleDelete}
           disabled={deleting}
           title="Șterge setul"

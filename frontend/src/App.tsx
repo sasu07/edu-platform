@@ -42,6 +42,7 @@ const MyRequests = lazy(() => import("./components/MyRequests"));
 const ParentDashboard = lazy(() => import("./components/ParentDashboard"));
 const StudySession = lazy(() => import("./components/StudySession"));
 const StudyPlan = lazy(() => import("./components/StudyPlan"));
+const LearningPath = lazy(() => import("./components/LearningPath"));
 
 function RouteLoader() {
   return <div className="auth-loading">Se încarcă...</div>;
@@ -64,6 +65,12 @@ function AppHub() {
   const [todayPlanEntries, setTodayPlanEntries] = useState<StudyPlanDay[]>([]);
   const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
   const [gamification, setGamification] = useState<GamificationProfile | null>(null);
+
+  const bacDate = new Date('2026-07-01');
+  const daysLeft = Math.max(0, Math.ceil((bacDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Bună dimineața' : hour < 18 ? 'Bună ziua' : 'Bună seara';
+  const firstName = user?.full_name?.split(' ')[0] || user?.full_name || '';
   const weakestSubiect =
     studyStats?.subiect_progress?.length
       ? [...studyStats.subiect_progress].sort((a, b) => a.pct - b.pct)[0]
@@ -106,8 +113,19 @@ function AppHub() {
   return (
     <div className="hub">
       <header className="hub-head">
-        <h1 className="hub-title">EtoXPlatform</h1>
-        <p className="hub-subtitle">Salut, {user?.full_name}! Hai să vedem care e cel mai bun pas pentru azi.</p>
+        <div className="hub-greeting-block">
+          <h1 className="hub-greeting">{greeting}, {firstName}!</h1>
+          <p className="hub-subtitle">Hai să vedem care e cel mai bun pas pentru azi.</p>
+        </div>
+        {!isTeacher && !isAdmin && (
+          <div className="hub-bac-pill">
+            <span className="hub-bac-icon">🎓</span>
+            <div>
+              <div className="hub-bac-days">{daysLeft}</div>
+              <div className="hub-bac-label">zile până la BAC</div>
+            </div>
+          </div>
+        )}
       </header>
 
       {!isTeacher && !isParent && (
@@ -291,85 +309,87 @@ function AppHub() {
       <div className="hub-grid">
         {isTeacher && (
           <Link to="/app/content/import" className="hub-card">
+            <div className="hub-card-icon hub-icon-blue">📂</div>
             <div className="hub-card-title">Conținut</div>
-            <div className="hub-card-sub">
-              Import JSON + gestionare/verificare exerciții
-            </div>
-            <div className="hub-card-cta">Deschide →</div>
+            <div className="hub-card-sub">Import JSON + gestionare/verificare exerciții</div>
+            <div className="hub-card-cta">Deschide</div>
           </Link>
         )}
 
         <Link to="/app/exercises" className="hub-card">
+          <div className="hub-card-icon hub-icon-blue">📖</div>
           <div className="hub-card-title">Exerciții</div>
-          <div className="hub-card-sub">
-            Generează exerciții pe topic și verifică-ți soluțiile
-          </div>
-          <div className="hub-card-cta">Deschide →</div>
+          <div className="hub-card-sub">Generează exerciții pe topic și verifică-ți soluțiile</div>
+          <div className="hub-card-cta">Deschide</div>
         </Link>
+
+        {!isTeacher && !isParent && (
+          <Link to="/app/learning-path" className="hub-card hub-card-learning">
+            <div className="hub-card-icon hub-icon-purple">🧠</div>
+            <div className="hub-card-title">Traseu adaptat</div>
+            <div className="hub-card-sub">Test diagnostic + plan personalizat pe lacunele tale</div>
+            <div className="hub-card-cta">Începe</div>
+          </Link>
+        )}
 
         {!isTeacher && (
           <Link to="/app/study-session" className="hub-card hub-card-session">
-            <div className="hub-card-title">⚡ Sesiune de studiu</div>
-            <div className="hub-card-sub">
-              Test scurt (10 ex · 60 min) sau Test BAC (25 ex · 3h) cu timer live
-            </div>
-            <div className="hub-card-cta">Pornește →</div>
+            <div className="hub-card-icon hub-icon-purple">⚡</div>
+            <div className="hub-card-title">Sesiune de studiu</div>
+            <div className="hub-card-sub">Test scurt (10 ex · 60 min) sau Test BAC (25 ex · 3h) cu timer live</div>
+            <div className="hub-card-cta">Pornește</div>
           </Link>
         )}
 
         {!isTeacher && (
           <Link to="/app/study-plan" className="hub-card hub-card-plan">
-            <div className="hub-card-title">📅 Plan săptămânal</div>
-            <div className="hub-card-sub">
-              Planifică sesiunile de studiu și urmărește countdown-ul până la BAC
-            </div>
-            <div className="hub-card-cta">Deschide →</div>
+            <div className="hub-card-icon hub-icon-green">📅</div>
+            <div className="hub-card-title">Plan săptămânal</div>
+            <div className="hub-card-sub">Planifică sesiunile de studiu și urmărește countdown-ul până la BAC</div>
+            <div className="hub-card-cta">Deschide</div>
           </Link>
         )}
 
         {!isParent && (
           <Link to="/app/league" className="hub-card">
+            <div className="hub-card-icon hub-icon-amber">🏆</div>
             <div className="hub-card-title">Liga BAC</div>
-            <div className="hub-card-sub">
-              Clasament săptămânal, cod de clasă și provocări care țin ritmul viu
-            </div>
-            <div className="hub-card-cta">Intră →</div>
+            <div className="hub-card-sub">Clasament săptămânal, cod de clasă și provocări care țin ritmul viu</div>
+            <div className="hub-card-cta">Intră</div>
           </Link>
         )}
 
         <Link to="/app/variants" className="hub-card">
+          <div className="hub-card-icon hub-icon-blue">📄</div>
           <div className="hub-card-title">Variante BAC</div>
-          <div className="hub-card-sub">
-            Generare automată subiecte tip BAC + download PDF
-          </div>
-          <div className="hub-card-cta">Deschide →</div>
+          <div className="hub-card-sub">Generare automată subiecte tip BAC + download PDF</div>
+          <div className="hub-card-cta">Deschide</div>
         </Link>
 
         {isTeacher && (
           <Link to="/app/teacher/requests" className="hub-card">
+            <div className="hub-card-icon hub-icon-amber">✉️</div>
             <div className="hub-card-title">Cereri de ajutor</div>
-            <div className="hub-card-sub">
-              Răspunde la flag-urile trimise de studenți
-            </div>
-            <div className="hub-card-cta">Deschide →</div>
+            <div className="hub-card-sub">Răspunde la flag-urile trimise de studenți</div>
+            <div className="hub-card-cta">Deschide</div>
           </Link>
         )}
+
         {isAdmin && (
           <Link to="/app/admin" className="hub-card hub-card-admin">
+            <div className="hub-card-icon hub-icon-amber">⚙️</div>
             <div className="hub-card-title">Administrator</div>
-            <div className="hub-card-sub">
-              Gestionează utilizatori și abonamente
-            </div>
-            <div className="hub-card-cta">Deschide →</div>
+            <div className="hub-card-sub">Gestionează utilizatori și abonamente</div>
+            <div className="hub-card-cta">Deschide</div>
           </Link>
         )}
+
         {isParent && (
           <Link to="/app/parent" className="hub-card hub-card-parent">
+            <div className="hub-card-icon hub-icon-purple">📊</div>
             <div className="hub-card-title">Dashboard Progres</div>
-            <div className="hub-card-sub">
-              Urmărește activitatea și progresul elevului tău
-            </div>
-            <div className="hub-card-cta">Deschide →</div>
+            <div className="hub-card-sub">Urmărește activitatea și progresul elevului tău</div>
+            <div className="hub-card-cta">Deschide</div>
           </Link>
         )}
       </div>
@@ -478,8 +498,16 @@ function ContentShell({
 }
 
 function NavbarUser() {
-  const { user, logout } = useAuth();
+  const { user, logout, isTeacher, isAdmin, isParent } = useAuth();
   const navigate = useNavigate();
+  const [gamif, setGamif] = useState<GamificationProfile | null>(null);
+  const isStudent = !isTeacher && !isAdmin && !isParent;
+
+  useEffect(() => {
+    if (isStudent && user) {
+      getMyGamification().then((r) => setGamif(r.data)).catch(() => {});
+    }
+  }, [isStudent, user]);
 
   const handleLogout = () => {
     logout();
@@ -488,10 +516,27 @@ function NavbarUser() {
 
   if (!user) return null;
 
+  const firstName = user.full_name?.split(' ')[0] || user.full_name;
+
   return (
     <div className="navbar-user">
+      {gamif && isStudent && (
+        <div className="navbar-xp-strip">
+          <span className="navbar-xp-level">⚡ {gamif.level.name}</span>
+          <div className="navbar-xp-track">
+            <div
+              className="navbar-xp-fill"
+              style={{ width: `${Math.min(100, (gamif.xp_total % 500) / 5)}%` }}
+            />
+          </div>
+          <span className="navbar-xp-val">{gamif.xp_total} XP</span>
+          {gamif.streak_current > 0 && (
+            <span className="navbar-streak">🔥{gamif.streak_current}</span>
+          )}
+        </div>
+      )}
       <NotificationBell />
-      <span className="navbar-user-name">{user.full_name}</span>
+      <span className="navbar-user-name">{firstName}</span>
       <span className={`navbar-user-badge badge-${user.role}`}>{user.role}</span>
       <button onClick={handleLogout} className="navbar-logout-btn">
         Ieși
@@ -568,6 +613,16 @@ function AppShell() {
                 >
                   Cererile mele
                 </NavLink>
+                {!isTeacher && (
+                  <NavLink
+                    to="/app/learning-path"
+                    className={({ isActive }) =>
+                      isActive ? "nav-link active" : "nav-link"
+                    }
+                  >
+                    Traseu
+                  </NavLink>
+                )}
                 {!isTeacher && (
                   <NavLink
                     to="/app/study-session"
@@ -710,6 +765,14 @@ function AppShell() {
             element={
               <Suspense fallback={<RouteLoader />}>
                 <StudyPlan />
+              </Suspense>
+            }
+          />
+          <Route
+            path="learning-path/*"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <LearningPath />
               </Suspense>
             }
           />

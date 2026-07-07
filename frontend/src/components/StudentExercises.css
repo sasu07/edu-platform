@@ -462,19 +462,22 @@
 
 .saved-set-arrow { color: #9ca3af; }
 
-.saved-set-delete {
+.saved-set-action {
   background: none;
   border: none;
-  color: #9ca3af;
+  color: #6b7280;
   cursor: pointer;
-  padding: 4px;
+  padding: 4px 6px;
   border-radius: 5px;
   display: flex;
   align-items: center;
+  font-size: 0.78rem;
+  font-weight: 600;
   transition: color 0.12s, background 0.12s;
 }
-.saved-set-delete:hover { color: #dc2626; background: #fee2e2; }
-.saved-set-delete:disabled { opacity: 0.4; cursor: not-allowed; }
+.saved-set-action:hover { color: #2563eb; background: #eff6ff; }
+.saved-set-action.danger:hover { color: #dc2626; background: #fee2e2; }
+.saved-set-action:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .saved-set-exercises {
   border: 1px solid #e5e7eb;
@@ -1013,23 +1016,17 @@
 .subpoint-item {
   border-top: 1px solid #e5e7eb;
   padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .subpoint-item:first-child { border-top: none; }
-
-.subpoint-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
 
 .subpoint-left {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  flex: 1;
-  min-width: 0;
 }
 
 .subpoint-letter {
@@ -1037,6 +1034,7 @@
   font-weight: 700;
   color: #6366f1;
   min-width: 22px;
+  flex-shrink: 0;
   padding-top: 2px;
 }
 
@@ -1045,13 +1043,15 @@
   line-height: 1.7;
   color: #1f2937;
   flex: 1;
+  min-width: 0;
 }
 
 .subpoint-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-left: 32px; /* aliniat cu enunțul, sub literă */
 }
 
 /* Solution sections */

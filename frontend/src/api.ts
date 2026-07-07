@@ -615,4 +615,170 @@ export const deleteStudyPlanDay = (planId: string) =>
 export const getTeacherStudentsList = () =>
   api.get<{ id: string; full_name: string; email: string }[]>('/teacher/students-list');
 
+// ─── Learning Path ───────────────────────────────────────────────────────────
+
+export interface DiagnosticExercise {
+  id: string;
+  statement_latex: string;
+  statement_text?: string;
+  difficulty?: number;
+  topic_key?: string;
+  topic_label?: string;
+  has_auto_check?: boolean;
+  options: string[] | null;  // null = exercițiu cu răspuns deschis
+}
+
+export interface DiagnosticWeakTopic {
+  topic_key: string;
+  topic_label: string;
+  subiect: number | null;
+  score_pct: number;
+  seen: number;
+  correct: number;
+}
+
+export interface DiagnosticResult {
+  test_id: string;
+  score_pct: number;
+  correct_count: number;
+  total: number;
+  weak_topics: DiagnosticWeakTopic[];
+}
+
+export interface LearningPathNode {
+  id: string;
+  topic_key: string;
+  topic_label: string;
+  subiect_num: number;
+  priority: number;
+  status: 'pending' | 'in_progress' | 'mastered';
+  exercises_seen: number;
+  exercises_correct: number;
+  target_exercises: number;
+  score_pct: number;
+  diagnostic_score_pct: number | null;
+  sort_order: number;
+}
+
+export interface LearningPath {
+  id: string;
+  user_id: string;
+  diagnostic_test_id: string | null;
+  status: string;
+  total_nodes: number;
+  completed_nodes: number;
+  generated_at: string;
+  updated_at: string;
+}
+
+export interface AIPlanWeek {
+  numar: number;
+  titlu: string;
+  focus_principal: string;
+  obiective: string[];
+  topicuri_recomandate: string[];
+  timp_zilnic_minute: number;
+  strategie: string;
+}
+
+export interface AIPlan {
+  rezumat: string;
+  nivel_general: 'incepator' | 'mediu' | 'avansat';
+  saptamani: AIPlanWeek[];
+  prioritati_urgente: string[];
+  sfaturi_practice: string[];
+  motivatie: string;
+  _source?: 'claude' | 'fallback';
+}
+
+export interface LearningPathResponse {
+  path: LearningPath | null;
+  nodes: LearningPathNode[];
+  total_nodes: number;
+  preview_only: boolean;
+  is_premium: boolean;
+  ai_plan: AIPlan | null;
+}
+
+export interface TodayRecommendation {
+  id: string;
+  statement_latex: string;
+  statement_text?: string;
+  answer_latex?: string;
+  answer_numeric_value?: number;
+  difficulty?: number;
+  source: 'spaced_repetition' | 'learning_path';
+  topic_key?: string;
+  topic_label?: string;
+  node_id?: string;
+}
+
+export interface SkillTreeSubiect {
+  subiect: number;
+  label: string;
+  topics: LearningPathNode[];
+  mastered: number;
+  total: number;
+}
+
+export interface DiagnosticHistoryEntry {
+  id: string;
+  status: 'active' | 'completed' | 'abandoned';
+  total_exercises: number;
+  correct_count: number;
+  score_pct: number;
+  weak_topics: DiagnosticWeakTopic[];
+  solution_file_path: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+// Diagnostic
+export const getDiagnosticHistory = () =>
+  api.get<DiagnosticHistoryEntry[]>('/diagnostic/history');
+
+export const startDiagnostic = () =>
+  api.post<{ test_id: string; exercises: DiagnosticExercise[]; total: number }>('/diagnostic/start');
+
+export const getCurrentDiagnostic = () =>
+  api.get<{ test: any | null; exercises?: any[] }>('/diagnostic/current');
+
+export const submitDiagnostic = (
+  testId: string,
+  answers: { exercise_id: string; selected_option?: number; answer?: string }[],
+) => api.post<DiagnosticResult>(`/diagnostic/${testId}/submit`, { answers });
+
+export const uploadDiagnosticSolution = (testId: string, file: File) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return api.post<{ filename: string; url: string }>(
+    `/diagnostic/${testId}/upload-solution`,
+    fd,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+};
+
+// Learning Path
+export const generateLearningPath = (diagnosticTestId: string) =>
+  api.post<{ path_id: string; total_nodes: number }>('/learning-path/generate', {
+    diagnostic_test_id: diagnosticTestId,
+  });
+
+export const getLearningPath = () =>
+  api.get<LearningPathResponse>('/learning-path/');
+
+export const getTodayRecommendations = () =>
+  api.get<{ date: string; recommendations: TodayRecommendation[]; sr_count: number; new_count: number }>(
+    '/learning-path/today',
+  );
+
+export const updateNodeProgress = (nodeId: string, exerciseId: string, isCorrect: boolean) =>
+  api.post(`/learning-path/node/${nodeId}/progress`, { exercise_id: exerciseId, is_correct: isCorrect });
+
+export const getSkillTree = () =>
+  api.get<{ subiects: SkillTreeSubiect[] }>('/learning-path/skill-tree');
+
+export const submitSRReview = (exerciseId: string, quality: number) =>
+  api.post('/spaced-repetition/review', { exercise_id: exerciseId, quality });
+
 export default api;
