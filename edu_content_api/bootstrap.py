@@ -2,13 +2,12 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from database import close_db_pool
 
 UPLOAD_DIR = "uploaded_files"
 
-ORIGINS = [
+_DEFAULT_ORIGINS = [
     "http://localhost",
     "http://localhost:3000",
     "http://localhost:5173",
@@ -17,6 +16,20 @@ ORIGINS = [
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
 ]
+
+
+def _get_allowed_origins() -> list:
+    """Originile permise (CORS). În producție se setează prin variabila de mediu
+    ALLOWED_ORIGINS (listă separată prin virgulă), ex.:
+        ALLOWED_ORIGINS=https://e2xacademy.ro,https://www.e2xacademy.ro
+    Fără ea, se folosesc originile de dezvoltare (localhost)."""
+    env = os.getenv("ALLOWED_ORIGINS", "").strip()
+    if env:
+        return [o.strip() for o in env.split(",") if o.strip()]
+    return _DEFAULT_ORIGINS
+
+
+ORIGINS = _get_allowed_origins()
 
 
 def configure_app(app: FastAPI) -> None:
@@ -30,7 +43,9 @@ def configure_app(app: FastAPI) -> None:
     )
 
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+    # NB: fișierele din UPLOAD_DIR NU se mai servesc static/public.
+    # Sunt servite prin endpoint-ul autentificat GET /uploads/{path} din main.py
+    # (verificare de proprietar). Vezi serve_uploaded_file.
 
     app.add_event_handler("startup", run_pending_migrations)
     app.add_event_handler("startup", backfill_numeric_answers)

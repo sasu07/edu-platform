@@ -9,8 +9,6 @@ import os
 import platform
 from typing import List, Dict, Optional
 from pathlib import Path
-from pix2text import Pix2Text
-from pdf2image import convert_from_path
 import tempfile
 
 
@@ -48,6 +46,7 @@ class Pix2TextProcessor:
             # Can be overridden by PIX2TEXT_DEVICE environment variable
             device = os.getenv("PIX2TEXT_DEVICE", "cpu")
             print(f"Initializing Pix2Text with device: {device}")
+            from pix2text import Pix2Text  # lazy: torch/pix2text — doar la ingestie OCR (nu în producție)
             self.p2t = Pix2Text.from_config(device=device)
             # Get poppler path
             self.poppler_path = get_poppler_path()
@@ -81,6 +80,7 @@ class Pix2TextProcessor:
         try:
             # Convert PDF pages to images
             print(f"Converting PDF to images: {pdf_path}")
+            from pdf2image import convert_from_path  # lazy: doar la ingestie OCR
             images = convert_from_path(
                 pdf_path,
                 dpi=dpi,

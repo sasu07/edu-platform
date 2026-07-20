@@ -17,6 +17,7 @@ import {
   type ExerciseSet,
 } from '../api';
 import LatexRenderer from './LatexRenderer';
+import ProgressiveHints from './ProgressiveHints';
 import './StudySession.css';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -506,6 +507,8 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
                       </div>
                     )}
                   </div>
+
+                  <ProgressiveHints exerciseId={ex.id} />
 
                   {ex.answer_latex && (
                     <div className="ss-answer-toggle-wrap">

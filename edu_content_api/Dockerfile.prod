@@ -1,0 +1,32 @@
+# ── Backend Dockerfile PRODUCȚIE (slim, student-facing) ──
+# Fără torch/pix2text/OCR. Imagine ~400MB (vs ~7GB imaginea completă).
+# Ingestia de conținut (upload-and-process, process-pdf) NU funcționează cu
+# această imagine — se face local cu Dockerfile-ul complet. Acele endpoint-uri
+# sunt oricum staff-only; dacă sunt apelate în producție, răspund cu eroare.
+FROM python:3.12-slim
+
+# Doar dependențe de sistem ușoare. Fără poppler-utils / libgl1 (erau pentru OCR).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Instalează întâi requirements (layer cache-uit)
+COPY requirements.prod.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.prod.txt
+
+# Copiază codul aplicației
+COPY . .
+
+RUN mkdir -p uploaded_files
+
+EXPOSE 8000
+
+# Healthcheck pe /health (nu /docs — docs se ascund în producție)
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+# 2 workers (potrivit pentru un Droplet mic 1-2 vCPU)
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

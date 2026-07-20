@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import React from 'react';
 import { Flag, CheckCircle, Clock, AlertCircle, ExternalLink, BookCheck, ThumbsUp, ThumbsDown, Paperclip, Hourglass } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import api, { buildApiUrl } from '../api';
+import api, { openAuthedFile } from '../api';
 import LatexRenderer from './LatexRenderer';
 import './MyRequests.css';
 
@@ -140,10 +140,9 @@ function HelpRequestsTab() {
 
                     {req.video_path && (
                       <div className="my-req-video">
-                        <video controls style={{ maxWidth: '100%', borderRadius: 8 }}>
-                          <source src={buildApiUrl(req.video_path)} />
-                          Browser-ul tău nu suportă video.
-                        </video>
+                        <button type="button" className="sol-file-btn" onClick={() => openAuthedFile(req.video_path)}>
+                          ▶ Vezi rezolvarea video
+                        </button>
                       </div>
                     )}
                   </div>
@@ -277,14 +276,13 @@ function SolutionsTab() {
                 {sub.photo_path && (
                   <div className="sol-file-row">
                     <div className="my-req-section-label">Soluția ta</div>
-                    <a
+                    <button
+                      type="button"
                       className="sol-file-btn"
-                      href={buildApiUrl(sub.photo_path)}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      onClick={() => openAuthedFile(sub.photo_path)}
                     >
                       <Paperclip size={14} /> Vezi fișierul tău
-                    </a>
+                    </button>
                   </div>
                 )}
 
@@ -307,14 +305,13 @@ function SolutionsTab() {
                     )}
 
                     {sub.teacher_file_path && (
-                      <a
+                      <button
+                        type="button"
                         className="sol-file-btn sol-file-teacher"
-                        href={buildApiUrl(sub.teacher_file_path)}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        onClick={() => openAuthedFile(sub.teacher_file_path)}
                       >
                         <Paperclip size={14} /> Fișier rezolvare de la profesor
-                      </a>
+                      </button>
                     )}
 
                     {sub.xp_teacher > 0 && (

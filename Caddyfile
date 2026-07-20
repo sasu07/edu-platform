@@ -1,0 +1,24 @@
+# HTTPS automat via Let's Encrypt. Necesită înregistrări DNS de tip A pentru
+# e2xacademy.ro, www.e2xacademy.ro și api.e2xacademy.ro → IP-ul serverului,
+# plus porturile 80 și 443 deschise în firewall.
+
+# ── Frontend (SPA React) ──
+e2xacademy.ro, www.e2xacademy.ro {
+	encode gzip
+	root * /srv/frontend
+	try_files {path} /index.html      # React Router — orice rută cade pe index.html
+	file_server
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# ── Backend API ──
+api.e2xacademy.ro {
+	reverse_proxy backend:8000
+}

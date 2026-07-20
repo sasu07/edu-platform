@@ -21,6 +21,26 @@ from variant_generator import get_variant_generator
 
 router = APIRouter()
 
+STAFF_ROLES = (UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN)
+
+
+def _ensure_variant_access(conn: Connection, variant_id, user: UserDB) -> None:
+    """Autorizare la nivel de obiect: doar proprietarul variantei sau personalul.
+
+    404 dacă varianta nu există, 403 dacă nu e a userului și userul nu e staff.
+    Previne IDOR — un elev nu poate modifica/șterge varianta altui elev.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT created_by_user_id_fk FROM variants WHERE id = %s", (variant_id,))
+        row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
+    if user.role in STAFF_ROLES:
+        return
+    owner = row["created_by_user_id_fk"]
+    if owner is None or str(owner) != str(user.id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nu ai acces la această variantă")
+
 
 def save_variant_meta(conn: Connection, variant_id: str, user: UserDB, result: dict) -> None:
     if not variant_id:
@@ -50,13 +70,13 @@ def save_variant_meta(conn: Connection, variant_id: str, user: UserDB, result: d
 
 
 @router.post("/variants/", response_model=VariantDB, status_code=status.HTTP_201_CREATED)
-def create_variant(variant: VariantCreate, conn: Connection = Depends(get_db_conn)):
+def create_variant(variant: VariantCreate, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
     query = """
     INSERT INTO variants (
         name, exam_type, profile, year, session, total_points,
-        duration_minutes, instructions, status, created_by_user_id
+        duration_minutes, instructions, status, created_by_user_id, created_by_user_id_fk
     )
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     RETURNING id, name, exam_type, profile, year, session, total_points,
               duration_minutes, instructions, status, created_by_user_id,
               created_at, updated_at;
@@ -79,6 +99,7 @@ def create_variant(variant: VariantCreate, conn: Connection = Depends(get_db_con
                     variant.instructions,
                     status_value,
                     variant.created_by_user_id,
+                    str(_user.id),  # owner autoritativ pentru verificările de acces
                 ),
             )
             new_variant = cur.fetchone()
@@ -94,6 +115,7 @@ def read_variants(
     exam_type: Optional[str] = None,
     status_filter: Optional[str] = None,
     conn: Connection = Depends(get_db_conn),
+    _user: UserDB = Depends(get_current_user),
 ):
     conditions = []
     params = []
@@ -103,6 +125,10 @@ def read_variants(
     if status_filter:
         conditions.append("status = %s")
         params.append(status_filter)
+    # Non-staff văd doar variantele proprii (previne enumerarea tuturor variantelor)
+    if _user.role not in STAFF_ROLES:
+        conditions.append("created_by_user_id_fk = %s")
+        params.append(str(_user.id))
     where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
     query = f"""
     SELECT id, name, exam_type, profile, year, session, total_points,
@@ -132,7 +158,8 @@ def my_variants_early(current_user: UserDB = Depends(get_current_user), conn: Co
 
 
 @router.get("/variants/{variant_id}", response_model=VariantDB)
-def read_variant(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def read_variant(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
+    _ensure_variant_access(conn, variant_id, _user)
     query = """
     SELECT id, name, exam_type, profile, year, session, total_points,
            duration_minutes, instructions, status, created_by_user_id,
@@ -148,7 +175,8 @@ def read_variant(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn))
 
 
 @router.put("/variants/{variant_id}", response_model=VariantDB)
-def update_variant(variant_id: uuid.UUID, variant: VariantUpdate, conn: Connection = Depends(get_db_conn)):
+def update_variant(variant_id: uuid.UUID, variant: VariantUpdate, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
+    _ensure_variant_access(conn, variant_id, _user)
     updates = []
     values = []
     update_data = variant.model_dump(exclude_unset=True)
@@ -183,7 +211,8 @@ def update_variant(variant_id: uuid.UUID, variant: VariantUpdate, conn: Connecti
 
 
 @router.delete("/variants/{variant_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_variant(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def delete_variant(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
+    _ensure_variant_access(conn, variant_id, _user)
     query = "DELETE FROM variants WHERE id = %s RETURNING id;"
     try:
         with conn.cursor() as cur:
@@ -198,7 +227,8 @@ def delete_variant(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn
 
 
 @router.post("/variants/{variant_id}/exercises/")
-def add_exercises_to_variant(variant_id: uuid.UUID, exercise_ids: List[uuid.UUID], conn: Connection = Depends(get_db_conn)):
+def add_exercises_to_variant(variant_id: uuid.UUID, exercise_ids: List[uuid.UUID], conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
+    _ensure_variant_access(conn, variant_id, _user)
     try:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
@@ -229,7 +259,8 @@ def add_exercises_to_variant(variant_id: uuid.UUID, exercise_ids: List[uuid.UUID
 
 
 @router.get("/variants/{variant_id}/exercises/")
-def get_variant_exercises(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def get_variant_exercises(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
+    _ensure_variant_access(conn, variant_id, _user)
     query = """
     SELECT
         ve.id, ve.variant_id, ve.exercise_id, ve.order_index, ve.section_name,
@@ -246,7 +277,8 @@ def get_variant_exercises(variant_id: uuid.UUID, conn: Connection = Depends(get_
 
 
 @router.delete("/variants/{variant_id}/exercises/{exercise_id}")
-def remove_exercise_from_variant(variant_id: uuid.UUID, exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def remove_exercise_from_variant(variant_id: uuid.UUID, exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
+    _ensure_variant_access(conn, variant_id, _user)
     query = "DELETE FROM variant_exercises WHERE variant_id = %s AND exercise_id = %s RETURNING id;"
     try:
         with conn.cursor() as cur:
@@ -262,7 +294,8 @@ def remove_exercise_from_variant(variant_id: uuid.UUID, exercise_id: uuid.UUID, 
 
 
 @router.put("/variants/{variant_id}/exercises/reorder")
-def reorder_variant_exercises(variant_id: uuid.UUID, exercise_order: List[uuid.UUID], conn: Connection = Depends(get_db_conn)):
+def reorder_variant_exercises(variant_id: uuid.UUID, exercise_order: List[uuid.UUID], conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
+    _ensure_variant_access(conn, variant_id, _user)
     query = """
     UPDATE variant_exercises
     SET order_index = %s
@@ -285,6 +318,7 @@ def download_variant_pdf(
     current_user: UserDB = Depends(require_pdf_premium),
     conn: Connection = Depends(get_db_conn),
 ):
+    _ensure_variant_access(conn, variant_id, current_user)
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("SELECT id, name FROM variants WHERE id = %s;", (variant_id,))
         variant = cur.fetchone()
@@ -312,8 +346,8 @@ def _ensure_variant_exists(conn: Connection, variant_id: uuid.UUID) -> None:
 
 
 @router.get("/variants/{variant_id}/preview-exam", response_class=HTMLResponse)
-def preview_variant_exam(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
-    _ensure_variant_exists(conn, variant_id)
+def preview_variant_exam(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
+    _ensure_variant_access(conn, variant_id, _user)
     try:
         return HTMLResponse(content=get_html_generator(conn).generate(variant_id, mode="exam"))
     except Exception as exc:
@@ -321,8 +355,8 @@ def preview_variant_exam(variant_id: uuid.UUID, conn: Connection = Depends(get_d
 
 
 @router.get("/variants/{variant_id}/preview-solutions", response_class=HTMLResponse)
-def preview_variant_solutions(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
-    _ensure_variant_exists(conn, variant_id)
+def preview_variant_solutions(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
+    _ensure_variant_access(conn, variant_id, _user)
     try:
         return HTMLResponse(content=get_html_generator(conn).generate(variant_id, mode="solutions"))
     except Exception as exc:
@@ -330,8 +364,8 @@ def preview_variant_solutions(variant_id: uuid.UUID, conn: Connection = Depends(
 
 
 @router.get("/variants/{variant_id}/preview-barem", response_class=HTMLResponse)
-def preview_variant_barem(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
-    _ensure_variant_exists(conn, variant_id)
+def preview_variant_barem(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
+    _ensure_variant_access(conn, variant_id, _user)
     try:
         return HTMLResponse(content=get_html_generator(conn).generate(variant_id, mode="barem"))
     except Exception as exc:

@@ -12,7 +12,26 @@ from psycopg.rows import dict_row
 from database import get_db_conn
 from models import UserDB, UserRole
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY", "changeme-in-production-use-long-random-string")
+def _load_jwt_secret() -> str:
+    """
+    Încarcă și validează cheia JWT la pornire.
+    Fail-hard (fără fallback previzibil): dacă cheia lipsește, e prea scurtă
+    sau e un placeholder cunoscut, aplicația refuză să pornească — altfel
+    oricine ar putea forja token-uri de admin cu un secret ghicibil.
+    """
+    secret = os.getenv("JWT_SECRET_KEY", "")
+    lowered = secret.lower()
+    is_placeholder = "schimba" in lowered or "changeme" in lowered
+    if not secret or len(secret) < 32 or is_placeholder:
+        raise RuntimeError(
+            "JWT_SECRET_KEY lipsește, e prea scurtă (<32) sau e un placeholder. "
+            "Generează una random și pune-o în .env: "
+            "python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+        )
+    return secret
+
+
+SECRET_KEY = _load_jwt_secret()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 zile
 
@@ -107,6 +126,11 @@ def require_role(*roles: UserRole):
             )
         return current_user
     return _check
+
+
+# Dependency reutilizabilă: doar personalul care gestionează conținutul
+# (profesor platformă, profesor școală, admin). Elevii și părinții primesc 403.
+require_staff = require_role(UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN)
 
 
 def _has_help_access(user_id: str, conn: Connection) -> bool:

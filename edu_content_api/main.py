@@ -45,7 +45,7 @@ from email_service import (
 )
 from auth import (
     get_current_user, get_optional_user, require_role, require_premium,
-    require_pdf_premium, check_school_teacher_limit, check_variant_gen_limit,
+    require_pdf_premium, require_staff, check_school_teacher_limit, check_variant_gen_limit,
     _has_active_premium,
 )
 from routers.auth_router import router as auth_router
@@ -78,6 +78,71 @@ app.include_router(study_router)
 app.include_router(system_router)
 app.include_router(variants_router)
 app.include_router(learning_path_router)
+
+
+# --- Servire autentificată a fișierelor uploadate ---
+# Înlocuiește vechiul mount static public `/uploads`. Fișierele sensibile
+# (soluții elevi, corecții profesori, video-uri help, soluții diagnostic) sunt
+# accesibile doar proprietarului sau personalului; restul (surse PDF) doar staff.
+_STAFF_ROLES = (UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN)
+
+
+@app.get("/uploads/{file_path:path}", tags=["Files"])
+def serve_uploaded_file(
+    file_path: str,
+    conn: Connection = Depends(get_db_conn),
+    current_user: UserDB = Depends(get_current_user),
+):
+    from fastapi.responses import FileResponse
+
+    base = os.path.realpath(UPLOAD_DIR)
+    target = os.path.realpath(os.path.join(base, file_path))
+    # Anti path-traversal: ținta trebuie să fie strict în interiorul UPLOAD_DIR
+    if target != base and not target.startswith(base + os.sep):
+        raise HTTPException(status_code=404, detail="Fișier negăsit")
+    if not os.path.isfile(target):
+        raise HTTPException(status_code=404, detail="Fișier negăsit")
+
+    is_staff = current_user.role in _STAFF_ROLES
+    if not is_staff:
+        rel = os.path.relpath(target, base).replace(os.sep, "/")
+        filename = os.path.basename(target)
+        uid = str(current_user.id)
+        allowed = False
+
+        if rel.startswith("submissions/"):
+            # submission_{user_id}_{exercise_id}.ext — doar elevul care a trimis
+            allowed = filename.startswith(f"submission_{uid}_")
+        elif rel.startswith("teacher_files/"):
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM exercise_submissions WHERE teacher_file_path = %s AND user_id = %s",
+                    (f"/uploads/{rel}", uid),
+                )
+                allowed = cur.fetchone() is not None
+        elif rel.startswith("help_videos/"):
+            # {request_id}.ext — doar elevul care deține cererea de ajutor
+            request_id = os.path.splitext(filename)[0]
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM help_requests WHERE id = %s AND student_id = %s",
+                    (request_id, uid),
+                )
+                allowed = cur.fetchone() is not None
+        elif filename.startswith("diagnostic_solution_"):
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT 1 FROM diagnostic_tests WHERE solution_file_path = %s AND user_id = %s",
+                    (filename, uid),
+                )
+                allowed = cur.fetchone() is not None
+        # else: conținut (PDF-uri surse, bareme) — rămâne doar pentru staff
+
+        if not allowed:
+            raise HTTPException(status_code=403, detail="Acces interzis la acest fișier")
+
+    return FileResponse(target)
+
 
 # --- Helper functions ---
 
@@ -250,7 +315,7 @@ def _save_structured_exercises(exercises: List[ExerciseImport], segment_id: uuid
 # --- CRUD Operations for SOURCES ---
 
 @app.post("/sources/", response_model=SourceDB, status_code=status.HTTP_201_CREATED)
-def create_source(source: SourceCreate, conn: Connection = Depends(get_db_conn)):
+def create_source(source: SourceCreate, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """Create a new source entry."""
     try:
         return _create_source_in_db(source, conn)
@@ -259,7 +324,7 @@ def create_source(source: SourceCreate, conn: Connection = Depends(get_db_conn))
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {e}")
 
 @app.get("/sources/", response_model=List[SourceDB])
-def read_sources(conn: Connection = Depends(get_db_conn)):
+def read_sources(conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """Retrieve a list of all sources."""
     query = "SELECT id, name, type, year, session, profile, url_file_path, url_barem_path, notes, created_at FROM sources ORDER BY year DESC NULLS LAST, created_at DESC;"
     with conn.cursor(row_factory=dict_row) as cur:
@@ -268,7 +333,7 @@ def read_sources(conn: Connection = Depends(get_db_conn)):
         return sources
 
 @app.get("/sources/{source_id}", response_model=SourceDB)
-def read_source(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def read_source(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """Retrieve a single source by ID."""
     query = "SELECT id, name, type, year, session, profile, url_file_path, url_barem_path, notes, created_at FROM sources WHERE id = %s;"
     with conn.cursor(row_factory=dict_row) as cur:
@@ -279,7 +344,7 @@ def read_source(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
         return source
 
 @app.get("/sources/{source_id}/download")
-def download_source_file(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def download_source_file(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """Descarcă fișierul original al sursei (varianta)."""
     from fastapi.responses import FileResponse
     with conn.cursor(row_factory=dict_row) as cur:
@@ -295,7 +360,7 @@ def download_source_file(source_id: uuid.UUID, conn: Connection = Depends(get_db
 
 
 @app.get("/sources/{source_id}/download-barem")
-def download_barem_file(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def download_barem_file(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """Descarcă baremul sursei."""
     from fastapi.responses import FileResponse
     with conn.cursor(row_factory=dict_row) as cur:
@@ -311,7 +376,7 @@ def download_barem_file(source_id: uuid.UUID, conn: Connection = Depends(get_db_
 
 
 @app.get("/sources/{source_id}/stats")
-def read_source_stats(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn)) -> Dict[str, Any]:
+def read_source_stats(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)) -> Dict[str, Any]:
     """
     Statistici agregate pentru o sursă:
     - segments_count
@@ -366,7 +431,7 @@ def read_source_stats(source_id: uuid.UUID, conn: Connection = Depends(get_db_co
         }
 
 @app.get("/sources/{source_id}/exercises")
-def read_source_exercises(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def read_source_exercises(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """
     Lista exercițiilor asociate unei surse (distinct).
     """
@@ -395,7 +460,7 @@ def read_source_exercises(source_id: uuid.UUID, conn: Connection = Depends(get_d
         )
         return cur.fetchall()
 @app.put("/sources/{source_id}", response_model=SourceDB)
-def update_source(source_id: uuid.UUID, source: SourceUpdate, conn: Connection = Depends(get_db_conn)):
+def update_source(source_id: uuid.UUID, source: SourceUpdate, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """Update an existing source."""
     updates = []
     values = []
@@ -433,7 +498,7 @@ def update_source(source_id: uuid.UUID, source: SourceUpdate, conn: Connection =
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {e}")
 
 @app.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_source(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def delete_source(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """Delete a source by ID."""
     query = "DELETE FROM sources WHERE id = %s RETURNING id;"
     try:
@@ -459,7 +524,8 @@ async def upload_and_process(
     source_profile: Optional[str] = Form(None),
     source_notes: Optional[str] = Form(None),
     barem_file: Optional[UploadFile] = File(None),
-    conn: Connection = Depends(get_db_conn)
+    conn: Connection = Depends(get_db_conn),
+    _staff: UserDB = Depends(require_staff),
 ):
     """
     Uploads a PDF file, saves it locally, creates a Source entry,
@@ -610,7 +676,8 @@ async def upload_with_json(
     source_profile: Optional[str] = Form(None),
     source_notes: Optional[str] = Form(None),
     barem_file: Optional[UploadFile] = File(None),
-    conn: Connection = Depends(get_db_conn)
+    conn: Connection = Depends(get_db_conn),
+    _staff: UserDB = Depends(require_staff),
 ):
     """
     Uploads a file and a JSON string containing structured exercise data.
@@ -693,7 +760,7 @@ async def upload_with_json(
 # --- CRUD Operations for SOURCE SEGMENTS ---
 
 @app.post("/source-segments/", response_model=SourceSegmentDB, status_code=status.HTTP_201_CREATED)
-def create_source_segment(segment: SourceSegmentCreate, conn: Connection = Depends(get_db_conn)):
+def create_source_segment(segment: SourceSegmentCreate, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """Create a new source segment entry."""
     query = """
     INSERT INTO source_segments (source_id, page_start, page_end, raw_extraction, checksum, status, extraction_method)
@@ -719,7 +786,8 @@ def create_source_segment(segment: SourceSegmentCreate, conn: Connection = Depen
 @app.get("/source-segments/", response_model=List[SourceSegmentDB])
 def read_source_segments(
     source_id: Optional[uuid.UUID] = None,
-    conn: Connection = Depends(get_db_conn)
+    conn: Connection = Depends(get_db_conn),
+    _staff: UserDB = Depends(require_staff),
 ):
     """Retrieve source segments, optionally filtered by source_id."""
     if source_id:
@@ -741,7 +809,7 @@ def read_source_segments(
         return segments
 
 @app.get("/source-segments/{segment_id}", response_model=SourceSegmentDB)
-def read_source_segment(segment_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def read_source_segment(segment_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """Retrieve a single source segment by ID."""
     query = """
     SELECT id, source_id, page_start, page_end, raw_extraction, checksum, status, extraction_method, created_at
@@ -761,7 +829,8 @@ async def process_existing_pdf(
     source_id: uuid.UUID,
     page_start: Optional[int] = None,
     page_end: Optional[int] = None,
-    conn: Connection = Depends(get_db_conn)
+    conn: Connection = Depends(get_db_conn),
+    _staff: UserDB = Depends(require_staff),
 ):
     """
     Process an already uploaded PDF using pix2text.
@@ -875,7 +944,8 @@ async def import_json_endpoint(
     include_containers: bool = Form(True),
     varianta_file: Optional[UploadFile] = File(None),
     barem_file: Optional[UploadFile] = File(None),
-    conn: Connection = Depends(get_db_conn)
+    conn: Connection = Depends(get_db_conn),
+    _staff: UserDB = Depends(require_staff),
 ):
     """
     Upload și procesare fișier JSON cu exerciții.
@@ -952,7 +1022,8 @@ async def import_json_endpoint(
 @app.post("/import-hierarchical/")
 async def import_hierarchical_endpoint(
     json_file: UploadFile = File(...),
-    conn: Connection = Depends(get_db_conn)
+    conn: Connection = Depends(get_db_conn),
+    _staff: UserDB = Depends(require_staff),
 ):
     """
     Import ierarhic de exerciții cu subpuncte nested.

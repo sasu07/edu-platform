@@ -452,3 +452,114 @@ def generate_fallback_plan(diagnostic: dict) -> dict:
         ],
         "motivatie": "Fiecare exercițiu rezolvat te apropie de nota dorită. Continui!",
     }
+
+
+# ─── Indicii progresive (Claude) ─────────────────────────────────────────────
+
+def generate_hints(statement: str, solution: str = "", scoring_guide: str = "") -> Optional[list]:
+    """
+    Generează 2-3 indicii PROGRESIVE pentru un exercițiu, din enunț + soluție.
+    Indiciile ghidează elevul spre soluție fără să dezvăluie răspunsul final.
+    Returnează lista de string-uri sau None dacă AI-ul nu e disponibil / eșuează.
+    """
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        return None
+
+    stmt = (statement or "").strip()[:800]
+    sol = (solution or scoring_guide or "").strip()[:800]
+    if not stmt:
+        return None
+
+    try:
+        import anthropic  # noqa: PLC0415
+
+        prompt = f"""Ești profesor de matematică pentru Bacalaureat România.
+
+Pentru exercițiul de mai jos, generează 2-3 INDICII PROGRESIVE care ghidează elevul spre soluție FĂRĂ să-i dai răspunsul final.
+
+Reguli:
+- Indiciul 1: orientare — ce fel de problemă e și ce metodă/concept se folosește (fără calcule).
+- Indiciul 2: primul pas concret — cum pornește.
+- Indiciul 3 (opțional): pasul-cheie sau ideea decisivă, dar TOT fără rezultatul final.
+- Fiecare indiciu: 1-2 propoziții, în română, clar și încurajator.
+- NU dezvălui răspunsul final (numeric sau expresia) în niciun indiciu.
+
+Enunț: {stmt}
+Soluție (doar pentru context, nu o cita direct): {sol if sol else 'indisponibilă'}
+
+Returnează EXCLUSIV un JSON valid (fără text în plus), o listă de string-uri:
+["indiciu 1", "indiciu 2", "indiciu 3"]"""
+
+        client = anthropic.Anthropic(api_key=api_key)
+        msg = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = msg.content[0].text.strip()
+
+        match = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", raw)
+        if match:
+            raw = match.group(1)
+
+        data = json.loads(raw)
+        if not isinstance(data, list):
+            return None
+        hints = [str(h).strip() for h in data if str(h).strip()]
+        return hints[:3] if hints else None
+
+    except ImportError:
+        return None
+    except (json.JSONDecodeError, Exception) as e:  # noqa: BLE001
+        print(f"[ai_plan_service] hints error: {e}")
+        return None
+
+
+def _safe_slice_points(text: str, fractions: list) -> list:
+    """
+    Poziții de tăiere la spații albe unde numărul de `$` dinainte e PAR — adică
+    în afara unei expresii $...$, ca să nu rupem o formulă LaTeX în două.
+    """
+    candidates = [i for i, ch in enumerate(text) if ch.isspace() and text[:i].count("$") % 2 == 0]
+    if not candidates:
+        return []
+    n = len(text)
+    points = set()
+    for f in fractions:
+        target = int(n * f)
+        points.add(min(candidates, key=lambda i: abs(i - target)))
+    return sorted(points)
+
+
+def generate_hints_fallback(solution: str = "", scoring_guide: str = "") -> Optional[list]:
+    """
+    Fallback fără AI: dezvăluie soluția existentă în pași progresivi.
+    Folosit când AI-ul nu e disponibil (fără cheie / fără credit). Nu se
+    cache-uiește — la primul apel cu AI funcțional se generează indicii reale.
+    Returnează o listă de pași (fiecare = un „indiciu") sau None.
+    """
+    sol = (solution or scoring_guide or "").strip()[:1500]
+    if len(sol) < 25:
+        return None
+
+    # 1. Limite naturale între pași: row-break LaTeX (\\) sau linii noi
+    steps = [s.strip() for s in re.split(r"\\\\|\n+", sol) if len(s.strip()) > 8]
+
+    # 2. Un singur bloc → taie în ~3 la spații cu $ echilibrat
+    if len(steps) < 2:
+        pts = _safe_slice_points(sol, [0.34, 0.67])
+        if pts:
+            bounds = [0] + pts + [len(sol)]
+            steps = [sol[bounds[i]:bounds[i + 1]].strip() for i in range(len(bounds) - 1)]
+            steps = [s for s in steps if len(s) > 8]
+        else:
+            steps = [sol]
+
+    # 3. Prea mulți pași → grupează în max 4
+    if len(steps) > 4:
+        size = -(-len(steps) // 4)  # ceil
+        steps = [" ".join(steps[i:i + size]) for i in range(0, len(steps), size)]
+
+    steps = [s[:400] for s in steps[:4]]
+    return steps or None

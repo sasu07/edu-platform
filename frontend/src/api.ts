@@ -12,6 +12,33 @@ export function buildApiUrl(path?: string | null): string {
   return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
+/**
+ * Ia un fișier protejat din /uploads ca object URL (pentru <img src>).
+ * Fișierele necesită acum header Authorization; <img>/<a> nu-l trimit,
+ * deci le luăm ca blob cu token. Apelantul e responsabil să revoce URL-ul.
+ */
+export async function fetchAuthedObjectUrl(path: string): Promise<string> {
+  const token = localStorage.getItem('access_token');
+  const res = await fetch(buildApiUrl(path), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error('Fișier indisponibil');
+  const blob = await res.blob();
+  return URL.createObjectURL(blob);
+}
+
+/** Descarcă un fișier protejat (cu token) și îl deschide într-un tab nou. */
+export async function openAuthedFile(path?: string | null): Promise<void> {
+  if (!path) return;
+  try {
+    const url = await fetchAuthedObjectUrl(path);
+    window.open(url, '_blank', 'noopener');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch {
+    alert('Fișierul nu este disponibil.');
+  }
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -182,6 +209,9 @@ export const getHelpResponse = (requestId: string) =>
   api.get<HelpResponse>(`/help-requests/${requestId}/response`);
 
 export const getExerciseChildren = (id: string) => api.get<Exercise[]>(`/exercises/${id}/children`);
+
+export const getExerciseHints = (id: string) =>
+  api.get<{ exercise_id: string; hints: string[]; source: string }>(`/exercises/${id}/hints`);
 export const getAdminUsers = () => api.get<any[]>('/admin/users');
 export const upgradeSubscription = (userId: string, planType: string = 'premium', expiresAt?: string) =>
   api.post(`/admin/subscriptions/${userId}/upgrade`, null, {

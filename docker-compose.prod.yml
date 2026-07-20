@@ -1,0 +1,44 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Producție (server Hetzner). Rulează cu:  docker compose -f docker-compose.prod.yml up -d --build
+# Vezi DEPLOY.md pentru pașii compleți.
+#
+# Arhitectură:
+#   Caddy (HTTPS automat) ── serve frontend static (e2xacademy.ro / www)
+#                         └─ reverse-proxy către backend (api.e2xacademy.ro)
+#   backend  ── imaginea slim (Dockerfile.prod, ~569MB, fără OCR)
+#   DB       ── Neon (extern, nu e container aici)
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  backend:
+    build:
+      context: ./edu_content_api
+      dockerfile: Dockerfile.prod        # imaginea slim, student-facing
+    container_name: etox-backend
+    env_file:
+      - ./edu_content_api/.env           # DATABASE_URL, JWT, ANTHROPIC, SMTP, APP_URL, ALLOWED_ORIGINS
+    environment:
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./edu_content_api/uploaded_files:/app/uploaded_files   # persistă fișierele elevilor (disc server)
+    expose:
+      - "8000"                           # vizibil DOAR pentru Caddy, NU public
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: etox-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./frontend/dist:/srv/frontend:ro   # frontend-ul compilat (VITE_API_URL=https://api.e2xacademy.ro)
+      - caddy_data:/data                   # certificatele TLS — persistente (nu le pierde la restart!)
+      - caddy_config:/config
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:

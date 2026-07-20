@@ -9,7 +9,7 @@ import {
   submitExercise, uploadSubmissionPhoto, getMySubmission,
   linkParent, getMyParents, removeParentLink,
   createStudyPlanDay,
-  buildApiUrl,
+  openAuthedFile,
   type Exercise, type GenLimits, type ExerciseSet, type ExerciseSetDetail, type FilterOptions,
   type ParentStudentLink, type ExerciseSubmission, type SessionType, type ReviewItem, type SelfEval,
 } from '../api';
@@ -593,9 +593,9 @@ function EvalModal({ exerciseId, existing, onDone, onClose }: {
               ✅ Profesorul a marcat soluția ca <strong>CORECTĂ</strong> — exercițiu rezolvat!
               {existing?.teacher_note && <div className="eval-review-note">Notă: {existing.teacher_note}</div>}
               {existing?.teacher_file_path && (
-                <a className="eval-teacher-file-btn" href={buildApiUrl(existing.teacher_file_path)} target="_blank" rel="noopener noreferrer">
+                <button type="button" className="eval-teacher-file-btn" onClick={() => openAuthedFile(existing.teacher_file_path)}>
                   📎 Vezi fișierul profesorului
-                </a>
+                </button>
               )}
             </div>
           )}
@@ -604,9 +604,9 @@ function EvalModal({ exerciseId, existing, onDone, onClose }: {
               ❌ Soluția marcată ca <strong>INCORECTĂ</strong> — poți retrimite mai jos.
               {existing?.teacher_note && <div className="eval-review-note">Notă: {existing.teacher_note}</div>}
               {existing?.teacher_file_path && (
-                <a className="eval-teacher-file-btn" href={buildApiUrl(existing.teacher_file_path)} target="_blank" rel="noopener noreferrer">
+                <button type="button" className="eval-teacher-file-btn" onClick={() => openAuthedFile(existing.teacher_file_path)}>
                   📎 Vezi fișierul profesorului
-                </a>
+                </button>
               )}
             </div>
           )}

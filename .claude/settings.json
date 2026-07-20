@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -m py_compile ai_plan_service.py routers/exercises_router.py)",
+      "Bash(PYTHONPATH=. venv/bin/python /tmp/imp.py)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" --max-time 5 http://localhost:8000/exercises/00000000-0000-0000-0000-000000000000/hints)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
+    ]
+  }
+}

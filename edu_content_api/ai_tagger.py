@@ -6,7 +6,6 @@ try:
     from openai import OpenAI
 except ImportError:
     OpenAI = None  # type: ignore
-import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,6 +21,7 @@ class AITagger:
             self.openai_client = OpenAI(api_key=self.openai_key)
             logger.info("AITagger initialized with OpenAI")
         elif self.gemini_key:
+            import google.generativeai as genai  # lazy: dependență grea, doar când există cheie Gemini
             genai.configure(api_key=self.gemini_key)
             self.gemini_model = genai.GenerativeModel('gemini-pro')
             logger.info("AITagger initialized with Gemini")

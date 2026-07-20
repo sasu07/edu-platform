@@ -7,9 +7,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from psycopg import Connection
 from psycopg.rows import dict_row
 
+from ai_plan_service import generate_hints, generate_hints_fallback
 from ai_tagger import get_ai_tagger
 from answer_numeric import evaluate_numeric_answer
-from auth import get_current_user, get_optional_user
+from auth import get_current_user, require_staff
 from database import get_db_conn
 from models import (
     ExerciseCreate,
@@ -149,7 +150,7 @@ def tag_exercise_in_db(exercise_id: uuid.UUID, conn: Connection) -> dict:
 
 
 @router.post("/exercises/", response_model=ExerciseDB, status_code=status.HTTP_201_CREATED)
-def create_exercise(exercise: ExerciseCreate, conn: Connection = Depends(get_db_conn)):
+def create_exercise(exercise: ExerciseCreate, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     try:
         return create_exercise_record(exercise, conn)
     except Exception as exc:
@@ -176,7 +177,7 @@ def read_exercises(
     is_container: Optional[bool] = None,
     limit: Optional[int] = None,
     conn: Connection = Depends(get_db_conn),
-    current_user: Optional[UserDB] = Depends(get_optional_user),
+    current_user: UserDB = Depends(get_current_user),
 ):
     conditions = []
     params: list = []
@@ -364,6 +365,7 @@ def get_exercise_filter_options(
     year: Optional[int] = None,
     topic_tag: Optional[str] = None,
     conn: Connection = Depends(get_db_conn),
+    _user: UserDB = Depends(get_current_user),
 ):
     conditions = ["(e.status != 'ARCHIVED' OR e.status IS NULL)"]
     params: list = []
@@ -459,7 +461,7 @@ def get_exercise_filter_options(
 
 
 @router.get("/exercises/batch-children")
-def get_exercises_batch_children(ids: str, conn: Connection = Depends(get_db_conn)):
+def get_exercises_batch_children(ids: str, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
     id_list = [item.strip() for item in ids.split(",") if item.strip()]
     if not id_list:
         return {}
@@ -504,7 +506,7 @@ def get_exercises_batch_children(ids: str, conn: Connection = Depends(get_db_con
 
 
 @router.get("/exercises/{exercise_id}", response_model=ExerciseDB)
-def read_exercise(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def read_exercise(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
     query = """
     SELECT id, exam_type, profile, subject_part, item_type, statement_latex, statement_text,
            answer_latex, solution_latex, scoring_guide_latex, scoring_guide_text,
@@ -518,6 +520,63 @@ def read_exercise(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn
         if exercise is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exercise not found")
         return exercise
+
+
+@router.get("/exercises/{exercise_id}/hints", tags=["Student"])
+def get_exercise_hints(
+    exercise_id: uuid.UUID,
+    conn: Connection = Depends(get_db_conn),
+    _user: UserDB = Depends(get_current_user),
+):
+    """
+    Indicii progresive pentru un exercițiu. Generate o singură dată (AI, din
+    enunț + soluție) și apoi servite din cache (tabel exercise_hints).
+    Dacă AI-ul nu e disponibil, întoarce listă goală — fluxul nu se blochează.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT hints, source FROM exercise_hints WHERE exercise_id = %s",
+            (str(exercise_id),),
+        )
+        cached = cur.fetchone()
+    if cached and cached["hints"]:
+        return {"exercise_id": str(exercise_id), "hints": cached["hints"], "source": cached["source"]}
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT statement_latex, statement_text, solution_latex, scoring_guide_latex FROM exercises WHERE id = %s",
+            (str(exercise_id),),
+        )
+        ex = cur.fetchone()
+    if not ex:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exercițiu negăsit")
+
+    statement = ex["statement_latex"] or ex["statement_text"] or ""
+    solution = ex["solution_latex"] or ""
+    scoring = ex["scoring_guide_latex"] or ""
+    hints = generate_hints(statement, solution, scoring)
+
+    if hints:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO exercise_hints (exercise_id, hints, source)
+                VALUES (%s, %s, 'ai')
+                ON CONFLICT (exercise_id) DO UPDATE
+                SET hints = EXCLUDED.hints, source = 'ai', updated_at = NOW()
+                """,
+                (str(exercise_id), json.dumps(hints)),
+            )
+            conn.commit()
+        return {"exercise_id": str(exercise_id), "hints": hints, "source": "ai"}
+
+    # AI indisponibil → fallback din soluție. NU cache-uim: la primul apel cu
+    # AI funcțional (cheie alimentată) se generează și se cache-uiește versiunea AI.
+    fallback = generate_hints_fallback(solution, scoring)
+    if fallback:
+        return {"exercise_id": str(exercise_id), "hints": fallback, "source": "fallback"}
+
+    return {"exercise_id": str(exercise_id), "hints": [], "source": "unavailable"}
 
 
 @router.post("/exercises/{exercise_id}/review/open")
@@ -555,7 +614,7 @@ def resolve_exercise_review_item(
 
 
 @router.put("/exercises/{exercise_id}", response_model=ExerciseDB)
-def update_exercise(exercise_id: uuid.UUID, exercise: ExerciseUpdate, conn: Connection = Depends(get_db_conn)):
+def update_exercise(exercise_id: uuid.UUID, exercise: ExerciseUpdate, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     updates = []
     values = []
     update_data = exercise.model_dump(exclude_unset=True)
@@ -600,7 +659,7 @@ def update_exercise(exercise_id: uuid.UUID, exercise: ExerciseUpdate, conn: Conn
 
 
 @router.delete("/exercises/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_exercise(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def delete_exercise(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     query = "DELETE FROM exercises WHERE id = %s RETURNING id;"
     try:
         with conn.cursor() as cur:
@@ -615,7 +674,7 @@ def delete_exercise(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_co
 
 
 @router.post("/tags/", response_model=TagDB, status_code=status.HTTP_201_CREATED)
-def create_tag(tag: TagCreate, conn: Connection = Depends(get_db_conn)):
+def create_tag(tag: TagCreate, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     query = """
     INSERT INTO tags (namespace, key, label, parent_id)
     VALUES (%s, %s, %s, %s)
@@ -634,7 +693,7 @@ def create_tag(tag: TagCreate, conn: Connection = Depends(get_db_conn)):
 
 
 @router.get("/tags/", response_model=List[TagDB])
-def read_tags(namespace: Optional[str] = None, conn: Connection = Depends(get_db_conn)):
+def read_tags(namespace: Optional[str] = None, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
     if namespace:
         query = "SELECT id, namespace, key, label, parent_id, created_at FROM tags WHERE namespace = %s ORDER BY namespace, key;"
         params = (namespace,)
@@ -648,7 +707,7 @@ def read_tags(namespace: Optional[str] = None, conn: Connection = Depends(get_db
 
 
 @router.post("/exercises/{exercise_id}/tag")
-def tag_exercise_endpoint(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def tag_exercise_endpoint(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     try:
         return tag_exercise_in_db(exercise_id, conn)
     except HTTPException:
@@ -659,7 +718,7 @@ def tag_exercise_endpoint(exercise_id: uuid.UUID, conn: Connection = Depends(get
 
 
 @router.get("/exercises/{exercise_id}/tags")
-def get_exercise_tags(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def get_exercise_tags(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
     query = """
     SELECT t.id, t.namespace, t.key, t.label, et.weight
     FROM exercise_tags et
@@ -673,7 +732,7 @@ def get_exercise_tags(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_
 
 
 @router.post("/exercises/{exercise_id}/tags/{tag_id}")
-def add_tag_to_exercise(exercise_id: uuid.UUID, tag_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def add_tag_to_exercise(exercise_id: uuid.UUID, tag_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     query = """
     INSERT INTO exercise_tags (exercise_id, tag_id, weight, confidence, created_by)
     VALUES (%s, %s, 1.0, 1.0, 'manual')
@@ -694,7 +753,7 @@ def add_tag_to_exercise(exercise_id: uuid.UUID, tag_id: uuid.UUID, conn: Connect
 
 
 @router.delete("/exercises/{exercise_id}/tags/{tag_id}")
-def remove_tag_from_exercise(exercise_id: uuid.UUID, tag_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def remove_tag_from_exercise(exercise_id: uuid.UUID, tag_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     query = "DELETE FROM exercise_tags WHERE exercise_id = %s AND tag_id = %s;"
     try:
         with conn.cursor() as cur:
@@ -707,7 +766,7 @@ def remove_tag_from_exercise(exercise_id: uuid.UUID, tag_id: uuid.UUID, conn: Co
 
 
 @router.get("/exercises/{exercise_id}/children")
-def get_exercise_children(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn)):
+def get_exercise_children(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("SELECT metadata::jsonb->>'external_id' as external_id FROM exercises WHERE id = %s", (exercise_id,))
         parent = cur.fetchone()
@@ -735,7 +794,7 @@ def get_exercise_children(exercise_id: uuid.UUID, conn: Connection = Depends(get
 
 
 @router.get("/exercises/by-path/{path:path}")
-def get_exercises_by_path(path: str, conn: Connection = Depends(get_db_conn)):
+def get_exercises_by_path(path: str, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """

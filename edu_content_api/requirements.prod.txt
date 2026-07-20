@@ -1,0 +1,49 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Requirements PRODUCȚIE (student-facing).
+# FĂRĂ torch / pix2text / OCR / Gemini — acelea sunt doar pentru ingestia de
+# conținut (upload-and-process, process-pdf), care se face LOCAL cu
+# requirements.txt complet. Imagine ~400MB în loc de ~7GB.
+# Importurile grele au fost făcute lazy, deci app-ul bootează fără ele.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Web / API
+fastapi==0.128.0
+starlette==0.50.0
+uvicorn==0.40.0
+python-multipart==0.0.21
+h11==0.16.0
+anyio==4.12.0
+
+# Bază de date
+psycopg==3.3.2
+psycopg-binary==3.3.2
+psycopg-pool
+
+# Validare / config
+pydantic==2.12.5
+pydantic_core==2.41.5
+annotated-doc==0.0.4
+annotated-types==0.7.0
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+python-dotenv==1.2.1
+
+# Auth
+python-jose[cryptography]
+bcrypt
+
+# AI (indicii, plan, grile) — client HTTP, ușor
+anthropic
+
+# Generare PDF variante (feature premium elev/profesor)
+reportlab
+matplotlib
+Pillow
+
+# Utilitare
+requests==2.32.5
+certifi==2025.11.12
+charset-normalizer==3.4.4
+idna==3.11
+urllib3==2.6.2
+click==8.3.1

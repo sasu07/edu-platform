@@ -8,7 +8,8 @@ import {
   getSubmissionStats,
   getLiveHelpRequests,
   scheduleLiveHelp,
-  buildApiUrl,
+  openAuthedFile,
+  fetchAuthedObjectUrl,
 } from '../api';
 import LatexRenderer from './LatexRenderer';
 import './TeacherDashboard.css';
@@ -45,6 +46,21 @@ function SubmissionsTab() {
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [photoModal, setPhotoModal] = useState<string | null>(null);
+
+  const openPhotoModal = async (path?: string | null) => {
+    if (!path) return;
+    try {
+      setPhotoModal(await fetchAuthedObjectUrl(path));
+    } catch {
+      alert('Fișierul nu este disponibil.');
+    }
+  };
+  const closePhotoModal = () => {
+    setPhotoModal((url) => {
+      if (url) URL.revokeObjectURL(url);
+      return null;
+    });
+  };
   const [uploadingFileId, setUploadingFileId] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
 
@@ -169,7 +185,7 @@ function SubmissionsTab() {
               {sub.photo_path && (
                 <div className="sub-photo-row">
                   <Camera size={14} />
-                  <button className="sub-photo-btn" onClick={() => setPhotoModal(buildApiUrl(sub.photo_path))}>
+                  <button className="sub-photo-btn" onClick={() => openPhotoModal(sub.photo_path)}>
                     <Eye size={13} /> Vezi fișier elev
                   </button>
                   {sub.photo_uploaded_at && (
@@ -183,9 +199,9 @@ function SubmissionsTab() {
               {sub.teacher_file_path && (
                 <div className="sub-photo-row">
                   <Paperclip size={14} />
-                  <a className="sub-photo-btn" href={buildApiUrl(sub.teacher_file_path)} target="_blank" rel="noopener noreferrer">
+                  <button type="button" className="sub-photo-btn" onClick={() => openAuthedFile(sub.teacher_file_path)}>
                     <Eye size={13} /> Fișier tău încărcat
-                  </a>
+                  </button>
                 </div>
               )}
 
@@ -250,9 +266,9 @@ function SubmissionsTab() {
       )}
 
       {photoModal && (
-        <div className="sub-photo-overlay" onClick={() => setPhotoModal(null)}>
+        <div className="sub-photo-overlay" onClick={closePhotoModal}>
           <div className="sub-photo-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="sub-photo-close" onClick={() => setPhotoModal(null)}>✕</button>
+            <button className="sub-photo-close" onClick={closePhotoModal}>✕</button>
             <img src={photoModal} alt="Soluție student" className="sub-photo-img" />
           </div>
         </div>
