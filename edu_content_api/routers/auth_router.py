@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime as dt
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from psycopg import Connection
 from psycopg.rows import dict_row
 
@@ -17,13 +17,14 @@ from auth import (
     verify_password,
 )
 from database import get_db_conn
+from email_service import send_welcome_email
 from models import SubscriptionDB, Token, UserDB, UserLogin, UserRegister, UserRole
 
 router = APIRouter()
 
 
 @router.post("/auth/register", response_model=Token, tags=["Auth"])
-def register(body: UserRegister, conn: Connection = Depends(get_db_conn)):
+def register(body: UserRegister, background_tasks: BackgroundTasks, conn: Connection = Depends(get_db_conn)):
     allowed_roles = (UserRole.STUDENT, UserRole.SCHOOL_TEACHER)
     if body.role not in allowed_roles:
         raise HTTPException(status_code=400, detail="Conturile de profesor platformă se creează doar de administrator")
@@ -50,6 +51,10 @@ def register(body: UserRegister, conn: Connection = Depends(get_db_conn)):
 
     user = UserDB(**user_row)
     token = create_access_token(str(user.id), user.role.value)
+
+    # Email de bun venit — în fundal, ca să nu blocheze/eșueze înregistrarea dacă SMTP-ul pică
+    background_tasks.add_task(send_welcome_email, body.email, body.full_name)
+
     return Token(access_token=token, user=user)
 
 

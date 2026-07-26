@@ -34,6 +34,49 @@ def _send(to: str, subject: str, html: str) -> None:
         log.exception("Failed to send email to %s", to)
 
 
+def send_welcome_email(email: str, full_name: str) -> None:
+    """Email de bun venit, trimis automat la înregistrarea unui cont nou.
+    Explică pe scurt (max o pagină) ce face platforma și cum ajută la BAC."""
+    first_name = (full_name or "").strip().split(" ")[0] or "salut"
+    link = f"{APP_URL}/app"
+    html = f"""
+    <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a232e;line-height:1.6;max-width:560px;">
+      <h2 style="font-size:22px;margin:0 0 4px;">Bine ai venit, {first_name}! 🎓</h2>
+      <p style="color:#55616f;margin:0 0 20px;">Ai făcut primul pas spre un BAC la matematică mai bun.</p>
+
+      <p><strong>EtoX</strong> te ajută să te pregătești pentru Bacalaureatul la matematică
+      <strong>inteligent, nu doar mult</strong> — știi mereu exact unde ești și ce ai de făcut mai departe.</p>
+
+      <p style="font-weight:700;margin:22px 0 8px;">Cum te ajută concret:</p>
+      <table style="border-collapse:collapse;width:100%;">
+        <tr><td style="padding:8px 0;vertical-align:top;width:30px;font-size:18px;">🎯</td>
+            <td style="padding:8px 0;"><strong>Test diagnostic gratuit</strong> — în câteva minute afli exact la ce subiecte și capitole stai bine și unde ai lacune.</td></tr>
+        <tr><td style="padding:8px 0;vertical-align:top;font-size:18px;">🗺️</td>
+            <td style="padding:8px 0;"><strong>Plan de studiu personalizat</strong> — un traseu adaptat lacunelor tale, nu unul generic.</td></tr>
+        <tr><td style="padding:8px 0;vertical-align:top;font-size:18px;">💡</td>
+            <td style="padding:8px 0;"><strong>Exerciții cu indicii progresive</strong> — te blochezi? Primești un indiciu pas cu pas, ca să înțelegi, nu doar să vezi soluția.</td></tr>
+        <tr><td style="padding:8px 0;vertical-align:top;font-size:18px;">📈</td>
+            <td style="padding:8px 0;"><strong>Progres vizibil + motivație</strong> — XP, serii zilnice și clasamente care te țin în ritm până la examen.</td></tr>
+      </table>
+
+      <p style="margin:22px 0 8px;font-weight:700;">Cel mai bun prim pas:</p>
+      <p style="margin:0 0 20px;">Fă <strong>testul diagnostic</strong> (gratuit, ~10 minute). Pe baza lui îți arătăm imediat de unde să începi.</p>
+
+      <p style="margin:0 0 28px;">
+        <a href="{link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;">
+          Începe pregătirea →
+        </a>
+      </p>
+
+      <p style="color:#55616f;">Fiecare exercițiu rezolvat te apropie de nota dorită. Succes! 💪</p>
+      <p style="color:#8b97a5;font-size:0.85em;margin-top:24px;border-top:1px solid #e5e9ee;padding-top:12px;">
+        EtoX — pregătire BAC la matematică · e2xacademy.ro
+      </p>
+    </div>
+    """
+    _send(email, "Bine ai venit pe EtoX — hai să începem pregătirea pentru BAC 🎓", html)
+
+
 def send_new_request_to_teacher(teacher_email: str, teacher_name: str,
                                  student_name: str, flag_type: str, request_id: str) -> None:
     labels = {"WRITTEN": "rezolvare scrisă ✍️", "VIDEO": "clip video 🎥", "LIVE": "sesiune live 🎙️"}

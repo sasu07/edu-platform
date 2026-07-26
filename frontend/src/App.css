@@ -1192,6 +1192,41 @@
   }
 }
 
+/* Navbar aplicație — mobil: previne suprapunerea brand (stânga) / user (dreapta) */
+@media (max-width: 600px) {
+  .navbar {
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+  .navbar-content {
+    gap: 8px;
+  }
+  /* permite micșorarea în flex → previne overflow-ul care cauza suprapunerea */
+  .navbar-brand,
+  .navbar-brand > div {
+    min-width: 0;
+  }
+  /* subtitlul lung se înfășura și se lovea de zona user — ascuns pe mobil */
+  .navbar-subtitle {
+    display: none;
+  }
+  .navbar-title {
+    font-size: 1rem;
+    white-space: nowrap;
+  }
+  .navbar-logo {
+    width: 32px;
+    height: 32px;
+  }
+  /* zona user compactă: păstrăm clopoțel + insignă rol + logout, ascundem numele lung */
+  .navbar-user {
+    gap: 6px;
+    min-width: 0;
+  }
+  .navbar-user-name {
+    display: none;
+  }
+}
+
 @media (max-width: 600px) {
   .hub-grid {
     grid-template-columns: 1fr;
