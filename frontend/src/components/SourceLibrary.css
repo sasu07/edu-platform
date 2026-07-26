@@ -95,22 +95,27 @@
 }
 .lib-card {
   display: flex;
-  gap: 14px;
+  flex-direction: column;
+  gap: 12px;
   background: #fff;
   border: 1px solid var(--gray-200);
   border-radius: 14px;
   padding: 16px;
-  align-items: flex-start;
   transition: box-shadow 0.15s ease, transform 0.15s ease;
 }
 .lib-card:hover {
   box-shadow: 0 6px 20px rgba(30, 41, 59, 0.09);
   transform: translateY(-1px);
 }
+.lib-card-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
 .lib-card-icon {
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
   background: var(--blue-50);
   color: var(--blue-600);
@@ -118,18 +123,19 @@
   align-items: center;
   justify-content: center;
 }
-.lib-card-body { flex: 1; min-width: 0; }
 .lib-card-name {
+  flex: 1;
+  min-width: 0;
   font-weight: 700;
   color: var(--gray-900);
   font-size: 0.95rem;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .lib-card-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 8px;
 }
 .lib-badge {
   font-size: 0.72rem;
@@ -145,19 +151,22 @@
 }
 .lib-card-actions {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: none;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 4px;
+  border-top: 1px solid var(--gray-100);
 }
 .lib-dl {
+  flex: 1;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   border: 1.5px solid var(--gray-200);
   background: #fff;
   color: var(--gray-700);
   border-radius: 8px;
-  padding: 7px 12px;
+  padding: 8px 12px;
   font-size: 0.82rem;
   font-weight: 600;
   cursor: pointer;

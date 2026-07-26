@@ -1,8 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+import { BRAND_LOGO_URL } from '../brand';
 import './LandingPage.css';
-
-const BRAND_LOGO_URL = '/logo_etox.png?v=20260726';
 
 const FEATURES = [
   {

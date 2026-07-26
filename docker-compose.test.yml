@@ -53,5 +53,20 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  # Frontend de test — servit din container pe :3001, construit ca să țintească
+  # backend-ul de test (:8001). Astfel ai O SINGURĂ adresă pentru test, fără `npm run dev`.
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:8001
+    container_name: etox-test-frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   test_db_data:

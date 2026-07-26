@@ -26,9 +26,8 @@ import {
   type StudySession,
   type StudyStats,
 } from "./api";
+import { BRAND_LOGO_URL } from "./brand";
 import "./App.css";
-
-const BRAND_LOGO_URL = "/logo_etox.png?v=20260726";
 
 const LandingPage = lazy(() => import("./components/LandingPage"));
 const SourceList = lazy(() => import("./components/SourceList"));

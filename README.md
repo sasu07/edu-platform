@@ -78,6 +78,23 @@ Pentru producție setează explicit și:
 - `APP_URL=https://domeniul-tau.ro`
 - `ALLOWED_ORIGINS=https://domeniul-tau.ro,https://www.domeniul-tau.ro`
 
+## Branding și logo
+
+Sursa unică pentru logo-ul din frontend este:
+- `frontend/public/logo_etox.png`
+
+Frontend-ul folosește un URL versionat pentru a evita cache-ul vechi din browser. Dacă schimbi logo-ul:
+
+```bash
+cd frontend
+npm run brand:sync
+npm run build
+cd ..
+docker compose up -d --build
+```
+
+Scriptul `npm run brand:sync` copiază același logo și în `edu_content_api/assets/logo_etox.png`, care este folosit la generarea PDF-urilor.
+
 ## Structura proiect
 
 ```text

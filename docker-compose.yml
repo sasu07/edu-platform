@@ -1,3 +1,5 @@
+name: etox-local          # proiect separat de mediul de test (evită coliziunea de containere)
+
 services:
   # Local development / local preview
   backend:

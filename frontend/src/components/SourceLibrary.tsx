@@ -110,14 +110,14 @@ export default function SourceLibrary() {
         <div className="lib-grid">
           {filtered.map((s) => (
             <div key={s.id} className="lib-card">
-              <div className="lib-card-icon"><FileText size={20} /></div>
-              <div className="lib-card-body">
+              <div className="lib-card-top">
+                <div className="lib-card-icon"><FileText size={18} /></div>
                 <div className="lib-card-name">{s.name}</div>
-                <div className="lib-card-badges">
-                  {s.year && <span className="lib-badge">{s.year}</span>}
-                  {s.session && <span className="lib-badge">{s.session}</span>}
-                  {s.profile && <span className="lib-badge lib-badge-profile">{PROFILE_LABELS[s.profile] || s.profile}</span>}
-                </div>
+              </div>
+              <div className="lib-card-badges">
+                {s.year && <span className="lib-badge">{s.year}</span>}
+                {s.session && <span className="lib-badge">{s.session}</span>}
+                {s.profile && <span className="lib-badge lib-badge-profile">{PROFILE_LABELS[s.profile] || s.profile}</span>}
               </div>
               <div className="lib-card-actions">
                 <button

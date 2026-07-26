@@ -67,7 +67,9 @@ def _register_fonts():
     )
     _FONTS_REGISTERED = True
 
-# Path to logo
+# Path to logo used in generated PDFs.
+# Source of truth for brand image: frontend/public/logo_etox.png
+# Sync it here with: `cd frontend && npm run brand:sync`
 ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets')
 LOGO_PATH = os.path.join(ASSETS_DIR, 'logo_etox.png')
 
