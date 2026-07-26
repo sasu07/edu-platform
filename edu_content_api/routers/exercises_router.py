@@ -155,7 +155,7 @@ def create_exercise(exercise: ExerciseCreate, conn: Connection = Depends(get_db_
         return create_exercise_record(exercise, conn)
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {exc}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Eroare internă de server")
 
 
 @router.get("/exercises/", response_model=List[ExerciseDB])
@@ -655,7 +655,7 @@ def update_exercise(exercise_id: uuid.UUID, exercise: ExerciseUpdate, conn: Conn
             return updated_exercise
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {exc}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Eroare internă de server")
 
 
 @router.delete("/exercises/{exercise_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -670,7 +670,7 @@ def delete_exercise(exercise_id: uuid.UUID, conn: Connection = Depends(get_db_co
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exercise not found")
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {exc}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Eroare internă de server")
 
 
 @router.post("/tags/", response_model=TagDB, status_code=status.HTTP_201_CREATED)
@@ -689,7 +689,7 @@ def create_tag(tag: TagCreate, conn: Connection = Depends(get_db_conn), _staff: 
             return new_tag
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {exc}")
+        raise HTTPException(status_code=500, detail="Eroare internă de server")
 
 
 @router.get("/tags/", response_model=List[TagDB])

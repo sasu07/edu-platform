@@ -28,9 +28,10 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 python-dotenv==1.2.1
 
-# Auth
+# Auth + rate limiting
 python-jose[cryptography]
 bcrypt
+slowapi
 
 # AI (indicii, plan, grile) — client HTTP, ușor
 anthropic

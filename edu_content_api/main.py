@@ -63,12 +63,26 @@ from routers.variants_router import router as variants_router
 from routers.learning_path_router import router as learning_path_router
 from services.xp_service import award_xp as _award_xp, calc_base_xp as _calc_base_xp
 
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from rate_limit import limiter
+
+# În producție (ENV=production) ascundem documentația API — reduce suprafața de recon.
+_PROD = os.getenv("ENV", "").lower() in ("production", "prod")
+
 app = FastAPI(
     title="Edu Content API",
     description="Backend API for managing educational exercises and variants.",
-    version="0.1.0"
+    version="0.1.0",
+    docs_url=None if _PROD else "/docs",
+    redoc_url=None if _PROD else "/redoc",
+    openapi_url=None if _PROD else "/openapi.json",
 )
 configure_app(app)
+
+# Rate limiting (brute-force / credential stuffing)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.include_router(auth_router)
 app.include_router(exercises_router)
 app.include_router(help_router)
@@ -321,7 +335,7 @@ def create_source(source: SourceCreate, conn: Connection = Depends(get_db_conn),
         return _create_source_in_db(source, conn)
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Eroare internă de server")
 
 @app.get("/sources/", response_model=List[SourceDB])
 def read_sources(conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
@@ -495,7 +509,7 @@ def update_source(source_id: uuid.UUID, source: SourceUpdate, conn: Connection =
             return updated_source
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Eroare internă de server")
 
 @app.delete("/sources/{source_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_source(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
@@ -510,7 +524,7 @@ def delete_source(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn),
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Eroare internă de server")
 
 # --- File Upload and Mathpix Logic ---
 
@@ -574,7 +588,7 @@ async def upload_and_process(
         source_entry = _create_source_in_db(source_data, conn)
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+        raise HTTPException(status_code=500, detail="Eroare internă de server")
 
     # 5. Process PDF with pix2text
     try:
@@ -728,7 +742,7 @@ async def upload_with_json(
         source_entry = _create_source_in_db(source_data, conn)
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {e}")
+        raise HTTPException(status_code=500, detail="Eroare internă de server")
 
     # 3. Create a source segment (as a container for exercises)
     segment_query = """
@@ -781,7 +795,7 @@ def create_source_segment(segment: SourceSegmentCreate, conn: Connection = Depen
             return new_segment
     except Exception as e:
         conn.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Eroare internă de server")
 
 @app.get("/source-segments/", response_model=List[SourceSegmentDB])
 def read_source_segments(

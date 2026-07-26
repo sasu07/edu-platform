@@ -427,6 +427,45 @@
   font-size: 0.95rem;
 }
 
+/* Nudge diagnostic — banner discret pt. elevii fără plan (dispare după diagnostic) */
+.hub-diag-nudge {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #eff6ff, #fffbeb);
+  border: 1.5px solid var(--blue-200);
+  border-radius: 14px;
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.hub-diag-nudge:hover {
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.14);
+  transform: translateY(-1px);
+}
+.hub-diag-nudge-icon { font-size: 26px; flex: none; line-height: 1; }
+.hub-diag-nudge-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.hub-diag-nudge-title { font-weight: 700; color: var(--gray-900); font-size: 1rem; }
+.hub-diag-nudge-sub { font-size: 0.82rem; color: var(--gray-500); }
+.hub-diag-nudge-cta {
+  flex: none;
+  font-weight: 700;
+  color: var(--blue-700);
+  background: #fff;
+  border: 1.5px solid var(--blue-200);
+  padding: 8px 16px;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+@media (max-width: 600px) {
+  .hub-diag-nudge { padding: 12px 14px; gap: 10px; }
+  .hub-diag-nudge-cta { display: none; }
+  .hub-diag-nudge-sub { font-size: 0.78rem; }
+}
+
 /* BAC countdown pill */
 .hub-bac-pill {
   display: flex;

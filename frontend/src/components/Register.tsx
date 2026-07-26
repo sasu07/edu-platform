@@ -27,7 +27,9 @@ export default function Register() {
     try {
       const res = await authRegister(form);
       login(res.data.access_token, res.data.user);
-      navigate('/app');
+      // Elevii noi intră direct în testul diagnostic (→ plan personalizat pe baza scorului).
+      // Profesorii de școală merg în platformă (diagnosticul nu li se aplică).
+      navigate(res.data.user.role === 'student' ? '/app/learning-path' : '/app');
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Eroare la înregistrare');
     } finally {
@@ -75,9 +77,9 @@ export default function Register() {
               type="password"
               value={form.password}
               onChange={handleChange}
-              placeholder="Minim 6 caractere"
+              placeholder="Minim 8 caractere"
               required
-              minLength={6}
+              minLength={8}
             />
           </div>
 

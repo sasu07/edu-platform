@@ -107,7 +107,7 @@ def create_variant(variant: VariantCreate, conn: Connection = Depends(get_db_con
             return new_variant
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {exc}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Eroare internă de server")
 
 
 @router.get("/variants/", response_model=List[VariantDB])
@@ -207,7 +207,7 @@ def update_variant(variant_id: uuid.UUID, variant: VariantUpdate, conn: Connecti
             return updated_variant
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {exc}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Eroare internă de server")
 
 
 @router.delete("/variants/{variant_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -223,7 +223,7 @@ def delete_variant(variant_id: uuid.UUID, conn: Connection = Depends(get_db_conn
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Variant not found")
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Database error: {exc}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Eroare internă de server")
 
 
 @router.post("/variants/{variant_id}/exercises/")
@@ -255,7 +255,7 @@ def add_exercises_to_variant(variant_id: uuid.UUID, exercise_ids: List[uuid.UUID
         return {"status": "success", "added_count": added_count}
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {exc}")
+        raise HTTPException(status_code=500, detail="Eroare internă de server")
 
 
 @router.get("/variants/{variant_id}/exercises/")
@@ -290,7 +290,7 @@ def remove_exercise_from_variant(variant_id: uuid.UUID, exercise_id: uuid.UUID, 
             return {"status": "success"}
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {exc}")
+        raise HTTPException(status_code=500, detail="Eroare internă de server")
 
 
 @router.put("/variants/{variant_id}/exercises/reorder")
@@ -309,7 +309,7 @@ def reorder_variant_exercises(variant_id: uuid.UUID, exercise_order: List[uuid.U
         return {"status": "success", "reordered_count": len(exercise_order)}
     except Exception as exc:
         conn.rollback()
-        raise HTTPException(status_code=500, detail=f"Database error: {exc}")
+        raise HTTPException(status_code=500, detail="Eroare internă de server")
 
 
 @router.get("/variants/{variant_id}/download-pdf")

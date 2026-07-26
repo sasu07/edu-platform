@@ -1,5 +1,7 @@
+import ast
 import json
 import math
+import operator
 import os
 import shutil
 import uuid
@@ -43,6 +45,32 @@ def _sm2(interval: int, reps: int, ease: float, quality: int):
 
 # ─── Answer checking ──────────────────────────────────────────────────────────
 
+_ARITH_BINOPS = {
+    ast.Add: operator.add, ast.Sub: operator.sub,
+    ast.Mult: operator.mul, ast.Div: operator.truediv,
+    ast.Pow: operator.pow, ast.Mod: operator.mod,
+}
+_ARITH_UNARY = {ast.UAdd: operator.pos, ast.USub: operator.neg}
+
+
+def _safe_arith_eval(node):
+    """Evaluează SIGUR o expresie aritmetică, fără eval — doar numere și + - * / ( ) **.
+    Ridică ValueError la orice nod nepermis. Previne code injection și DoS."""
+    if isinstance(node, ast.Expression):
+        return _safe_arith_eval(node.body)
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    if isinstance(node, ast.BinOp) and type(node.op) in _ARITH_BINOPS:
+        left = _safe_arith_eval(node.left)
+        right = _safe_arith_eval(node.right)
+        if isinstance(node.op, ast.Pow) and (abs(right) > 100 or abs(left) > 1e6):
+            raise ValueError("exponent prea mare")  # anti-DoS (ex: 9**9**9)
+        return _ARITH_BINOPS[type(node.op)](left, right)
+    if isinstance(node, ast.UnaryOp) and type(node.op) in _ARITH_UNARY:
+        return _ARITH_UNARY[type(node.op)](_safe_arith_eval(node.operand))
+    raise ValueError("expresie nepermisă")
+
+
 def _eval_numeric(expr: str) -> Optional[float]:
     import re
     if not expr:
@@ -57,7 +85,7 @@ def _eval_numeric(expr: str) -> Optional[float]:
     if not re.match(r'^[\d\s\+\-\*\/\.\(\)]+$', s):
         return None
     try:
-        result = eval(s, {"__builtins__": {}}, {})  # noqa: S307
+        result = _safe_arith_eval(ast.parse(s, mode="eval"))
         if isinstance(result, (int, float)) and math.isfinite(result):
             return float(result)
     except Exception:

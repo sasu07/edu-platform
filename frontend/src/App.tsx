@@ -16,6 +16,7 @@ import NotificationBell from "./components/NotificationBell";
 import StudyPrepCalendar from "./components/StudyPrepCalendar";
 import {
   buildApiUrl,
+  getLearningPath,
   getMyGamification,
   getStudyPlan,
   getStudySessions,
@@ -65,6 +66,7 @@ function AppHub() {
   const [todayPlanEntries, setTodayPlanEntries] = useState<StudyPlanDay[]>([]);
   const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
   const [gamification, setGamification] = useState<GamificationProfile | null>(null);
+  const [needsDiagnostic, setNeedsDiagnostic] = useState(false);
 
   const bacDate = new Date('2026-07-01');
   const daysLeft = Math.max(0, Math.ceil((bacDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
@@ -109,6 +111,14 @@ function AppHub() {
       });
   }, [isParent, isTeacher]);
 
+  // Nudge diagnostic: elevii fără plan (n-au terminat diagnosticul) primesc un banner pe hub
+  useEffect(() => {
+    if (isTeacher || isParent) return;
+    getLearningPath()
+      .then((r) => setNeedsDiagnostic(!r.data.path))
+      .catch(() => {});
+  }, [isParent, isTeacher]);
+
   if (isParent) return <Navigate to="/app/parent" replace />;
   return (
     <div className="hub">
@@ -127,6 +137,17 @@ function AppHub() {
           </div>
         )}
       </header>
+
+      {needsDiagnostic && !isTeacher && !isParent && (
+        <Link to="/app/learning-path" className="hub-diag-nudge">
+          <span className="hub-diag-nudge-icon">🎯</span>
+          <span className="hub-diag-nudge-text">
+            <span className="hub-diag-nudge-title">Începe cu testul diagnostic</span>
+            <span className="hub-diag-nudge-sub">~10 min · gratuit · îți deblochează planul personalizat pe lacunele tale</span>
+          </span>
+          <span className="hub-diag-nudge-cta">Începe →</span>
+        </Link>
+      )}
 
       {!isTeacher && !isParent && (
         <section className="hub-dashboard">

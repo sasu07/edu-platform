@@ -487,7 +487,7 @@ class UserRole(str, Enum):
 
 class UserRegister(BaseModel):
     email: str = Field(..., max_length=255)
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=8)
     full_name: str = Field(..., max_length=255)
     role: UserRole = UserRole.STUDENT
     # school_teacher poate specifica instituția

@@ -2,9 +2,11 @@ import uuid
 from datetime import datetime as dt
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from psycopg import Connection
 from psycopg.rows import dict_row
+
+from rate_limit import limiter
 
 from auth import (
     _has_gen_access,
@@ -24,7 +26,8 @@ router = APIRouter()
 
 
 @router.post("/auth/register", response_model=Token, tags=["Auth"])
-def register(body: UserRegister, background_tasks: BackgroundTasks, conn: Connection = Depends(get_db_conn)):
+@limiter.limit("10/minute")
+def register(request: Request, body: UserRegister, background_tasks: BackgroundTasks, conn: Connection = Depends(get_db_conn)):
     allowed_roles = (UserRole.STUDENT, UserRole.SCHOOL_TEACHER)
     if body.role not in allowed_roles:
         raise HTTPException(status_code=400, detail="Conturile de profesor platformă se creează doar de administrator")
@@ -59,7 +62,8 @@ def register(body: UserRegister, background_tasks: BackgroundTasks, conn: Connec
 
 
 @router.post("/auth/login", response_model=Token, tags=["Auth"])
-def login(body: UserLogin, conn: Connection = Depends(get_db_conn)):
+@limiter.limit("20/minute")
+def login(request: Request, body: UserLogin, conn: Connection = Depends(get_db_conn)):
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             "SELECT id, email, full_name, role, is_active, created_at, password_hash FROM users WHERE email = %s",

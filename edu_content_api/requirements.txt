@@ -32,3 +32,4 @@ matplotlib
 python-jose[cryptography]
 bcrypt
 anthropic
+slowapi

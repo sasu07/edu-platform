@@ -14,11 +14,23 @@ e2xacademy.ro, www.e2xacademy.ro {
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "SAMEORIGIN"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		# CSP — scripturile doar de la 'self' (mitighează XSS). Stilurile inline sunt
+		# necesare (React + KaTeX). Imagini/API/media de la subdomeniul api.
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.e2xacademy.ro; font-src 'self' data:; connect-src 'self' https://api.e2xacademy.ro; media-src 'self' https://api.e2xacademy.ro; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
 		-Server
 	}
 }
 
 # ── Backend API ──
 api.e2xacademy.ro {
+	# Limită payload — previne DoS cu corpuri uriașe (upload-urile legitime încap în 25MB)
+	request_body {
+		max_size 25MB
+	}
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
 	reverse_proxy backend:8000
 }
