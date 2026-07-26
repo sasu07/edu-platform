@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  getExercises, getTags, getExerciseTags, addTagToExercise, removeTagFromExercise, tagExercise,
+  getExercisesWithTags, getTags, getExerciseTags, addTagToExercise, removeTagFromExercise, tagExercise,
   type Exercise, type Tag, type ExerciseTag
 } from '../api';
 import { Edit2, Tag as TagIcon, BookOpen, ChevronRight, X, Plus, Search } from 'lucide-react';
@@ -48,20 +48,16 @@ const ExerciseList: React.FC<ExerciseListProps> = ({ refreshKey }) => {
   const fetchExercises = async () => {
     setLoading(true);
     try {
-      const response = await getExercises();
+      // Un singur query: exercițiile CU tag-urile incluse (elimină N+1-ul de ~5000 de cereri de tag-uri)
+      const response = await getExercisesWithTags();
       const data = Array.isArray(response.data) ? response.data : [];
       setExercises(data);
       setError(null);
 
-      // Fetch tags for all exercises in parallel
-      const tagPromises = data.map(ex =>
-        getExerciseTags(ex.id).then(res => ({ id: ex.id, tags: res.data })).catch(() => ({ id: ex.id, tags: [] }))
-      );
-      const tagResults = await Promise.all(tagPromises);
       const tagsMap: Record<string, ExerciseTag[]> = {};
-      tagResults.forEach(({ id, tags }) => {
-        tagsMap[id] = Array.isArray(tags) ? tags : [];
-      });
+      for (const ex of data) {
+        tagsMap[ex.id] = Array.isArray((ex as any).tags) ? (ex as any).tags : [];
+      }
       setExerciseTags(tagsMap);
 
     } catch (err) {

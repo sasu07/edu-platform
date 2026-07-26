@@ -212,6 +212,10 @@ export const getExerciseChildren = (id: string) => api.get<Exercise[]>(`/exercis
 
 export const getExerciseHints = (id: string) =>
   api.get<{ exercise_id: string; hints: string[]; source: string }>(`/exercises/${id}/hints`);
+
+// Listă de exerciții cu tag-urile incluse (1 query) — pentru administrare, fără N+1 de tag-uri.
+export const getExercisesWithTags = () =>
+  api.get<(Exercise & { tags: ExerciseTag[] })[]>('/exercises/with-tags');
 export const getAdminUsers = () => api.get<any[]>('/admin/users');
 
 export const getAuditLog = (params?: {

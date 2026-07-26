@@ -173,22 +173,19 @@ const SourceList: React.FC<SourceListProps> = ({ refreshKey }) => {
       setLoading(true);
       setError(null);
       try {
-        const response = await api.get<Source[]>("/sources/");
-        const src = Array.isArray(response.data) ? response.data : [];
-        setSources(src);
-
-        const statsResults = await Promise.all(
-          src.map(async (s) => {
-            try {
-              const r = await api.get<SourceStats>(`/sources/${s.id}/stats`);
-              return r.data;
-            } catch {
-              return { source_id: s.id, segments_count: 0, exercises_count: 0, tags_count: 0 } as SourceStats;
-            }
-          })
-        );
+        // Un singur query agregat (surse + statistici) în loc de N+1 (o cerere /stats per sursă)
+        const response = await api.get<any[]>("/sources/with-stats");
+        const rows = Array.isArray(response.data) ? response.data : [];
+        setSources(rows as Source[]);
         const map: Record<string, SourceStats> = {};
-        for (const st of statsResults) map[st.source_id] = st;
+        for (const r of rows) {
+          map[r.id] = {
+            source_id: r.id,
+            segments_count: r.segments_count ?? 0,
+            exercises_count: r.exercises_count ?? 0,
+            tags_count: r.tags_count ?? 0,
+          };
+        }
         setStatsById(map);
       } catch (err) {
         setError("Eroare la preluarea surselor.");

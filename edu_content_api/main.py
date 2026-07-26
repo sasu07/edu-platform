@@ -346,6 +346,39 @@ def read_sources(conn: Connection = Depends(get_db_conn), _staff: UserDB = Depen
         sources = cur.fetchall()
         return sources
 
+
+@app.get("/sources/with-stats")
+def read_sources_with_stats(conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
+    """Toate sursele CU statistici (segmente / exerciții / tag-uri) într-UN SINGUR query.
+    Înlocuiește N+1-ul din SourceList (o cerere /stats per sursă → 250 cereri)."""
+    query = """
+    SELECT s.id, s.name, s.type, s.year, s.session, s.profile,
+           s.url_file_path, s.url_barem_path, s.notes, s.created_at,
+           COALESCE(seg.segments_count, 0)  AS segments_count,
+           COALESCE(agg.exercises_count, 0) AS exercises_count,
+           COALESCE(agg.tags_count, 0)      AS tags_count
+    FROM sources s
+    LEFT JOIN (
+        SELECT source_id, COUNT(*) AS segments_count
+        FROM source_segments
+        GROUP BY source_id
+    ) seg ON seg.source_id = s.id
+    LEFT JOIN (
+        SELECT ss.source_id,
+               COUNT(DISTINCT e.id)      AS exercises_count,
+               COUNT(DISTINCT et.tag_id) AS tags_count
+        FROM source_segments ss
+        JOIN exercise_source_segments ess ON ess.source_segment_id = ss.id
+        JOIN exercises e                  ON e.id = ess.exercise_id
+        LEFT JOIN exercise_tags et        ON et.exercise_id = e.id
+        GROUP BY ss.source_id
+    ) agg ON agg.source_id = s.id
+    ORDER BY s.year DESC NULLS LAST, s.created_at DESC;
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(query)
+        return cur.fetchall()
+
 @app.get("/sources/{source_id}", response_model=SourceDB)
 def read_source(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """Retrieve a single source by ID."""

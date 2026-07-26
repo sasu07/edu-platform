@@ -358,6 +358,36 @@ def read_exercises(
         return exercises
 
 
+@router.get("/exercises/with-tags")
+def read_exercises_with_tags(
+    conn: Connection = Depends(get_db_conn),
+    _user: UserDB = Depends(get_current_user),
+):
+    """Lista de exerciții pentru administrare, cu tag-urile INCLUSE, într-un singur query.
+    Înlocuiește N+1-ul din ExerciseList (o cerere /tags per exercițiu → 5000+ cereri) +
+    payload ușor (fără soluție/barem/metadata — lista arată doar enunțul)."""
+    query = """
+    SELECT e.id, e.exam_type, e.profile, e.subject_part, e.item_type,
+           e.statement_text, e.statement_latex, e.difficulty, e.points, e.status,
+           e.created_at, e.updated_at,
+           COALESCE(
+             (SELECT json_agg(json_build_object(
+                        'id', t.id, 'namespace', t.namespace, 'key', t.key,
+                        'label', t.label, 'weight', et.weight)
+                      ORDER BY t.namespace, t.key)
+              FROM exercise_tags et JOIN tags t ON t.id = et.tag_id
+              WHERE et.exercise_id = e.id),
+             '[]'::json
+           ) AS tags
+    FROM exercises e
+    WHERE (e.status != 'ARCHIVED' OR e.status IS NULL)
+    ORDER BY e.created_at DESC;
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(query)
+        return cur.fetchall()
+
+
 @router.get("/exercises/filter-options")
 def get_exercise_filter_options(
     subiect_tag: Optional[str] = None,
