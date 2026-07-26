@@ -30,6 +30,8 @@ htmlcov/
 *.env
 .env.*
 !.env.example
+# URL-ul public al API-ului pentru build-ul de producție (fără secrete) — trebuie comis
+!frontend/.env.production
 
 # =============================================
 # Node.js / React
