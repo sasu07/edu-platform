@@ -1,7 +1,5 @@
-version: "3.8"
-
 services:
-  # ── Backend (FastAPI) ──
+  # Local development / local preview
   backend:
     build:
       context: ./edu_content_api
@@ -14,19 +12,16 @@ services:
     environment:
       - PYTHONUNBUFFERED=1
     volumes:
-      # Persist uploaded files
       - ./edu_content_api/uploaded_files:/app/uploaded_files
-      # Persist assets (logo, etc.)
       - ./edu_content_api/assets:/app/assets
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
 
-  # ── Frontend (React + Nginx) ──
   frontend:
     build:
       context: ./frontend
@@ -40,7 +35,6 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
-    volumes:
-      # Montează dist/ local → Nginx servește direct fișierele compilate local.
-      # Actualizare: rulează `npm run build` în /frontend, fără rebuild Docker.
-      - ./frontend/dist:/usr/share/nginx/html:ro
+    # Frontend-ul e servit din build-ul imaginii (construit cu VITE_API_URL=http://localhost:8000
+    # din build-arg-ul de mai sus). Pentru a actualiza frontend-ul: `docker compose up -d --build frontend`.
+    # (Nu montăm ./frontend/dist ca volum — ar umbri build-ul imaginii și ar servi URL-ul greșit.)

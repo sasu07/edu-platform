@@ -6,6 +6,8 @@ Ghid pas-cu-pas de la „am domeniu + cont Hetzner" la „site live pe https://e
 - Imagine backend slim (`edu_content_api/Dockerfile.prod`, ~569MB, fără OCR).
 - `docker-compose.prod.yml` + `Caddyfile` (HTTPS automat).
 - CORS citește din `ALLOWED_ORIGINS`; fișierele elevilor sunt servite autentificat.
+- `/docs` și schema OpenAPI sunt ascunse în producție când `ENV=production`.
+- Login și register au rate limiting pentru protecție de bază la brute-force.
 
 **Ce faci tu:** pașii de mai jos (server, DNS, config, lansare).
 
@@ -69,6 +71,7 @@ SMTP_PASS=...
 SMTP_FROM=...
 
 # ── Producție ──
+ENV=production
 APP_URL=https://e2xacademy.ro
 ALLOWED_ORIGINS=https://e2xacademy.ro,https://www.e2xacademy.ro
 ```
@@ -100,8 +103,6 @@ Deschide **https://e2xacademy.ro** în browser.
 ## 6. După lansare
 
 - **Cont admin:** creează-l (script de seed / SQL direct în Neon). Fără el nu poți administra conținut.
-- **Rate limiting pe login** — recomandat înainte/imediat după public (brute-force). *De adăugat — vezi „Următorii pași".*
-- **Ascunde `/docs`** în producție.
 - **Backup:** Neon are backup-uri automate. `uploaded_files/` stă pe discul serverului — fă snapshot Hetzner periodic, sau migrează pe object storage mai târziu.
 
 ## Operare curentă

@@ -213,6 +213,13 @@ export const getExerciseChildren = (id: string) => api.get<Exercise[]>(`/exercis
 export const getExerciseHints = (id: string) =>
   api.get<{ exercise_id: string; hints: string[]; source: string }>(`/exercises/${id}/hints`);
 export const getAdminUsers = () => api.get<any[]>('/admin/users');
+
+export const getAuditLog = (params?: {
+  action?: string; method?: string; status_code?: number;
+  resource_type?: string; q?: string; since_hours?: number;
+  limit?: number; offset?: number;
+}) =>
+  api.get<{ total: number; limit: number; offset: number; items: any[] }>('/admin/audit', { params });
 export const upgradeSubscription = (userId: string, planType: string = 'premium', expiresAt?: string) =>
   api.post(`/admin/subscriptions/${userId}/upgrade`, null, {
     params: { plan_type: planType, ...(expiresAt ? { expires_at: expiresAt } : {}) },

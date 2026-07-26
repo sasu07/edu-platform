@@ -4,6 +4,7 @@ import {
   getAdminUsers, upgradeSubscription, cancelSubscription, createTeacher,
   adminGetParentStudents, adminLinkParentStudent, adminRemoveParentStudentLink,
 } from '../api';
+import AuditLog from './AuditLog';
 import './AdminPanel.css';
 
 interface UserRow {
@@ -320,6 +321,11 @@ export default function AdminPanel() {
       </div>
 
       <AdminParentSection users={users} />
+
+      <div className="admin-section">
+        <h3 className="admin-section-title"><Shield size={16} /> Jurnal de audit</h3>
+        <AuditLog />
+      </div>
     </div>
   );
 }

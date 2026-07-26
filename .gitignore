@@ -92,3 +92,6 @@ start.command
 # Local scripts
 create_admin.py
 seed_*.py
+edu_content_api/.env
+edu_content_api/venv/
+*.pyc

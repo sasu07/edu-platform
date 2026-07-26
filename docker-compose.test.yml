@@ -1,0 +1,54 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Mediu de TEST — complet izolat de producție.
+#
+# Bază de date Postgres LOCALĂ (container efemer, NU Neon, NU date reale) +
+# backend pe portul 8001 (ca să nu intre în conflict cu localul pe 8000).
+# Folosește imaginea slim (ca producția) → oglindește prod + build rapid.
+#
+# Pornire:   docker compose -f docker-compose.test.yml up -d --build
+# Backend:   http://localhost:8001   (ENV=development → /docs vizibil)
+# Frontend:  rulează separat, țintind backend-ul de test:
+#              cd frontend && VITE_API_URL=http://localhost:8001 npm run dev
+# Reset DB:  docker compose -f docker-compose.test.yml down -v   (șterge tot volumul)
+#
+# Valorile de mai jos sunt de TEST (fără secrete reale) — de aceea fișierul e comis.
+# ─────────────────────────────────────────────────────────────────────────────
+services:
+  test-db:
+    image: postgres:16-alpine
+    container_name: etox-test-db
+    environment:
+      POSTGRES_USER: etox
+      POSTGRES_PASSWORD: etox_test
+      POSTGRES_DB: etox_test
+    ports:
+      - "5433:5432"          # 5433 pe host — ca să nu se bată cu alt Postgres local
+    volumes:
+      - test_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U etox -d etox_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./edu_content_api
+      dockerfile: Dockerfile.prod    # slim, la fel ca producția
+    container_name: etox-test-backend
+    ports:
+      - "8001:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://etox:etox_test@test-db:5432/etox_test?sslmode=disable
+      - JWT_SECRET_KEY=test-only-secret-nu-folosi-in-productie-minim-32-caractere
+      - ENV=development
+      - APP_URL=http://localhost:5173
+      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3001
+    depends_on:
+      test-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  test_db_data:

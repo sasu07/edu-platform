@@ -33,6 +33,11 @@ ORIGINS = _get_allowed_origins()
 
 
 def configure_app(app: FastAPI) -> None:
+    from audit_service import AuditMiddleware
+
+    # Audit trail — auditează automat mutațiile + accesele refuzate.
+    app.add_middleware(AuditMiddleware)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=ORIGINS,

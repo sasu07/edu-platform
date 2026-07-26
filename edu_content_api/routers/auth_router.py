@@ -6,7 +6,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from psycopg import Connection
 from psycopg.rows import dict_row
 
-from rate_limit import limiter
+from audit_service import write_audit
+from rate_limit import client_ip, limiter
 
 from auth import (
     _has_gen_access,
@@ -23,6 +24,15 @@ from email_service import send_welcome_email
 from models import SubscriptionDB, Token, UserDB, UserLogin, UserRegister, UserRole
 
 router = APIRouter()
+
+
+def _audit_auth(request: Request, action: str, **kw) -> None:
+    write_audit(
+        action,
+        ip=client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+        **kw,
+    )
 
 
 @router.post("/auth/register", response_model=Token, tags=["Auth"])
@@ -58,6 +68,9 @@ def register(request: Request, body: UserRegister, background_tasks: BackgroundT
     # Email de bun venit — în fundal, ca să nu blocheze/eșueze înregistrarea dacă SMTP-ul pică
     background_tasks.add_task(send_welcome_email, body.email, body.full_name)
 
+    _audit_auth(request, "register", actor_user_id=str(user.id), actor_role=user.role.value,
+                status=201, details={"email": user.email, "role": user.role.value})
+
     return Token(access_token=token, user=user)
 
 
@@ -72,12 +85,17 @@ def login(request: Request, body: UserLogin, conn: Connection = Depends(get_db_c
         row = cur.fetchone()
 
     if not row or not verify_password(body.password, row["password_hash"]):
+        _audit_auth(request, "login.fail", status=401, details={"email": body.email})
         raise HTTPException(status_code=401, detail="Email sau parolă incorectă")
     if not row["is_active"]:
+        _audit_auth(request, "login.fail", actor_user_id=str(row["id"]), status=403,
+                    details={"email": body.email, "reason": "cont dezactivat"})
         raise HTTPException(status_code=403, detail="Cont dezactivat")
 
     user = UserDB(**{k: v for k, v in row.items() if k != "password_hash"})
     token = create_access_token(str(user.id), user.role.value)
+    _audit_auth(request, "login.success", actor_user_id=str(user.id), actor_role=user.role.value,
+                status=200, details={"email": user.email})
     return Token(access_token=token, user=user)
 
 
@@ -327,4 +345,62 @@ def log_exercise_generation(
         )
     conn.commit()
     return {"ok": True}
+
+
+@router.get("/admin/audit", tags=["Admin"])
+def list_audit(
+    action: Optional[str] = None,
+    actor_user_id: Optional[str] = None,
+    method: Optional[str] = None,
+    status_code: Optional[int] = None,
+    resource_type: Optional[str] = None,
+    q: Optional[str] = None,          # căutare în path
+    since_hours: Optional[int] = None,
+    limit: int = 100,
+    offset: int = 0,
+    _admin: UserDB = Depends(require_role(UserRole.ADMIN)),
+    conn: Connection = Depends(get_db_conn),
+):
+    """Jurnalul de audit — doar admin. Filtre opționale + paginare."""
+    conditions: list = []
+    params: list = []
+    if action:
+        conditions.append("al.action = %s"); params.append(action)
+    if actor_user_id:
+        conditions.append("al.actor_user_id = %s"); params.append(actor_user_id)
+    if method:
+        conditions.append("al.method = %s"); params.append(method.upper())
+    if status_code is not None:
+        conditions.append("al.status = %s"); params.append(status_code)
+    if resource_type:
+        conditions.append("al.resource_type = %s"); params.append(resource_type)
+    if q:
+        conditions.append("al.path ILIKE %s"); params.append(f"%{q}%")
+    if since_hours:
+        conditions.append("al.created_at >= NOW() - (%s || ' hours')::interval"); params.append(str(since_hours))
+
+    where = (" WHERE " + " AND ".join(conditions)) if conditions else ""
+    limit = max(1, min(limit, 500))
+    offset = max(0, offset)
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(f"SELECT COUNT(*) AS total FROM audit_log al{where}", tuple(params))
+        total = cur.fetchone()["total"]
+        cur.execute(
+            f"""
+            SELECT al.id, al.created_at, al.actor_user_id, al.actor_role, al.action,
+                   al.method, al.path, al.resource_type, al.resource_id, al.ip,
+                   al.status, al.details,
+                   u.email AS actor_email, u.full_name AS actor_name
+            FROM audit_log al
+            LEFT JOIN users u ON u.id = al.actor_user_id
+            {where}
+            ORDER BY al.created_at DESC
+            LIMIT %s OFFSET %s
+            """,
+            tuple(params) + (limit, offset),
+        )
+        items = cur.fetchall()
+
+    return {"total": total, "limit": limit, "offset": offset, "items": items}
 

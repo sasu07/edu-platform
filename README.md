@@ -1,6 +1,6 @@
 # EtoX Platform
 
-Platformă web pentru pregătirea la examenul de bacalaureat (matematică). Permite studenților să exerseze exerciții din subiecte reale de BAC, să ceară ajutor de la profesori și să urmărească progresul. Profesorii pot genera variante și fișe de lucru personalizate.
+Platformă web pentru pregătirea la examenul de bacalaureat (matematică). Permite elevilor să exerseze exerciții din subiecte reale de BAC, să ceară ajutor de la profesori și să urmărească progresul. Profesorii pot genera variante și fișe de lucru personalizate.
 
 ## Ce face
 
@@ -24,14 +24,29 @@ Deploy: Docker Compose (nginx pentru frontend, uvicorn pentru API)
 
 1. Clonează repo-ul
 2. Copiază `.env.example` în `.env` și completează variabilele
-3. Rulează migrările SQL din `edu_content_api/migrations/` în ordinea numerică
-4. Pornește containerele:
+3. Pornește containerele (migrările SQL rulează automat la pornirea backend-ului):
 
 ```bash
 docker compose up -d --build
 ```
 
-Frontend disponibil la `http://localhost:3000`, API la `http://localhost:8000`.
+Acest fișier `docker-compose.yml` este pentru rulare locală. Frontend-ul va fi disponibil la `http://localhost:3000`, iar API-ul la `http://localhost:8000`.
+
+## Deploy producție
+
+Pentru producție folosește separat:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Documentația completă de deploy este în [`DEPLOY.md`](/Users/admin/Desktop/run-apps/edu_content_app/edu-platform/DEPLOY.md).
+
+Pe scurt:
+- backend-ul rulează din `edu_content_api/Dockerfile.prod`
+- frontend-ul trebuie build-uit cu `VITE_API_URL=https://api.domeniul-tau.ro`
+- CORS se configurează din `ALLOWED_ORIGINS`
+- `ENV=production` ascunde documentația API
 
 **Creare cont admin inițial** (după ce backend-ul pornește):
 
@@ -54,15 +69,23 @@ Exercițiile se importă prin `POST /import-hierarchical/` cu un JSON structurat
 
 ## Variabile de mediu
 
-Vezi `.env.example`. Obligatorii: `DATABASE_URL` și `JWT_SECRET_KEY`.
+Vezi `edu_content_api/.env.example`. Minimul necesar:
+- `DATABASE_URL`
+- `JWT_SECRET_KEY`
+
+Pentru producție setează explicit și:
+- `ENV=production`
+- `APP_URL=https://domeniul-tau.ro`
+- `ALLOWED_ORIGINS=https://domeniul-tau.ro,https://www.domeniul-tau.ro`
 
 ## Structura proiect
 
-```
-edu_content_api/   ← FastAPI backend
-frontend/          ← React frontend
-docs/              ← workflow, diagrame
-docker-compose.yml
+```text
+edu_content_api/   <- FastAPI backend
+frontend/          <- React frontend
+docs/              <- workflow, diagrame
+docker-compose.yml <- rulare locală
+docker-compose.prod.yml <- rulare producție
 ```
 
-Diagrama completă a fluxului aplicației: [`docs/workflow.md`](docs/workflow.md)
+Diagrama completă a fluxului aplicației: [`docs/workflow.md`](/Users/admin/Desktop/run-apps/edu_content_app/edu-platform/docs/workflow.md)
