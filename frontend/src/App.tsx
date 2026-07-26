@@ -28,6 +28,8 @@ import {
 } from "./api";
 import "./App.css";
 
+const BRAND_LOGO_URL = "/logo_etox.png?v=20260726";
+
 const LandingPage = lazy(() => import("./components/LandingPage"));
 const SourceList = lazy(() => import("./components/SourceList"));
 const ExerciseList = lazy(() => import("./components/ExerciseList"));
@@ -44,6 +46,7 @@ const ParentDashboard = lazy(() => import("./components/ParentDashboard"));
 const StudySession = lazy(() => import("./components/StudySession"));
 const StudyPlan = lazy(() => import("./components/StudyPlan"));
 const LearningPath = lazy(() => import("./components/LearningPath"));
+const SourceLibrary = lazy(() => import("./components/SourceLibrary"));
 
 function RouteLoader() {
   return <div className="auth-loading">Se încarcă...</div>;
@@ -594,7 +597,7 @@ function AppShell() {
         <div className="navbar-content">
           <Link to="/app" className="navbar-brand">
             <img
-              src="/logo_etox.png"
+              src={BRAND_LOGO_URL}
               alt="EtoX Academy"
               className="navbar-logo"
             />
@@ -625,6 +628,14 @@ function AppShell() {
                   }
                 >
                   Exerciții
+                </NavLink>
+                <NavLink
+                  to="/app/subiecte"
+                  className={({ isActive }) =>
+                    isActive ? "nav-link active" : "nav-link"
+                  }
+                >
+                  Subiecte BAC
                 </NavLink>
                 <NavLink
                   to="/app/my-requests"
@@ -758,6 +769,14 @@ function AppShell() {
             }
           />
           <Route
+            path="subiecte"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <SourceLibrary />
+              </Suspense>
+            }
+          />
+          <Route
             path="teacher/requests"
             element={
               <Suspense fallback={<RouteLoader />}>
@@ -828,7 +847,7 @@ function AppShell() {
       <footer className="footer">
         <div className="footer-content">
           <div className="footer-left">
-            <img src="/logo_etox.png" alt="EtoX" className="footer-logo" />
+            <img src={BRAND_LOGO_URL} alt="EtoX" className="footer-logo" />
             <span>© 2026 EtoX Academy</span>
           </div>
           <div className="footer-right">Platforma de Generare Subiecte BAC</div>

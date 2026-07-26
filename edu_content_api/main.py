@@ -379,6 +379,23 @@ def read_sources_with_stats(conn: Connection = Depends(get_db_conn), _staff: Use
         cur.execute(query)
         return cur.fetchall()
 
+
+@app.get("/sources/downloadable")
+def read_downloadable_sources(conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
+    """Sursele descărcabile (au fișier) — biblioteca de subiecte BAC pentru elevi și profesori.
+    Accesibil oricărui utilizator autentificat (subiectele BAC sunt publice)."""
+    query = """
+    SELECT id, name, type, year, session, profile,
+           (url_barem_path IS NOT NULL) AS has_barem
+    FROM sources
+    WHERE url_file_path IS NOT NULL
+    ORDER BY year DESC NULLS LAST, session NULLS LAST, name;
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(query)
+        return cur.fetchall()
+
+
 @app.get("/sources/{source_id}", response_model=SourceDB)
 def read_source(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
     """Retrieve a single source by ID."""
@@ -391,7 +408,7 @@ def read_source(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _
         return source
 
 @app.get("/sources/{source_id}/download")
-def download_source_file(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
+def download_source_file(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
     """Descarcă fișierul original al sursei (varianta)."""
     from fastapi.responses import FileResponse
     with conn.cursor(row_factory=dict_row) as cur:
@@ -407,7 +424,7 @@ def download_source_file(source_id: uuid.UUID, conn: Connection = Depends(get_db
 
 
 @app.get("/sources/{source_id}/download-barem")
-def download_barem_file(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _staff: UserDB = Depends(require_staff)):
+def download_barem_file(source_id: uuid.UUID, conn: Connection = Depends(get_db_conn), _user: UserDB = Depends(get_current_user)):
     """Descarcă baremul sursei."""
     from fastapi.responses import FileResponse
     with conn.cursor(row_factory=dict_row) as cur:

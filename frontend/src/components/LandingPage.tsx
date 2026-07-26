@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import './LandingPage.css';
 
+const BRAND_LOGO_URL = '/logo_etox.png?v=20260726';
+
 const FEATURES = [
   {
     icon: '📚',
@@ -192,7 +194,7 @@ export default function LandingPage() {
       <nav className="lp-nav">
         <div className="lp-nav-inner">
           <div className="lp-nav-brand">
-            <img src="/logo_etox.png" alt="EtoX Academy" className="lp-nav-logo" />
+            <img src={BRAND_LOGO_URL} alt="EtoX Academy" className="lp-nav-logo" />
             <div>
               <div className="lp-nav-name">EtoX Platform</div>
               <div className="lp-nav-tagline">Pregătire BAC</div>
@@ -520,7 +522,7 @@ export default function LandingPage() {
       {/* ── CTA banner ── */}
       <section className="lp-cta-banner">
         <div className="lp-cta-banner-inner">
-          <img src="/logo_etox.png" alt="EtoX" className="lp-cta-logo" />
+          <img src={BRAND_LOGO_URL} alt="EtoX" className="lp-cta-logo" />
           <div>
             <h2 className="lp-cta-title">Pregătit să dai BAC-ul cu încredere?</h2>
             <p className="lp-cta-sub">Creează un cont gratuit și începe să exersezi chiar acum.</p>
@@ -535,7 +537,7 @@ export default function LandingPage() {
       <footer className="lp-footer">
         <div className="lp-footer-inner">
           <div className="lp-footer-brand">
-            <img src="/logo_etox.png" alt="EtoX" className="lp-footer-logo" />
+            <img src={BRAND_LOGO_URL} alt="EtoX" className="lp-footer-logo" />
             <div>
               <div className="lp-footer-name">EtoX Platform</div>
               <div className="lp-footer-tagline">Pregătire BAC Matematică</div>

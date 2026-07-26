@@ -271,6 +271,19 @@ export const updateExerciseSet = (id: string, data: { name?: string; linked_plan
 export const deleteExerciseSet = (id: string) => api.delete(`/exercise-sets/${id}`);
 
 export const getSources = () => api.get<Source[]>('/sources/');
+
+export interface DownloadableSource {
+  id: string;
+  name: string;
+  type: string;
+  year?: number;
+  session?: string;
+  profile?: string;
+  has_barem: boolean;
+}
+// Biblioteca de subiecte BAC descărcabile (elevi + profesori)
+export const getDownloadableSources = () =>
+  api.get<DownloadableSource[]>('/sources/downloadable');
 export interface FilterOptions {
   profiles: string[];
   years: number[];

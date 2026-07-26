@@ -1,0 +1,189 @@
+.lib-wrap {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 60px;
+}
+
+.lib-head {
+  margin-bottom: 20px;
+}
+.lib-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.7rem;
+  font-weight: 800;
+  margin: 0;
+  color: var(--gray-900);
+  letter-spacing: -0.01em;
+}
+.lib-sub {
+  color: var(--gray-500);
+  margin: 6px 0 0;
+  font-size: 0.95rem;
+}
+
+/* ── Filtre ── */
+.lib-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+.lib-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1.5px solid var(--gray-200);
+  border-radius: 10px;
+  padding: 0 12px;
+  flex: 1;
+  min-width: 200px;
+  color: var(--gray-400);
+}
+.lib-search input {
+  border: none;
+  outline: none;
+  padding: 10px 0;
+  flex: 1;
+  font-size: 0.9rem;
+  background: transparent;
+  color: var(--gray-900);
+}
+.lib-filters select {
+  border: 1.5px solid var(--gray-200);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  background: #fff;
+  color: var(--gray-700);
+  cursor: pointer;
+}
+.lib-filters select:focus,
+.lib-search:focus-within {
+  border-color: var(--blue-400);
+}
+.lib-reset {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  border-radius: 10px;
+  padding: 9px 13px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+.lib-reset:hover { background: var(--gray-200); }
+
+.lib-count {
+  color: var(--gray-500);
+  font-size: 0.85rem;
+  margin-bottom: 14px;
+  font-weight: 600;
+}
+
+/* ── Grilă carduri ── */
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 14px;
+}
+.lib-card {
+  display: flex;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid var(--gray-200);
+  border-radius: 14px;
+  padding: 16px;
+  align-items: flex-start;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.lib-card:hover {
+  box-shadow: 0 6px 20px rgba(30, 41, 59, 0.09);
+  transform: translateY(-1px);
+}
+.lib-card-icon {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--blue-50);
+  color: var(--blue-600);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lib-card-body { flex: 1; min-width: 0; }
+.lib-card-name {
+  font-weight: 700;
+  color: var(--gray-900);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+.lib-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.lib-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+.lib-badge-profile {
+  background: var(--blue-50);
+  color: var(--blue-700);
+}
+.lib-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+}
+.lib-dl {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1.5px solid var(--gray-200);
+  background: #fff;
+  color: var(--gray-700);
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s ease;
+}
+.lib-dl:hover { background: var(--gray-50); }
+.lib-dl-primary {
+  background: var(--blue-600);
+  color: #fff;
+  border-color: var(--blue-600);
+}
+.lib-dl-primary:hover { background: var(--blue-700); }
+
+.lib-loading,
+.lib-empty,
+.lib-error {
+  text-align: center;
+  padding: 44px 20px;
+  color: var(--gray-500);
+}
+.lib-error { color: var(--red-600); }
+
+@media (max-width: 600px) {
+  .lib-card { flex-direction: column; }
+  .lib-card-actions { flex-direction: row; width: 100%; }
+  .lib-dl { flex: 1; justify-content: center; }
+  .lib-filters select { flex: 1; }
+}
