@@ -41,6 +41,7 @@ services:
       - ./frontend/dist:/srv/frontend:ro   # frontend-ul compilat (VITE_API_URL=https://api.e2xacademy.ro)
       - caddy_data:/data                   # certificatele TLS — persistente (nu le pierde la restart!)
       - caddy_config:/config
+      - /var/log/caddy:/var/log/caddy      # log-uri de acces (JSON) — citite de fail2ban pe host
     depends_on:
       backend:
         condition: service_healthy

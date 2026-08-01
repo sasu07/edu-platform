@@ -2,12 +2,32 @@
 # e2xacademy.ro, www.e2xacademy.ro și api.e2xacademy.ro → IP-ul serverului,
 # plus porturile 80 și 443 deschise în firewall.
 
+# ── Matcher reutilizabil: scanări automate ──
+# Aplicația e SPA React + API FastAPI — nu are NICIODATĂ fișiere .php sau rute
+# wp-*/wordpress. Orice astfel de cerere e un bot care caută vulnerabilități WordPress
+# sau fișiere secrete. Le respingem direct (403), fără să ajungă la backend, și le
+# logăm — fail2ban banează IP-ul după câteva încercări.
+(block_scanners) {
+	# path_regexp — prinde tiparul oriunde în cale (inclusiv sub prefixe gen /blog/, /wordpress/).
+	@scanners path_regexp (?i)(/wp-|/wordpress|xmlrpc\.php|\.php|/\.env|/\.git|/\.aws|/\.ssh|phpmyadmin|/administrator|/vendor/)
+	handle @scanners {
+		respond 403
+	}
+}
+
+(access_log) {
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10MB
+			roll_keep 5
+		}
+		format json
+	}
+}
+
 # ── Frontend (SPA React) ──
 e2xacademy.ro, www.e2xacademy.ro {
 	encode gzip
-	root * /srv/frontend
-	try_files {path} /index.html      # React Router — orice rută cade pe index.html
-	file_server
 
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -18,6 +38,15 @@ e2xacademy.ro, www.e2xacademy.ro {
 		# necesare (React + KaTeX). Imagini/API/media de la subdomeniul api.
 		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://api.e2xacademy.ro; font-src 'self' data:; connect-src 'self' https://api.e2xacademy.ro; media-src 'self' https://api.e2xacademy.ro; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
 		-Server
+	}
+
+	import access_log
+	import block_scanners
+
+	handle {
+		root * /srv/frontend
+		try_files {path} /index.html # React Router — orice rută cade pe index.html
+		file_server
 	}
 }
 
@@ -32,5 +61,11 @@ api.e2xacademy.ro {
 		Referrer-Policy "strict-origin-when-cross-origin"
 		-Server
 	}
-	reverse_proxy backend:8000
+
+	import access_log
+	import block_scanners
+
+	handle {
+		reverse_proxy backend:8000
+	}
 }

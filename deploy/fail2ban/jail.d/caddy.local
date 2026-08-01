@@ -1,0 +1,22 @@
+# Jail care banează automat IP-urile care scanează platforma.
+#
+# Logica: dacă un IP adună 5 „lovituri" (403 sau rute de bot) în 2 minute,
+# e banat 24h la nivel de firewall (chain DOCKER-USER, vezi action.d/docker-user.conf).
+
+[DEFAULT]
+# Nu bana niciodată localhost / rețele private / IP-ul tău (adaugă-l pe al tău dacă vrei).
+ignoreip = 127.0.0.1/8 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16
+# Reban progresiv: recidiviștii primesc ban tot mai lung.
+bantime.increment = true
+bantime.factor = 2
+bantime.maxtime = 30d
+
+[caddy-scan]
+enabled  = true
+filter   = caddy-scan
+logpath  = /var/log/caddy/access.log
+backend  = polling
+maxretry = 5
+findtime = 120
+bantime  = 86400
+banaction = docker-user[name=caddy-scan]

@@ -6,7 +6,8 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" --max-time 5 http://localhost:8000/exercises/00000000-0000-0000-0000-000000000000/hints)",
       "Bash(python3 -m py_compile audit_service.py bootstrap.py routers/auth_router.py)",
       "Bash(docker info *)",
-      "Bash(docker stop *)"
+      "Bash(docker stop *)",
+      "Bash(docker run *)"
     ],
     "additionalDirectories": [
       "/tmp"
