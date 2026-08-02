@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CheckCircle, Camera, ThumbsUp, ThumbsDown, Eye, Paperclip, Users, Video, Calendar } from 'lucide-react';
 import {
   getTeacherSubmissions,
@@ -43,6 +44,8 @@ function SubmissionsTab() {
   const [subStats, setSubStats] = useState<{ pending: number; correct: number; incorrect: number; total: number } | null>(null);
   const [filter, setFilter] = useState<'pending' | 'correct' | 'incorrect'>('pending');
   const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams();
+  const focusId = searchParams.get('focus');
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
   const [photoModal, setPhotoModal] = useState<string | null>(null);
@@ -81,6 +84,13 @@ function SubmissionsTab() {
   };
 
   useEffect(() => { load(); }, []);
+
+  // Când venim dintr-o notificare (?focus=<id>), derulăm la cererea respectivă.
+  useEffect(() => {
+    if (!focusId || loading) return;
+    const el = document.getElementById(`sub-${focusId}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [focusId, loading, submissions]);
 
   const handleFilter = (f: 'pending' | 'correct' | 'incorrect') => {
     setFilter(f);
@@ -165,7 +175,7 @@ function SubmissionsTab() {
       ) : (
         <div className="submissions-list">
           {submissions.map((sub) => (
-            <div key={sub.id} className={`submission-card sub-status-${sub.teacher_status || 'pending'}`}>
+            <div key={sub.id} id={`sub-${sub.id}`} className={`submission-card sub-status-${sub.teacher_status || 'pending'}${focusId === sub.id ? ' sub-focus' : ''}`}>
               <div className="sub-card-header">
                 <div className="sub-card-student">
                   <strong>{sub.student_name}</strong>

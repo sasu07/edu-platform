@@ -1694,9 +1694,10 @@ async def upload_submission_photo(
         if extra_xp > 0:
             _award_xp(conn, str(current_user.id), extra_xp, "photo_upload", exercise_id)
 
-        # Notifică toți profesorii / adminii că există o nouă soluție de corectat
+        # Notifică toți profesorii (platformă + școală) / adminii că există o nouă soluție de corectat.
+        # Rolurile trebuie să coincidă cu cele care au acces la /teacher/submissions.
         cur.execute(
-            "SELECT id FROM users WHERE role IN ('teacher', 'admin') AND is_active = TRUE"
+            "SELECT id FROM users WHERE role IN ('teacher', 'school_teacher', 'admin') AND is_active = TRUE"
         )
         teachers = cur.fetchall()
         ex_short = ((ex["statement_text"] or "")[:60] + "…") if ex and ex.get("statement_text") else "exercițiu"

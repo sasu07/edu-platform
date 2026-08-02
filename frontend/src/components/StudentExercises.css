@@ -1830,3 +1830,13 @@
 }
 
 .eval-teacher-file-btn:hover { background: rgba(37, 99, 235, 0.18); }
+
+/* ── Mobil ── */
+@media (max-width: 600px) {
+  .student-exercises { padding: 16px 12px; gap: 16px; }
+  .student-ex-toolbar { flex-direction: column; }
+  .student-ex-title { font-size: 1.2rem; }
+  .student-ex-header { flex-wrap: wrap; }
+  .student-ex-actions { flex-wrap: wrap; }
+  .student-filter-group { min-width: 0; flex-basis: calc(50% - 6px); }
+}

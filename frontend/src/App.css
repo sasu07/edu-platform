@@ -126,6 +126,93 @@
   color: var(--color-gray-500);
 }
 
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Buton hamburger (ascuns pe desktop) ── */
+.navbar-burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border: 1.5px solid var(--gray-200);
+  background: #fff;
+  border-radius: var(--radius-md);
+  color: var(--gray-700);
+  flex: none;
+}
+.navbar-burger:hover { background: var(--gray-50); }
+
+.navbar-overlay { display: none; }
+
+/* ─────────────────────────────────────────────────────────────
+   NAVBAR MOBIL — drawer lateral + top-bar compact
+   ───────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .navbar {
+    padding: 10px 16px;
+    z-index: 300;                 /* deasupra overlay-ului și a drawer-ului */
+  }
+  .navbar-content { gap: 8px; }
+
+  .navbar-subtitle { display: none; }
+  .navbar-title { font-size: 1.05rem; }
+  .navbar-logo { width: 34px; height: 34px; }
+
+  /* ordine pe mobil: brand | zona user (compactă) | hamburger */
+  .navbar-brand { order: 1; min-width: 0; }
+  .navbar-right { order: 2; margin-left: auto; gap: 6px; }
+  .navbar-burger { display: inline-flex; order: 3; }
+
+  /* elemente grele ascunse din top-bar pe mobil */
+  .navbar-status,
+  .navbar-xp-strip,
+  .navbar-user-name,
+  .navbar-user-badge { display: none; }
+
+  /* fundal semi-transparent când drawer-ul e deschis */
+  .navbar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 200;
+    animation: fadeIn 0.2s ease;
+  }
+
+  /* meniul devine un panou lateral care intră din dreapta */
+  .navbar-links {
+    position: fixed;
+    top: 0;
+    right: 0;
+    height: 100dvh;
+    width: min(82vw, 320px);
+    margin: 0;
+    padding: 76px 16px 28px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    background: #fff;
+    box-shadow: -10px 0 30px rgba(15, 23, 42, 0.15);
+    transform: translateX(100%);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+    z-index: 250;
+  }
+  .navbar-links.open { transform: translateX(0); }
+
+  .nav-link {
+    display: block;
+    padding: 13px 14px;
+    font-size: 1rem;
+    border-radius: 10px;
+  }
+}
+
 /* Main Content */
 .main-content {
   flex: 1;
@@ -1557,4 +1644,60 @@
   background: var(--gray-100);
   border-color: var(--gray-400);
   color: var(--gray-800);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   STRAT GLOBAL RESPONSIVE  (shell + hub)
+   Pus la final ca să aibă prioritate la conflicte.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Gardă anti-overflow orizontal — nicio pagină nu împinge lățimea peste ecran. */
+html, body { overflow-x: hidden; }
+.app { max-width: 100%; overflow-x: clip; }
+
+/* ── Tabletă ── */
+@media (max-width: 900px) {
+  .main-content { padding: var(--space-6) var(--space-4); }
+  .hub-grid { grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .hub-student-hero { grid-template-columns: 1fr; }
+  .hub-dashboard { padding: 18px; border-radius: 22px; }
+}
+
+/* ── Telefon ── */
+@media (max-width: 600px) {
+  .main-content { padding: var(--space-4) var(--space-3); }
+  .page-header { margin-bottom: var(--space-6); }
+  .page-title { font-size: 1.4rem; }
+
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.25rem; }
+  h3 { font-size: 1.1rem; }
+
+  /* Hub */
+  .hub-grid { grid-template-columns: 1fr; gap: 12px; }
+  .hub-head { flex-direction: column; align-items: flex-start; gap: 12px; }
+  .hub-bac-pill { width: 100%; justify-content: center; }
+  .hub-dashboard { padding: 16px; border-radius: 18px; }
+  .hub-dashboard-title { font-size: 1.35rem; }
+  .hub-student-hero-main { padding: 16px; }
+  .hub-student-hero-title { font-size: 1.3rem; }
+  .hub-student-summary-value { font-size: 1.3rem; }
+  .hub-student-hero-actions { flex-direction: column; }
+  .hub-student-hero-actions > * { width: 100%; }
+  .hub-detail-card summary { padding: 14px 16px; }
+
+  /* Footer se pune pe verticală */
+  .footer-content { flex-direction: column; gap: 6px; text-align: center; }
+
+  /* Butoanele mari devin full-width pe telefon, ușor de apăsat cu degetul */
+  .btn-lg, .btn-xl { width: 100%; }
+
+  /* Autentificare */
+  .auth-page { padding: 16px; }
+  .auth-card { padding: 28px 20px; }
+}
+
+/* Touch targets — pe ecrane cu deget, elementele interactive minim 40px înălțime */
+@media (max-width: 600px) and (pointer: coarse) {
+  .nav-link, .btn, .hub-compact-link { min-height: 42px; }
 }

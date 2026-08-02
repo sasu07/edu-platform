@@ -7,7 +7,9 @@
       "Bash(python3 -m py_compile audit_service.py bootstrap.py routers/auth_router.py)",
       "Bash(docker info *)",
       "Bash(docker stop *)",
-      "Bash(docker run *)"
+      "Bash(docker run *)",
+      "Bash(cd /Users/admin/Desktop/run-apps/edu_content_app/edu-platform/frontend/src/components *)",
+      "Read(//Users/admin/Desktop/run-apps/edu_content_app/**)"
     ],
     "additionalDirectories": [
       "/tmp"

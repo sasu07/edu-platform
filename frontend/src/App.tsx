@@ -7,7 +7,9 @@ import {
   NavLink,
   Navigate,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
+import { Menu, X } from "lucide-react";
 
 import Login from "./components/Login";
 import Register from "./components/Register";
@@ -571,9 +573,24 @@ function NavbarUser() {
 function AppShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
+  const [menuOpen, setMenuOpen] = useState(false);
   const { isTeacher, isAdmin, isParent } = useAuth();
+  const location = useLocation();
 
   const bumpRefresh = () => setRefreshKey((k) => k + 1);
+
+  // Închide meniul mobil la orice schimbare de rută.
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  // Blochează scroll-ul din spate cât timp drawer-ul mobil e deschis.
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [menuOpen]);
 
   useEffect(() => {
     const checkConnection = async () => {
@@ -608,7 +625,27 @@ function AppShell() {
             </div>
           </Link>
 
-          <div className="navbar-links">
+          <button
+            className="navbar-burger"
+            aria-label={menuOpen ? "Închide meniul" : "Deschide meniul"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            {menuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+
+          {menuOpen && (
+            <div
+              className="navbar-overlay"
+              onClick={() => setMenuOpen(false)}
+              aria-hidden="true"
+            />
+          )}
+
+          <div
+            className={`navbar-links${menuOpen ? " open" : ""}`}
+            onClick={() => setMenuOpen(false)}
+          >
             {isParent ? (
               <NavLink
                 to="/app/parent"

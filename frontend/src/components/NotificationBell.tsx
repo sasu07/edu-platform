@@ -17,6 +17,7 @@ interface Notif {
 const TYPE_ROUTES: Record<string, string> = {
   help_response:        '/app/my-requests',
   new_request:          '/app/teacher/requests',
+  new_submission:       '/app/teacher/requests',
   submission_reviewed:  '/app/my-requests?tab=solutions',
   teacher_file:         '/app/my-requests?tab=solutions',
   review_reminder:      '/app/exercises?tab=review',
@@ -68,7 +69,11 @@ export default function NotificationBell() {
       markNotificationRead(n.id).catch(() => {});
       setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, is_read: true } : x));
     }
-    const route = TYPE_ROUTES[n.type];
+    let route = TYPE_ROUTES[n.type];
+    // Duce direct la cererea/submisia respectivă (evidențiată în listă).
+    if (route && n.related_id && (n.type === 'new_submission' || n.type === 'new_request')) {
+      route += `${route.includes('?') ? '&' : '?'}focus=${n.related_id}`;
+    }
     if (route) navigate(route);
   };
 

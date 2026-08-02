@@ -582,3 +582,9 @@
 }
 .dt-done h2 { font-size: 1.5rem; font-weight: 800; color: #111827; margin: 0; }
 .dt-done p  { color: #6b7280; margin: 0; }
+
+/* ── Mobil ── */
+@media (max-width: 600px) {
+  .dt-nav-btn { flex: 1; justify-content: center; }
+  .dt-score-card { padding: 16px; }
+}

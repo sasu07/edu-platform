@@ -936,3 +936,12 @@
   text-align: center;
   color: #9ca3af;
 }
+
+/* ── Mobil ── */
+@media (max-width: 600px) {
+  .study-session-wrap { padding: 16px 12px; }
+  .ss-type-cards { flex-direction: column; }
+  .ss-active-footer { flex-direction: column; }
+  .ss-active-footer > * { width: 100%; justify-content: center; }
+  .ss-ex-actions { flex-wrap: wrap; }
+}

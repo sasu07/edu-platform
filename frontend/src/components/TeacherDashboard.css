@@ -534,6 +534,16 @@
 .sub-status-correct { border-left: 4px solid #22c55e; }
 .sub-status-incorrect { border-left: 4px solid #ef4444; }
 
+/* Cardul deschis dintr-o notificare — evidențiat câteva secunde */
+.sub-focus {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.35);
+  animation: subFocusPulse 2.4s ease-out 1;
+}
+@keyframes subFocusPulse {
+  0%   { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0.45); }
+  100% { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18); }
+}
+
 .sub-card-header {
   display: flex;
   justify-content: space-between;

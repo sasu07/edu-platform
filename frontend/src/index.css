@@ -199,6 +199,21 @@ body {
 
 img, svg { display: block; max-width: 100%; }
 
+/* ── Conținut lat: scrollează în interiorul lui, nu sparge ecranul ──
+   Esențial pe mobil pentru formule KaTeX lungi, tabele și blocuri de cod. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  padding-bottom: 2px;
+}
+.katex { max-width: 100%; }
+pre {
+  overflow-x: auto;
+  max-width: 100%;
+}
+table { max-width: 100%; }
+
 button { cursor: pointer; font-family: inherit; }
 
 input, select, textarea {
