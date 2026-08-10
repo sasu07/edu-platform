@@ -9,7 +9,8 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Play } from "lucide-react";
+import { PrimaryCTA } from "./components/StateViews";
 
 import Login from "./components/Login";
 import Register from "./components/Register";
@@ -20,6 +21,7 @@ import {
   buildApiUrl,
   getLearningPath,
   getMyGamification,
+  getPublicConfig,
   getStudyPlan,
   getStudySessions,
   getStudyStats,
@@ -71,9 +73,13 @@ function AppHub() {
   const [studyStats, setStudyStats] = useState<StudyStats | null>(null);
   const [gamification, setGamification] = useState<GamificationProfile | null>(null);
   const [needsDiagnostic, setNeedsDiagnostic] = useState(false);
+  const [examDate, setExamDate] = useState<string | null>(null);
 
-  const bacDate = new Date('2026-07-01');
-  const daysLeft = Math.max(0, Math.ceil((bacDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  // Data BAC vine din config-ul backend (EXAM_DATE), nu hardcodată. daysLeft e null
+  // dacă data nu e configurată → countdown-ul se ascunde.
+  const daysLeft = examDate
+    ? Math.max(0, Math.ceil((new Date(examDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : null;
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Bună dimineața' : hour < 18 ? 'Bună ziua' : 'Bună seara';
   const firstName = user?.full_name?.split(' ')[0] || user?.full_name || '';
@@ -83,6 +89,31 @@ function AppHub() {
       : null;
   const recommendedSubiect =
     studyStats?.recommendation?.match(/([123])/)?.[1] || weakestSubiect?.subiect || "";
+
+  // O SINGURĂ acțiune dominantă (brief §2.1), în ordinea de prioritate din brief.
+  const primaryAction = activeSession
+    ? {
+        label: "Continuă sesiunea",
+        sublabel: `${activeSession.session_type === "test_bac" ? "Test BAC" : "Test scurt"} în desfășurare`,
+        to: `/app/study-session?resume=${activeSession.id}`,
+      }
+    : todayPlanEntries.length > 0
+      ? {
+          label: "Începe obiectivul de azi",
+          sublabel: `${todayPlanEntries.length} ${todayPlanEntries.length === 1 ? "activitate planificată" : "activități planificate"}`,
+          to: `/app/study-session?plan=${todayPlanEntries[0].id}&type=${todayPlanEntries[0].session_type}${todayPlanEntries[0].filters?.subiect_tag ? `&subiect=${todayPlanEntries[0].filters.subiect_tag}` : ""}${todayPlanEntries[0].filters?.exercise_set_id ? `&set=${todayPlanEntries[0].filters.exercise_set_id}` : ""}`,
+        }
+      : recommendedSubiect
+        ? {
+            label: "Exersează recomandarea",
+            sublabel: `Subiectul ${recommendedSubiect} — ai cel mai mult loc de progres`,
+            to: `/app/study-session?type=test_scurt&subiect=${recommendedSubiect}`,
+          }
+        : {
+            label: "Începe o sesiune de 10 minute",
+            sublabel: "Sesiune scurtă, ghidată",
+            to: `/app/study-session?type=test_scurt`,
+          };
 
   useEffect(() => {
     if (isTeacher || isParent) return;
@@ -123,6 +154,11 @@ function AppHub() {
       .catch(() => {});
   }, [isParent, isTeacher]);
 
+  // Data BAC din config backend (fără hardcode).
+  useEffect(() => {
+    getPublicConfig().then((r) => setExamDate(r.data.exam_date)).catch(() => {});
+  }, []);
+
   if (isParent) return <Navigate to="/app/parent" replace />;
   return (
     <div className="hub">
@@ -131,7 +167,7 @@ function AppHub() {
           <h1 className="hub-greeting">{greeting}, {firstName}!</h1>
           <p className="hub-subtitle">Hai să vedem care e cel mai bun pas pentru azi.</p>
         </div>
-        {!isTeacher && !isAdmin && (
+        {!isTeacher && !isAdmin && daysLeft !== null && (
           <div className="hub-bac-pill">
             <span className="hub-bac-icon">🎓</span>
             <div>
@@ -186,31 +222,17 @@ function AppHub() {
               </div>
 
               <div className="hub-student-hero-actions">
-                {activeSession ? (
-                  <Link to={`/app/study-session?resume=${activeSession.id}`} className="hub-panel-action">
-                    Continuă acum
-                  </Link>
-                ) : todayPlanEntries.length > 0 ? (
-                  <Link
-                    to={`/app/study-session?plan=${todayPlanEntries[0].id}&type=${todayPlanEntries[0].session_type}${todayPlanEntries[0].filters?.subiect_tag ? `&subiect=${todayPlanEntries[0].filters.subiect_tag}` : ""}${todayPlanEntries[0].filters?.exercise_set_id ? `&set=${todayPlanEntries[0].filters.exercise_set_id}` : ""}`}
-                    className="hub-panel-action"
-                  >
-                    Începe ce ai planificat
-                  </Link>
-                ) : (
-                  <Link
-                    to={`/app/study-session?type=test_scurt${recommendedSubiect ? `&subiect=${recommendedSubiect}` : ""}`}
-                    className="hub-panel-action"
-                  >
-                    Pornește o sesiune
-                  </Link>
-                )}
-
+                <PrimaryCTA
+                  label={primaryAction.label}
+                  sublabel={primaryAction.sublabel}
+                  icon={<Play size={20} />}
+                  to={primaryAction.to}
+                />
                 <Link
                   to={recommendedSubiect ? `/app/exercises?subiect=${recommendedSubiect}` : "/app/exercises"}
-                  className="hub-panel-action secondary"
+                  className="hub-secondary-link"
                 >
-                  Lucrează pe subiect
+                  Sau alege singur un subiect
                 </Link>
               </div>
             </div>

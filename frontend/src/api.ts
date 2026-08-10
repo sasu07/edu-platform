@@ -196,6 +196,8 @@ export const markAllNotificationsRead = () => api.put('/notifications/read-all')
 export const authLogin = (data: { email: string; password: string }) =>
   api.post<AuthToken>('/auth/login', data);
 export const authMe = () => api.get<User>('/auth/me');
+// Config public (fără auth) — ex: data BAC pentru countdown. exam_date poate fi null.
+export const getPublicConfig = () => api.get<{ exam_date: string | null }>('/config/public');
 export const authMySubscription = () => api.get<Subscription>('/auth/me/subscription');
 
 export const createHelpRequest = (data: { exercise_id: string; flag_type: string; notes?: string }) =>

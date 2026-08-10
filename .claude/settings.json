@@ -18,7 +18,8 @@
       "Bash(ls -lat ~/Downloads/ 2>/dev/null | grep -iE \"\\\\.png|\\\\.jpg|\\\\.jpeg|\\\\.svg|logo|e2x|academy\" | head -15)",
       "Read(//Users/admin/Downloads//**)",
       "Bash(ls -lat ~/Downloads/ 2>/dev/null | head -12)",
-      "Bash(grep -rnE \"html, body|html,body|^body \\\\{|^html \\\\{\" App.css index.css)"
+      "Bash(grep -rnE \"html, body|html,body|^body \\\\{|^html \\\\{\" App.css index.css)",
+      "Bash(git rev-list *)"
     ],
     "additionalDirectories": [
       "/tmp"
