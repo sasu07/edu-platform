@@ -1,564 +1,304 @@
+import {
+  ArrowRight,
+  BarChart3,
+  BookOpenCheck,
+  Check,
+  GraduationCap,
+  MessageCircle,
+  Minus,
+  Sparkles,
+  Target,
+  Trophy,
+  Users,
+  WandSparkles,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import { BRAND_LOGO_URL } from '../brand';
 import './LandingPage.css';
 
-const FEATURES = [
+// ⚠️ Numărul de WhatsApp (format internațional, fără +, spații sau 0 inițial).
+const WHATSAPP_URL =
+  'https://wa.me/40745960848?text=Salut!%20Vreau%20s%C4%83%20aflu%20ce%20plan%20mi%20se%20potrive%C8%99te.';
+
+type Feature = { icon: LucideIcon; title: string; description: string };
+
+const FEATURES: Feature[] = [
   {
-    icon: '📚',
-    color: 'blue',
-    title: 'Bază de exerciții autentice',
-    desc: 'Mii de exerciții din subiecte reale de BAC, organizate pe subiect, domeniu și nivel de dificultate. Filtrează exact ce îți trebuie.',
+    icon: BookOpenCheck,
+    title: 'Variante oficiale și exerciții',
+    description:
+      'Toate subiectele oficiale și exerciții organizate pe profil, subiect, capitol și dificultate — fără căutări.',
   },
   {
-    icon: '⚡',
-    color: 'amber',
-    title: 'Generator automat de variante',
-    desc: 'Generează variante complete tip BAC în câteva secunde — Subiectul I, II și III, echilibrate și personalizate.',
+    icon: WandSparkles,
+    title: 'Generezi variante noi',
+    description:
+      'Un nou antrenament în câteva secunde: variante echilibrate pe care le rezolvi în platformă sau pe hârtie.',
   },
   {
-    icon: '📄',
-    color: 'green',
-    title: 'Export PDF profesional',
-    desc: 'Descarcă subiectul, rezolvarea detaliată și baremul de corectare în format PDF, gata de tipărit.',
+    icon: BarChart3,
+    title: 'Progres vizibil',
+    description:
+      'Testare inițială, plan personalizat, tablou de bord cu puncte XP și jurnalul greșelilor — legate de activitatea ta.',
   },
   {
-    icon: '✍️',
-    color: 'purple',
-    title: 'Ajutor de la profesori',
-    desc: 'Ești blocat la un exercițiu? Semnalează-l și primești o rezolvare scrisă, un clip video sau o sesiune live.',
+    icon: MessageCircle,
+    title: 'Ajutor când contează',
+    description:
+      'Indicii pas cu pas, verificare automată și ajutor de la profesor — inclusiv ședințe live, în funcție de plan.',
   },
   {
-    icon: '🎙️',
-    color: 'red',
-    title: 'Sesiuni live & video',
-    desc: 'Conectează-te direct cu un profesor pentru o sesiune online 1-la-1 sau cere un clip explicativ personalizat.',
+    icon: Trophy,
+    title: 'Motivație constantă',
+    description:
+      'Câștigi XP, îți păstrezi seria de studiu și intri în simulările și provocările noastre alături de colegi.',
   },
   {
-    icon: '🎮',
-    color: 'indigo',
-    title: 'Gamificare & motivare',
-    desc: 'Câștigă XP, urci în ligi și ții streak-ul activ. Competiția sănătoasă te ține motivat zi de zi.',
+    icon: Target,
+    title: 'Totul într-un singur loc',
+    description:
+      'Nu o bibliotecă de exerciții, ci un sistem de pregătire în care fiecare pas actualizează traseul tău.',
   },
 ];
 
-const STEPS = [
+const AUDIENCES = [
   {
-    num: '01',
-    icon: '👤',
-    title: 'Creează un cont gratuit',
-    desc: 'Înregistrarea durează 30 de secunde. Niciun card de credit necesar.',
+    icon: GraduationCap,
+    label: 'Elevi',
+    title: 'Pregătire pentru examen, fără haos',
+    points: ['Sesiuni de lucru ghidate', 'Răspuns verificat automat', 'Calendar și Liga BAC'],
   },
   {
-    num: '02',
-    icon: '⚡',
-    title: 'Generează exerciții sau variante BAC',
-    desc: 'Alege filtrele dorite și lasă platforma să construiască setul de exerciții sau varianta completă.',
+    icon: Users,
+    label: 'Părinți',
+    title: 'Vezi progresul copilului',
+    points: ['Calendar comun', 'Rezumat de activitate', 'Analiză lunară'],
   },
   {
-    num: '03',
-    icon: '🎯',
-    title: 'Exersează și cere ajutor',
-    desc: 'Rezolvă exercițiile în ritmul tău. Dacă ești blocat, un profesor îți răspunde în câteva ore.',
+    icon: BookOpenCheck,
+    label: 'Profesori',
+    title: 'Îți pregătești elevii de la clasă',
+    points: ['Clase și leaderboard', 'Generator de variante', 'Solicitări prioritizate'],
   },
 ];
+
+type CellValue = boolean | string;
 
 const PLANS = [
-  {
-    key: 'free',
-    name: 'Gratuit',
-    price: '0 lei',
-    features: [
-      '3 generări de exerciții / lună',
-      '1 variantă BAC / lună',
-      'Acces la biblioteca de exerciții',
-      'Vizualizare soluții disponibile',
-    ],
-    cta: 'Începe gratuit',
-    ctaTo: '/register',
-    highlight: false,
-  },
-  {
-    key: 'premium_help',
-    name: 'Premium Help',
-    price: 'Contact',
-    features: [
-      'Generare nelimitată exerciții',
-      'Cereri de ajutor către profesori',
-      'Rezolvare scrisă sau video',
-      'Sesiuni live pe Zoom',
-    ],
-    cta: 'Activează',
-    ctaTo: '/login',
-    highlight: false,
-  },
-  {
-    key: 'premium_pdf',
-    name: 'Premium PDF',
-    price: 'Contact',
-    features: [
-      'Generare nelimitată exerciții',
-      'Variante BAC nelimitate / lună',
-      'Export PDF — subiect, rezolvare, barem',
-      'Tipărești și studiezi offline',
-    ],
-    cta: 'Activează',
-    ctaTo: '/login',
-    highlight: false,
-  },
-  {
-    key: 'premium_gen',
-    name: 'Premium Gen',
-    price: 'Contact',
-    badge: '★ Recomandat',
-    features: [
-      'Generare nelimitată exerciții',
-      'Variante BAC nelimitate / lună',
-      'Export PDF — subiect, rezolvare, barem',
-      'Acces complet la filtru avansat',
-    ],
-    cta: 'Activează',
-    ctaTo: '/login',
-    highlight: true,
-  },
-  {
-    key: 'premium',
-    name: 'Premium Full',
-    price: 'Contact',
-    features: [
-      'Tot ce include Premium Gen',
-      'Cereri de ajutor nelimitate',
-      'Sesiuni live + video personalizate',
-      'Prioritate la răspunsuri',
-    ],
-    cta: 'Activează',
-    ctaTo: '/login',
-    highlight: false,
-  },
+  { key: 'free', name: 'Free', price: 'Gratis', suffix: '', cta: 'Creează cont', to: '/register', featured: false },
+  { key: 'start', name: 'Start', price: '100 lei', suffix: '/ lună', cta: 'Scrie-ne', to: WHATSAPP_URL, featured: false },
+  { key: 'avansat', name: 'Avansat', price: '250 lei', suffix: '/ lună', cta: 'Scrie-ne', to: WHATSAPP_URL, featured: true },
+  { key: 'pro', name: 'Pro', price: '700 lei', suffix: '/ lună', cta: 'Scrie-ne', to: WHATSAPP_URL, featured: false },
 ];
 
-const PERSONAS = [
-  {
-    emoji: '🎓',
-    color: 'blue',
-    title: 'Elev la liceu',
-    desc: 'Pregătești BAC-ul și vrei să exersezi cu exerciții reale, să generezi variante de antrenament și să primești ajutor când te blochezi.',
-  },
-  {
-    emoji: '🏫',
-    color: 'green',
-    title: 'Profesor de școală',
-    desc: 'Pregătești elevi pentru BAC și vrei să generezi variante personalizate pentru ore sau simulări, pe care să le și tipărești rapid.',
-  },
-  {
-    emoji: '👨‍💻',
-    color: 'purple',
-    title: 'Profesor platformă',
-    desc: 'Răspunzi la cererile de ajutor ale elevilor, trimiți rezolvări scrise, înregistrezi clipuri sau organizezi sesiuni live.',
-  },
+const COMPARE: { label: string; values: [CellValue, CellValue, CellValue, CellValue] }[] = [
+  { label: 'Acces la toate variantele oficiale', values: [true, true, true, true] },
+  { label: 'Generează variante noi', values: ['3 / lună', '10 / lună', 'Nelimitat', 'Nelimitat'] },
+  { label: 'Testare inițială și feedback (elev și părinte)', values: [false, true, true, true] },
+  { label: 'Primești ajutor 24/7', values: [false, true, true, true] },
+  { label: 'Acces la ședințele LIVE', values: [false, false, true, true] },
+  { label: 'Plan personalizat pentru pregătirea ta', values: [false, false, true, true] },
+  { label: 'Tablou de bord cu puncte XP', values: [false, false, true, true] },
+  { label: 'Prioritate la întrebări', values: [false, false, true, true] },
+  { label: 'Participi la simulările noastre', values: [false, false, true, true] },
+  { label: 'Analiză lunară pentru părinte și elev', values: [false, false, false, true] },
+  { label: 'Ședință individuală săptămânală', values: [false, false, false, true] },
+  { label: 'Mentor personal dedicat', values: [false, false, false, true] },
 ];
 
-const PARENT_FEATURES = [
-  { icon: '🔔', text: 'Notificări automate când este programată o sesiune live' },
-  { icon: '📊', text: 'Rapoarte de progres — exerciții rezolvate, XP acumulat, streak' },
-  { icon: '📅', text: 'Calendarul sesiunilor viitoare cu profesorii' },
-  { icon: '✅', text: 'Confirmare că exercițiile au fost verificate de profesor' },
-];
-
-function BacCountdown() {
-  const bacDate = new Date('2026-07-01');
-  const today = new Date();
-  const daysLeft = Math.max(0, Math.ceil((bacDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
-  return (
-    <div className="lp-announcement">
-      <span className="lp-ann-pulse" />
-      <span>
-        🔥 BAC 2026: mai sunt <strong>{daysLeft} de zile</strong> — nu lăsa pregătirea pe ultima sută de metri!
-      </span>
-      <Link to="/register" className="lp-ann-cta">Începe gratuit →</Link>
-    </div>
-  );
+function Cell({ value }: { value: CellValue }) {
+  if (value === true) return <span className="lp-cell lp-cell-yes"><Check size={16} /></span>;
+  if (value === false) return <span className="lp-cell lp-cell-no"><Minus size={15} /></span>;
+  return <span className="lp-cell lp-cell-text">{value}</span>;
 }
 
 export default function LandingPage() {
   const { user } = useAuth();
+  const primaryTo = user ? '/app' : '/register';
+  const primaryLabel = user ? 'Deschide platforma' : 'Hai să începem';
 
   return (
     <div className="lp">
-
-      {/* ── Announcement bar ── */}
-      <BacCountdown />
-
-      {/* ── Navbar ── */}
-      <nav className="lp-nav">
+      {/* NAV */}
+      <nav className="lp-nav" aria-label="Navigație principală">
         <div className="lp-nav-inner">
-          <div className="lp-nav-brand">
-            <img src={BRAND_LOGO_URL} alt="EtoX Academy" className="lp-nav-logo" />
-            <div>
-              <div className="lp-nav-name">EtoX Platform</div>
-              <div className="lp-nav-tagline">Pregătire BAC</div>
-            </div>
-          </div>
-
+          <Link to="/" className="lp-brand" aria-label="EtoX Academy - Acasă">
+            <span className="lp-brand-mark"><img src={BRAND_LOGO_URL} alt="" /></span>
+            <span className="lp-brand-copy"><strong>EtoX</strong><small>Academy</small></span>
+          </Link>
           <div className="lp-nav-links">
-            <a href="#features" className="lp-nav-link">Funcții</a>
-            <a href="#how" className="lp-nav-link">Cum funcționează</a>
-            <a href="#parents" className="lp-nav-link">Părinți</a>
-            <a href="#plans" className="lp-nav-link">Planuri</a>
+            <a href="#despre">Despre noi</a>
+            <a href="#ce-facem">Ce facem</a>
+            <a href="#cum-incep">Cum încep</a>
+            <a href="#pentru-cine">Pentru cine</a>
+            <a href="#planuri">Planuri</a>
           </div>
-
           <div className="lp-nav-actions">
-            {user ? (
-              <Link to="/app" className="lp-btn lp-btn-primary">
-                Intră în platformă →
-              </Link>
-            ) : (
-              <>
-                <Link to="/login" className="lp-btn lp-btn-ghost">
-                  Intră în cont
-                </Link>
-                <Link to="/register" className="lp-btn lp-btn-primary">
-                  Înregistrare gratuită
-                </Link>
-              </>
-            )}
+            {!user && <Link to="/login" className="lp-login-link">Intră în cont</Link>}
+            <Link to={primaryTo} className="lp-btn lp-btn-primary lp-btn-sm">{primaryLabel}</Link>
           </div>
         </div>
       </nav>
 
-      {/* ── Hero ── */}
-      <section className="lp-hero">
-        <div className="lp-hero-blob lp-hero-blob-1" aria-hidden />
-        <div className="lp-hero-blob lp-hero-blob-2" aria-hidden />
-        <div className="lp-hero-inner">
-          <div className="lp-hero-content">
-            <div className="lp-hero-badge">
-              <span className="lp-badge-dot" />
-              Platforma nr. 1 pentru pregătire BAC Matematică
-            </div>
-
-            <h1 className="lp-hero-title">
-              Exerciții BAC autentice.<br />
-              <span className="lp-hero-accent">Variante generate automat.</span><br />
-              Profesori la un click distanță.
-            </h1>
-
-            <p className="lp-hero-sub">
-              EtoX Platform reunește mii de exerciții din subiecte reale de bacalaureat,
-              un generator inteligent de variante și profesori dedicați care îți răspund
-              atunci când ai nevoie.
+      <main>
+        {/* HERO */}
+        <section className="lp-hero">
+          <div className="lp-hero-inner">
+            <span className="lp-pill"><Sparkles size={14} /> Pregătire pentru BAC la matematică</span>
+            <h1>Totul începe cu un plan. <span>Noi îl construim împreună cu tine.</span></h1>
+            <p>
+              Exerciții autentice, un plan care se adaptează progresului tău și ajutor exact atunci când ai nevoie.
+              Totul într-un singur loc, învățat simplu.
             </p>
-
-            <div className="lp-hero-cta">
-              {user ? (
-                <Link to="/app" className="lp-btn lp-btn-primary lp-btn-lg">
-                  Deschide platforma →
-                </Link>
-              ) : (
-                <>
-                  <Link to="/register" className="lp-btn lp-btn-primary lp-btn-lg">
-                    Începe gratuit →
-                  </Link>
-                  <Link to="/login" className="lp-btn lp-btn-outline lp-btn-lg">
-                    Am deja cont
-                  </Link>
-                </>
-              )}
+            <div className="lp-hero-actions">
+              <Link to={primaryTo} className="lp-btn lp-btn-primary lp-btn-lg">{primaryLabel}<ArrowRight size={18} /></Link>
+              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-ghost lp-btn-lg">
+                <MessageCircle size={18} /> Scrie-ne pe WhatsApp
+              </a>
             </div>
-
-            <div className="lp-hero-stats">
-              <div className="lp-stat">
-                <div className="lp-stat-val">2 500+</div>
-                <div className="lp-stat-key">Exerciții în baza de date</div>
-              </div>
-              <div className="lp-stat-divider" />
-              <div className="lp-stat">
-                <div className="lp-stat-val">100%</div>
-                <div className="lp-stat-key">Din subiecte reale BAC</div>
-              </div>
-              <div className="lp-stat-divider" />
-              <div className="lp-stat">
-                <div className="lp-stat-val">3 tipuri</div>
-                <div className="lp-stat-key">De ajutor personalizat</div>
-              </div>
-            </div>
+            <div className="lp-hero-trust">Elev, părinte și profesor — pe același traseu de progres.</div>
           </div>
+        </section>
 
-          <div className="lp-hero-visual" aria-hidden>
-            <div className="lp-mockup">
-              <div className="lp-mockup-bar">
-                <span /><span /><span />
-                <div className="lp-mockup-url">etox.academy/app</div>
-              </div>
-              <div className="lp-mockup-body">
-                {/* XP bar */}
-                <div className="lp-mockup-xp">
-                  <div className="lp-mockup-xp-label">
-                    <span>🏆 Liga Bronz</span>
-                    <span>1 240 XP</span>
-                  </div>
-                  <div className="lp-mockup-xp-track">
-                    <div className="lp-mockup-xp-fill" style={{ width: '62%' }} />
-                  </div>
-                </div>
-
-                <div className="lp-mockup-chip lp-chip-blue">Subiectul I</div>
-                <div className="lp-mockup-ex">
-                  <div className="lp-mockup-label">Exercițiu 3</div>
-                  <div className="lp-mockup-text">Fie funcția <em>f : ℝ → ℝ</em>, f(x) = x² + 2x − 3. Determinați intervalele de monotonie ale lui <em>f</em>.</div>
-                  <div className="lp-mockup-actions">
-                    <div className="lp-mockup-btn lp-mockup-btn-done">✓ Rezolvat</div>
-                    <div className="lp-mockup-btn lp-mockup-btn-help">Ajutor</div>
-                  </div>
-                </div>
-
-                <div className="lp-mockup-chip lp-chip-purple">Subiectul II</div>
-                <div className="lp-mockup-ex lp-mockup-ex-sm">
-                  <div className="lp-mockup-label">Problemă cu subpuncte</div>
-                  <div className="lp-mockup-text">Fie triunghiul ABC cu AB = 6 cm, BC = 8 cm...</div>
-                  <div className="lp-mockup-pending">⏳ În verificare de profesor</div>
-                </div>
-
-                <div className="lp-mockup-footer">
-                  <div className="lp-mockup-generate">⚡ Generează variantă BAC completă</div>
-                </div>
-              </div>
-            </div>
+        {/* CE FACEM */}
+        <section className="lp-section" id="ce-facem">
+          <div className="lp-head">
+            <span className="lp-kicker">Ce facem</span>
+            <h2>Totul este organizat și eficient</h2>
+            <p>Fiecare exercițiu rezolvat actualizează traseul, calendarul, statisticile și pasul următor.</p>
           </div>
-        </div>
-      </section>
-
-      {/* ── Trust strip ── */}
-      <div className="lp-trust">
-        <div className="lp-trust-inner">
-          <span className="lp-trust-label">Recomandat de profesori din</span>
-          <div className="lp-trust-items">
-            <span className="lp-trust-item">🏫 Colegii Naționale</span>
-            <span className="lp-trust-sep">·</span>
-            <span className="lp-trust-item">📐 Licee de Matematică-Informatică</span>
-            <span className="lp-trust-sep">·</span>
-            <span className="lp-trust-item">🎓 Centre de meditații</span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Features ── */}
-      <section className="lp-section lp-section-light" id="features">
-        <div className="lp-section-inner">
-          <div className="lp-section-head">
-            <div className="lp-section-label">Ce oferă platforma</div>
-            <h2 className="lp-section-title">Tot ce ai nevoie pentru BAC, într-un singur loc</h2>
-            <p className="lp-section-sub">
-              De la exerciții filtrate pe profil și dificultate, până la variante complete
-              și profesori care îți explică pas cu pas.
-            </p>
-          </div>
-
-          <div className="lp-features-grid">
-            {FEATURES.map((f) => (
-              <div key={f.title} className={`lp-feature-card lp-feature-${f.color}`}>
-                <div className="lp-feature-icon-wrap">
-                  <span className="lp-feature-icon">{f.icon}</span>
-                </div>
-                <div className="lp-feature-title">{f.title}</div>
-                <div className="lp-feature-desc">{f.desc}</div>
-              </div>
+          <div className="lp-feature-grid">
+            {FEATURES.map(({ icon: Icon, ...f }) => (
+              <article className="lp-feature" key={f.title}>
+                <span className="lp-feature-icon"><Icon size={20} /></span>
+                <h3>{f.title}</h3>
+                <p>{f.description}</p>
+              </article>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── How it works ── */}
-      <section className="lp-section" id="how">
-        <div className="lp-section-inner">
-          <div className="lp-section-head">
-            <div className="lp-section-label">Simplu de folosit</div>
-            <h2 className="lp-section-title">Trei pași și ești gata de exersat</h2>
+        {/* DESPRE NOI */}
+        <section className="lp-section lp-about" id="despre">
+          <div className="lp-about-inner">
+            <span className="lp-kicker">Despre noi</span>
+            <h2>Suntem o echipă tânără, dar cu experiență în educație.</h2>
+            <p>
+              Ne dorim să oferim mai departe tot ce am învățat în anii trecuți, astfel încât elevilor noștri să le
+              fie mai ușor să își atingă obiectivele. Știm cum e și înțelegem.
+            </p>
+            <p>
+              Oferim totul într-un singur loc, ca fiecare elev să-și poată construi propriul ritm și să devină ceea
+              ce își dorește.
+            </p>
+            <Link to={primaryTo} className="lp-btn lp-btn-primary lp-btn-lg">Hai să începem<ArrowRight size={18} /></Link>
           </div>
+        </section>
 
-          <div className="lp-steps">
-            {STEPS.map((s, i) => (
-              <div key={s.num} className="lp-step">
-                {i < STEPS.length - 1 && <div className="lp-step-connector" aria-hidden />}
-                <div className="lp-step-num">
-                  <span className="lp-step-icon">{s.icon}</span>
-                </div>
-                <div className="lp-step-content">
-                  <div className="lp-step-num-label">{s.num}</div>
-                  <div className="lp-step-title">{s.title}</div>
-                  <div className="lp-step-desc">{s.desc}</div>
-                </div>
-              </div>
+        {/* CUM ȘI DE UNDE ÎNCEP */}
+        <section className="lp-section" id="cum-incep">
+          <div className="lp-head">
+            <span className="lp-kicker">Primul pas</span>
+            <h2>Cum și de unde încep?</h2>
+            <p>Auzim întrebarea asta de la toți elevii și părinții. Ai două variante — alege ce ți se potrivește.</p>
+          </div>
+          <div className="lp-start-grid">
+            <article className="lp-start-card">
+              <span className="lp-start-num">1</span>
+              <h3>Vrei să discutăm întâi</h3>
+              <p>Scrie-ne pe WhatsApp ca să stabilim o convorbire și să găsim împreună planul care ți se potrivește cel mai bine.</p>
+              <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-whatsapp">
+                <MessageCircle size={18} /> Scrie-ne pe WhatsApp
+              </a>
+            </article>
+            <article className="lp-start-card">
+              <span className="lp-start-num">2</span>
+              <h3>Ești deja hotărât</h3>
+              <p>Îți creezi contul, alegi direct nivelul pe care îl vrei și începi pregătirea. Bine ai venit în echipă!</p>
+              <Link to={primaryTo} className="lp-btn lp-btn-primary">{user ? 'Deschide platforma' : 'Creează cont'}<ArrowRight size={17} /></Link>
+            </article>
+          </div>
+        </section>
+
+        {/* PENTRU CINE */}
+        <section className="lp-section" id="pentru-cine">
+          <div className="lp-head">
+            <span className="lp-kicker">Pentru cine este EtoX</span>
+            <h2>Pentru elevi, părinți și profesori</h2>
+            <p>Aceleași date, prezentate diferit pentru fiecare. Mai puține mesaje pierdute, mai multă continuitate.</p>
+          </div>
+          <div className="lp-audience-grid">
+            {AUDIENCES.map(({ icon: Icon, ...a }) => (
+              <article className="lp-audience" key={a.label}>
+                <div className="lp-audience-head"><span className="lp-feature-icon"><Icon size={20} /></span><small>{a.label}</small></div>
+                <h3>{a.title}</h3>
+                <ul>{a.points.map((p) => <li key={p}><Check size={15} />{p}</li>)}</ul>
+              </article>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ── For who ── */}
-      <section className="lp-section lp-section-light">
-        <div className="lp-section-inner">
-          <div className="lp-section-head">
-            <div className="lp-section-label">Pentru cine este EtoX</div>
-            <h2 className="lp-section-title">Construit pentru elevi și profesori</h2>
+        {/* PLANURI */}
+        <section className="lp-section" id="planuri">
+          <div className="lp-head">
+            <span className="lp-kicker">Planuri de abonament</span>
+            <h2>Începi gratuit. Alegi nivelul de care ai nevoie.</h2>
+            <p>Poți începe oricând cu planul gratuit. Pentru planurile plătite, scrie-ne și le activăm împreună.</p>
           </div>
-
-          <div className="lp-personas">
-            {PERSONAS.map((p) => (
-              <div key={p.title} className={`lp-persona lp-persona-${p.color}`}>
-                <div className="lp-persona-emoji">{p.emoji}</div>
-                <div className="lp-persona-title">{p.title}</div>
-                <div className="lp-persona-desc">{p.desc}</div>
+          <div className="lp-table-wrap">
+            <div className="lp-table" role="table" aria-label="Comparație planuri">
+              <div className="lp-table-head" role="row">
+                <div className="lp-th-corner" role="columnheader">Ce include</div>
+                {PLANS.map((plan) => (
+                  <div key={plan.key} className={`lp-th ${plan.featured ? 'is-featured' : ''}`} role="columnheader">
+                    {plan.featured && <span className="lp-th-tag">Recomandat</span>}
+                    <strong>{plan.name}</strong>
+                    <div className="lp-th-price"><b>{plan.price}</b>{plan.suffix && <span>{plan.suffix}</span>}</div>
+                    {plan.to.startsWith('http')
+                      ? <a href={plan.to} target="_blank" rel="noopener noreferrer" className="lp-th-cta">{plan.cta}</a>
+                      : <Link to={user ? '/app' : plan.to} className="lp-th-cta">{user ? 'Deschide' : plan.cta}</Link>}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── Parents section ── */}
-      <section className="lp-section lp-section-parent" id="parents">
-        <div className="lp-section-inner lp-parent-grid">
-          <div className="lp-parent-content">
-            <div className="lp-section-label lp-label-parent">Pentru părinți</div>
-            <h2 className="lp-section-title lp-title-dark">
-              Fiți mereu la curent cu progresul copilului
-            </h2>
-            <p className="lp-section-sub lp-sub-dark">
-              Nu trebuie să întrebați "ai studiat azi?" — EtoX vă trimite actualizări
-              automate și vă arată exact unde se află copilul în pregătire.
-            </p>
-            <ul className="lp-parent-list">
-              {PARENT_FEATURES.map((pf) => (
-                <li key={pf.text} className="lp-parent-item">
-                  <span className="lp-parent-icon">{pf.icon}</span>
-                  <span>{pf.text}</span>
-                </li>
-              ))}
-            </ul>
-            <Link to="/register" className="lp-btn lp-btn-primary" style={{ marginTop: '28px', alignSelf: 'flex-start' }}>
-              Creez cont pentru copilul meu →
-            </Link>
-          </div>
-
-          <div className="lp-parent-visual" aria-hidden>
-            <div className="lp-notif-mockup">
-              <div className="lp-notif-header">
-                <span className="lp-notif-app-icon">📱</span>
-                <span>EtoX · Notificări</span>
-              </div>
-              <div className="lp-notif-item lp-notif-new">
-                <div className="lp-notif-dot" />
-                <div>
-                  <div className="lp-notif-title">Sesiune live programată</div>
-                  <div className="lp-notif-body">Prof. Ionescu a programat o sesiune pentru <strong>mâine, 18:00</strong> — Limite și continuitate</div>
-                  <div className="lp-notif-time">acum 2 minute</div>
-                </div>
-              </div>
-              <div className="lp-notif-item">
-                <div>
-                  <div className="lp-notif-title">Exercițiu verificat ✅</div>
-                  <div className="lp-notif-body">Andrei a primit OK de la profesor pentru exercițiul de la Geometrie în spațiu</div>
-                  <div className="lp-notif-time">acum 1 oră</div>
-                </div>
-              </div>
-              <div className="lp-notif-item">
-                <div>
-                  <div className="lp-notif-title">Raport săptămânal 📊</div>
-                  <div className="lp-notif-body">Andrei a rezolvat <strong>14 exerciții</strong> săptămâna aceasta și a câștigat <strong>320 XP</strong></div>
-                  <div className="lp-notif-time">ieri, 20:00</div>
-                </div>
-              </div>
-              <div className="lp-notif-progress">
-                <div className="lp-notif-prog-label">Progres BAC <span>62%</span></div>
-                <div className="lp-notif-prog-track">
-                  <div className="lp-notif-prog-fill" />
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── Plans ── */}
-      <section className="lp-section lp-section-dark" id="plans">
-        <div className="lp-section-inner">
-          <div className="lp-section-head lp-head-dark">
-            <div className="lp-section-label lp-label-light">Planuri de abonament</div>
-            <h2 className="lp-section-title lp-title-light">Alege planul potrivit pentru tine</h2>
-            <p className="lp-section-sub lp-sub-light">
-              Începe gratuit și extinde accesul pe măsură ce ai nevoie.
-            </p>
-          </div>
-
-          <div className="lp-plans-grid">
-            {PLANS.map((plan) => (
-              <div key={plan.key} className={`lp-plan ${plan.highlight ? 'lp-plan-highlight' : ''}`}>
-                {plan.badge && <div className="lp-plan-badge">{plan.badge}</div>}
-                <div className="lp-plan-name">{plan.name}</div>
-                <div className="lp-plan-price">{plan.price}</div>
-                <ul className="lp-plan-features">
-                  {plan.features.map((feat) => (
-                    <li key={feat}>
-                      <span className="lp-check">✓</span> {feat}
-                    </li>
+              {COMPARE.map((row) => (
+                <div className="lp-tr" role="row" key={row.label}>
+                  <div className="lp-td-label" role="cell">{row.label}</div>
+                  {row.values.map((v, i) => (
+                    <div className={`lp-td ${PLANS[i].featured ? 'is-featured' : ''}`} role="cell" key={i}><Cell value={v} /></div>
                   ))}
-                </ul>
-                <Link
-                  to={plan.ctaTo}
-                  className={`lp-plan-cta ${plan.highlight ? 'lp-plan-cta-highlight' : ''}`}
-                >
-                  {plan.cta}
-                </Link>
-              </div>
-            ))}
+                </div>
+              ))}
+            </div>
           </div>
+          <p className="lp-note"><Sparkles size={15} /> Nu ai nevoie de card pentru contul gratuit. Poți schimba planul oricând.</p>
+        </section>
 
-          <p className="lp-plans-note">
-            Planurile Premium se activează de către un administrator. Contactează-ne pentru detalii.
-          </p>
-        </div>
-      </section>
-
-      {/* ── CTA banner ── */}
-      <section className="lp-cta-banner">
-        <div className="lp-cta-banner-inner">
-          <img src={BRAND_LOGO_URL} alt="EtoX" className="lp-cta-logo" />
-          <div>
-            <h2 className="lp-cta-title">Pregătit să dai BAC-ul cu încredere?</h2>
-            <p className="lp-cta-sub">Creează un cont gratuit și începe să exersezi chiar acum.</p>
+        {/* FINAL CTA */}
+        <section className="lp-cta-band">
+          <h2>Începe și tu să exersezi.</h2>
+          <p>Contul gratuit îți oferă suficient cât să vezi dacă EtoX este potrivit pentru tine.</p>
+          <div className="lp-hero-actions">
+            <Link to={primaryTo} className="lp-btn lp-btn-primary lp-btn-lg">{primaryLabel}<ArrowRight size={18} /></Link>
+            <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer" className="lp-btn lp-btn-ghost lp-btn-lg">
+              <MessageCircle size={18} /> Scrie-ne pe WhatsApp
+            </a>
           </div>
-          <Link to={user ? '/app' : '/register'} className="lp-btn lp-btn-primary lp-btn-lg">
-            {user ? 'Deschide platforma' : 'Înregistrare gratuită'} →
-          </Link>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* ── Footer ── */}
       <footer className="lp-footer">
         <div className="lp-footer-inner">
           <div className="lp-footer-brand">
-            <img src={BRAND_LOGO_URL} alt="EtoX" className="lp-footer-logo" />
-            <div>
-              <div className="lp-footer-name">EtoX Platform</div>
-              <div className="lp-footer-tagline">Pregătire BAC Matematică</div>
-              <div className="lp-footer-copy">© 2026 EtoX Academy. Toate drepturile rezervate.</div>
-            </div>
+            <Link to="/" className="lp-brand"><span className="lp-brand-mark"><img src={BRAND_LOGO_URL} alt="" /></span><span className="lp-brand-copy"><strong>EtoX</strong><small>Academy</small></span></Link>
+            <p>Pregătire BAC la matematică, construită în jurul progresului real.</p>
           </div>
-
-          <div className="lp-footer-cols">
-            <div className="lp-footer-col">
-              <div className="lp-footer-col-title">Platformă</div>
-              <a href="#features" className="lp-footer-link">Funcții</a>
-              <a href="#how" className="lp-footer-link">Cum funcționează</a>
-              <a href="#plans" className="lp-footer-link">Planuri</a>
-              <a href="#parents" className="lp-footer-link">Părinți</a>
-            </div>
-            <div className="lp-footer-col">
-              <div className="lp-footer-col-title">Cont</div>
-              <Link to="/login" className="lp-footer-link">Intră în cont</Link>
-              <Link to="/register" className="lp-footer-link">Înregistrare</Link>
-            </div>
-          </div>
+          <div className="lp-footer-col"><strong>Platforma</strong><a href="#ce-facem">Ce facem</a><a href="#cum-incep">Cum încep</a><a href="#planuri">Planuri</a></div>
+          <div className="lp-footer-col"><strong>Cont</strong><Link to="/register">Înregistrare</Link><Link to="/login">Autentificare</Link><Link to="/app">Platforma</Link></div>
+          <div className="lp-footer-col"><strong>Contact</strong><a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">Scrie-ne pe WhatsApp</a></div>
         </div>
+        <div className="lp-footer-bottom">© 2026 EtoX Academy. Toate drepturile rezervate.</div>
       </footer>
     </div>
   );

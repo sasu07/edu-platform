@@ -9,7 +9,16 @@
       "Bash(docker stop *)",
       "Bash(docker run *)",
       "Bash(cd /Users/admin/Desktop/run-apps/edu_content_app/edu-platform/frontend/src/components *)",
-      "Read(//Users/admin/Desktop/run-apps/edu_content_app/**)"
+      "Read(//Users/admin/Desktop/run-apps/edu_content_app/**)",
+      "Bash(git commit -q -m ' *)",
+      "Bash(git checkout *)",
+      "Bash(cat /tmp/lp_faces.css)",
+      "Read(//private/tmp/**)",
+      "WebFetch(domain:zecelainfo.ro)",
+      "Bash(ls -lat ~/Downloads/ 2>/dev/null | grep -iE \"\\\\.png|\\\\.jpg|\\\\.jpeg|\\\\.svg|logo|e2x|academy\" | head -15)",
+      "Read(//Users/admin/Downloads//**)",
+      "Bash(ls -lat ~/Downloads/ 2>/dev/null | head -12)",
+      "Bash(grep -rnE \"html, body|html,body|^body \\\\{|^html \\\\{\" App.css index.css)"
     ],
     "additionalDirectories": [
       "/tmp"

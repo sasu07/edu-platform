@@ -1652,7 +1652,7 @@
    ═══════════════════════════════════════════════════════════════ */
 
 /* Gardă anti-overflow orizontal — nicio pagină nu împinge lățimea peste ecran. */
-html, body { overflow-x: hidden; }
+html, body { overflow-x: clip; }   /* clip, nu hidden → previne scroll orizontal FĂRĂ să strice position:sticky */
 .app { max-width: 100%; overflow-x: clip; }
 
 /* ── Tabletă ── */
