@@ -123,7 +123,12 @@ def start_study_session(
 
     session_type = body.session_type
     filters = body.filters
-    ex_count = 10 if session_type == "test_scurt" else 25
+    # Nr. exerciții: din request (duratele 10/20/40) sau implicit pe tip.
+    ex_count = body.exercise_count or (10 if session_type == "test_scurt" else 25)
+    ex_count = max(1, min(ex_count, 40))  # limite sănătoase
+    # Stocăm durata aleasă în filters (jsonb) → o citim la reluare pentru timer.
+    if body.duration_minutes:
+        filters = {**filters, "duration_minutes": body.duration_minutes}
 
     with conn.cursor(row_factory=dict_row) as cur:
         exact_set_id = filters.get("exercise_set_id")

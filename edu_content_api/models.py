@@ -839,6 +839,8 @@ class StudySessionStartRequest(BaseModel):
     session_type: str = "test_scurt"
     filters: Dict[str, Any] = Field(default_factory=dict)
     plan_day_id: Optional[str] = None
+    exercise_count: Optional[int] = None   # nr. exerciții (pentru duratele 10/20/40 min)
+    duration_minutes: Optional[int] = None  # durata aleasă, pentru timer/rezumat
 
 
 class StudySessionCompleteRequest(BaseModel):

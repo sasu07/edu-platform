@@ -644,7 +644,7 @@ export interface ParentStudySessionsResponse {
   stats: Record<string, number | null>;
 }
 
-export const startStudySession = (data: { session_type: SessionType; filters: Record<string, any>; plan_day_id?: string }) =>
+export const startStudySession = (data: { session_type: SessionType; filters: Record<string, any>; plan_day_id?: string; exercise_count?: number; duration_minutes?: number }) =>
   api.post<StudySession>('/study-sessions/start', data);
 export const completeStudySession = (sessionId: string, data: { duration_sec: number; exercises_completed: number }) =>
   api.post<StudySession>(`/study-sessions/${sessionId}/complete`, data);

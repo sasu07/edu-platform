@@ -169,8 +169,14 @@ function getStartErrorMessage(error: any) {
 
 type SourceMode = 'auto' | 'set';
 
+const DURATIONS = [
+  { key: '10', minutes: 10, exercises: 5,  icon: '⚡', label: '10 minute', desc: 'Sesiune scurtă · 5 exerciții' },
+  { key: '20', minutes: 20, exercises: 10, icon: '🔥', label: '20 minute', desc: 'Sesiune medie · 10 exerciții' },
+  { key: '40', minutes: 40, exercises: 18, icon: '💪', label: '40 minute', desc: 'Antrenament extins · 18 exerciții' },
+] as const;
+
 function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaultFilters = {} }: ConfigureProps) {
-  const [sessionType, setSessionType] = useState<SessionType>(defaultType);
+  const [choice, setChoice] = useState<string>(defaultType === 'test_bac' ? 'bac' : '20');
   const [subiect, setSubiect] = useState<string>(defaultFilters.subiect_tag || '');
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
@@ -200,7 +206,12 @@ function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaul
       } else if (sourceMode === 'auto') {
         if (subiect) filters.subiect_tag = subiect;
       }
-      const res = await startStudySession({ session_type: sessionType, filters, plan_day_id: planDayId });
+      const dur = DURATIONS.find((d) => d.key === choice);
+      const res = await startStudySession(
+        choice === 'bac' || !dur
+          ? { session_type: 'test_bac', filters, plan_day_id: planDayId }
+          : { session_type: 'test_scurt', filters, plan_day_id: planDayId, exercise_count: dur.exercises, duration_minutes: dur.minutes },
+      );
       onStart(res.data);
     } catch (e: any) {
       setError(getStartErrorMessage(e));
@@ -208,7 +219,7 @@ function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaul
     }
   };
 
-  const cfg = SESSION_CONFIG[sessionType];
+  const chosenDur = DURATIONS.find((d) => d.key === choice);
   const canStart = sourceMode === 'auto' || Boolean(selectedSetId);
   const selectedSet = savedSets.find(s => s.id === selectedSetId);
 
@@ -216,22 +227,33 @@ function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaul
     <div className="ss-configure">
       <BacCountdown />
 
-      <div className="ss-section-title">Alege tipul sesiunii</div>
+      <div className="ss-section-title">Cât timp ai acum?</div>
       <div className="ss-type-cards">
-        {(Object.entries(SESSION_CONFIG) as [SessionType, typeof SESSION_CONFIG.test_scurt][]).map(([key, c]) => (
+        {DURATIONS.map((d) => (
           <button
-            key={key}
-            className={`ss-type-card${sessionType === key ? ' selected' : ''}`}
-            onClick={() => setSessionType(key)}
+            key={d.key}
+            className={`ss-type-card${choice === d.key ? ' selected' : ''}`}
+            onClick={() => setChoice(d.key)}
           >
-            <span className="ss-type-icon">{c.icon}</span>
+            <span className="ss-type-icon">{d.icon}</span>
             <div>
-              <div className="ss-type-name">{c.label}</div>
-              <div className="ss-type-desc">{c.desc}</div>
+              <div className="ss-type-name">{d.label}</div>
+              <div className="ss-type-desc">{d.desc}</div>
             </div>
-            {sessionType === key && <CheckCircle size={18} className="ss-type-check" />}
+            {choice === d.key && <CheckCircle size={18} className="ss-type-check" />}
           </button>
         ))}
+        <button
+          className={`ss-type-card${choice === 'bac' ? ' selected' : ''}`}
+          onClick={() => setChoice('bac')}
+        >
+          <span className="ss-type-icon">🏆</span>
+          <div>
+            <div className="ss-type-name">Variantă BAC completă</div>
+            <div className="ss-type-desc">~25 exerciții · 3 ore</div>
+          </div>
+          {choice === 'bac' && <CheckCircle size={18} className="ss-type-check" />}
+        </button>
       </div>
 
       <div className="ss-section-title">Exercițiile vin din</div>
@@ -299,7 +321,11 @@ function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaul
 
       <div className="ss-info-row">
         <Timer size={15} />
-        <span>Vei lucra <strong>{cfg.exercises} exerciții</strong> în maxim <strong>{cfg.minutes} minute</strong>.</span>
+        {choice === 'bac' || !chosenDur ? (
+          <span>Vei lucra <strong>~25 exerciții</strong> în maxim <strong>3 ore</strong>.</span>
+        ) : (
+          <span>Vei lucra <strong>{chosenDur.exercises} exerciții</strong> în maxim <strong>{chosenDur.minutes} minute</strong>.</span>
+        )}
       </div>
 
       {error && <div className="ss-error">{error}</div>}
@@ -327,7 +353,9 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
   const [answerInputs, setAnswerInputs] = useState<Record<string, string>>({});
   const [answerChecks, setAnswerChecks] = useState<Record<string, { status: 'correct' | 'incorrect' | 'invalid' | 'pending'; message: string }>>({});
   const [completing, setCompleting] = useState(false);
-  const limitSec = SESSION_CONFIG[session.session_type].minutes * 60;
+  // Durata: cea aleasă (10/20/40, stocată în filters) sau implicit pe tip.
+  const sessionMinutes = (session.filters as any)?.duration_minutes || SESSION_CONFIG[session.session_type].minutes;
+  const limitSec = sessionMinutes * 60;
   const exercises = session.exercises || [];
 
   useEffect(() => {
