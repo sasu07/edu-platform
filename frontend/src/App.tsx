@@ -50,6 +50,8 @@ const StudySession = lazy(() => import("./components/StudySession"));
 const StudyPlan = lazy(() => import("./components/StudyPlan"));
 const LearningPath = lazy(() => import("./components/LearningPath"));
 const SourceLibrary = lazy(() => import("./components/SourceLibrary"));
+const Practice = lazy(() => import("./components/Practice"));
+const Progress = lazy(() => import("./components/Progress"));
 
 function RouteLoader() {
   return <div className="auth-loading">Se încarcă...</div>;
@@ -677,108 +679,32 @@ function AppShell() {
               >
                 Progres Elev
               </NavLink>
-            ) : (
+            ) : isTeacher ? (
               <>
                 <NavLink
-                  to="/app/exercises"
+                  to="/app/content/import"
                   className={({ isActive }) =>
                     isActive ? "nav-link active" : "nav-link"
                   }
                 >
-                  Exerciții
+                  Conținut
                 </NavLink>
                 <NavLink
-                  to="/app/subiecte"
+                  to="/app/study-plan"
                   className={({ isActive }) =>
                     isActive ? "nav-link active" : "nav-link"
                   }
                 >
-                  Subiecte BAC
+                  Plan studiu
                 </NavLink>
                 <NavLink
-                  to="/app/my-requests"
+                  to="/app/teacher/requests"
                   className={({ isActive }) =>
                     isActive ? "nav-link active" : "nav-link"
                   }
                 >
-                  Cererile mele
+                  Cereri
                 </NavLink>
-                {!isTeacher && (
-                  <NavLink
-                    to="/app/learning-path"
-                    className={({ isActive }) =>
-                      isActive ? "nav-link active" : "nav-link"
-                    }
-                  >
-                    Traseu
-                  </NavLink>
-                )}
-                {!isTeacher && (
-                  <NavLink
-                    to="/app/study-session"
-                    className={({ isActive }) =>
-                      isActive ? "nav-link active" : "nav-link"
-                    }
-                  >
-                    Sesiuni
-                  </NavLink>
-                )}
-                {!isTeacher && (
-                  <NavLink
-                    to="/app/study-plan"
-                    className={({ isActive }) =>
-                      isActive ? "nav-link active" : "nav-link"
-                    }
-                  >
-                    Plan
-                  </NavLink>
-                )}
-                <NavLink
-                  to="/app/league"
-                  className={({ isActive }) =>
-                    isActive ? "nav-link active" : "nav-link"
-                  }
-                >
-                  Liga BAC
-                </NavLink>
-                <NavLink
-                  to="/app/variants"
-                  className={({ isActive }) =>
-                    isActive ? "nav-link active" : "nav-link"
-                  }
-                >
-                  Variante
-                </NavLink>
-                {isTeacher && (
-                  <NavLink
-                    to="/app/content/import"
-                    className={({ isActive }) =>
-                      isActive ? "nav-link active" : "nav-link"
-                    }
-                  >
-                    Conținut
-                  </NavLink>
-                )}
-                {isTeacher && (
-                  <NavLink
-                    to="/app/study-plan"
-                    className={({ isActive }) =>
-                      isActive ? "nav-link active" : "nav-link"
-                    }
-                  >
-                    Plan studiu
-                  </NavLink>
-                )}
-                {isTeacher && (
-                  <NavLink
-                    to="/app/teacher/requests"
-                    className={({ isActive }) =>
-                      isActive ? "nav-link active" : "nav-link"
-                    }
-                  >
-                    Cereri
-                  </NavLink>
-                )}
                 {isAdmin && (
                   <NavLink
                     to="/app/admin"
@@ -789,6 +715,43 @@ function AppShell() {
                     Admin
                   </NavLink>
                 )}
+              </>
+            ) : (
+              /* Elev — nav consolidat pe 4 destinații (brief §3.1) */
+              <>
+                <NavLink
+                  to="/app"
+                  end
+                  className={({ isActive }) =>
+                    isActive ? "nav-link active" : "nav-link"
+                  }
+                >
+                  Acasă
+                </NavLink>
+                <NavLink
+                  to="/app/practice"
+                  className={({ isActive }) =>
+                    isActive ? "nav-link active" : "nav-link"
+                  }
+                >
+                  Exersează
+                </NavLink>
+                <NavLink
+                  to="/app/progress"
+                  className={({ isActive }) =>
+                    isActive ? "nav-link active" : "nav-link"
+                  }
+                >
+                  Progres
+                </NavLink>
+                <NavLink
+                  to="/app/league"
+                  className={({ isActive }) =>
+                    isActive ? "nav-link active" : "nav-link"
+                  }
+                >
+                  Clasa mea
+                </NavLink>
               </>
             )}
           </div>
@@ -815,6 +778,22 @@ function AppShell() {
             element={
               <Suspense fallback={<RouteLoader />}>
                 <VariantBuilderAuto />
+              </Suspense>
+            }
+          />
+          <Route
+            path="practice"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <Practice />
+              </Suspense>
+            }
+          />
+          <Route
+            path="progress"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <Progress />
               </Suspense>
             }
           />
