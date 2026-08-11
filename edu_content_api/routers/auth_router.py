@@ -1,9 +1,12 @@
+import hashlib
+import secrets
 import uuid
-from datetime import datetime as dt
+from datetime import datetime as dt, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from psycopg import Connection
+from psycopg.errors import UniqueViolation
 from psycopg.rows import dict_row
 
 from audit_service import write_audit
@@ -20,10 +23,30 @@ from auth import (
     verify_password,
 )
 from database import get_db_conn
-from email_service import send_welcome_email
-from models import SubscriptionDB, Token, UserDB, UserLogin, UserRegister, UserRole
+from email_service import send_password_setup_email, send_welcome_email
+from models import (
+    AdminUserCreate,
+    AdminUserRoleUpdate,
+    PasswordResetComplete,
+    SubscriptionDB,
+    Token,
+    UserDB,
+    UserLogin,
+    UserRegister,
+    UserRole,
+)
 
 router = APIRouter()
+
+_ADMIN_MANAGED_ROLES = (
+    UserRole.STUDENT,
+    UserRole.TEACHER,
+    UserRole.SCHOOL_TEACHER,
+    UserRole.PARENT,
+)
+_ADMIN_MANAGED_ROLE_VALUES = {role.value for role in _ADMIN_MANAGED_ROLES}
+_INVITE_TTL = timedelta(hours=24)
+_RESET_TTL = timedelta(minutes=30)
 
 
 def _audit_auth(request: Request, action: str, **kw) -> None:
@@ -33,6 +56,73 @@ def _audit_auth(request: Request, action: str, **kw) -> None:
         user_agent=request.headers.get("user-agent"),
         **kw,
     )
+
+
+def _normalise_email(email: str) -> str:
+    value = email.strip().lower()
+    if value.count("@") != 1 or any(char.isspace() for char in value):
+        raise HTTPException(status_code=422, detail="Adresa de email nu este validă")
+    local, domain = value.split("@", 1)
+    local_allowed = set("abcdefghijklmnopqrstuvwxyz0123456789.!#$%&'*+/=?^_`{|}~-")
+    if (
+        not local
+        or len(local) > 64
+        or local.startswith(".")
+        or local.endswith(".")
+        or ".." in local
+        or any(char not in local_allowed for char in local)
+    ):
+        raise HTTPException(status_code=422, detail="Adresa de email nu este validă")
+    domain_labels = domain.split(".")
+    if len(domain) > 253 or len(domain_labels) < 2 or any(
+        not label
+        or len(label) > 63
+        or label.startswith("-")
+        or label.endswith("-")
+        or any(not (char.isalnum() or char == "-") for char in label)
+        for label in domain_labels
+    ):
+        raise HTTPException(status_code=422, detail="Adresa de email nu este validă")
+    return value
+
+
+def _reset_token_hash(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _issue_password_token(
+    conn: Connection,
+    *,
+    user_id: str,
+    purpose: str,
+    created_by: Optional[str],
+) -> str:
+    """Creează un token one-time; în DB persistă exclusiv digestul SHA-256."""
+    if purpose not in ("invite", "reset"):
+        raise ValueError("Scop invalid pentru token")
+
+    raw_token = secrets.token_urlsafe(32)
+    expires_at = dt.now(timezone.utc) + (_INVITE_TTL if purpose == "invite" else _RESET_TTL)
+    with conn.cursor() as cur:
+        # Un singur link activ per utilizator. Folosirea unuia dintre linkuri
+        # invalidează implicit toate cererile mai vechi.
+        cur.execute(
+            """
+            UPDATE password_reset_tokens
+            SET used_at = NOW()
+            WHERE user_id = %s AND used_at IS NULL
+            """,
+            (user_id,),
+        )
+        cur.execute(
+            """
+            INSERT INTO password_reset_tokens
+                (user_id, token_hash, purpose, expires_at, created_by)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (user_id, _reset_token_hash(raw_token), purpose, expires_at, created_by),
+        )
+    return raw_token
 
 
 @router.post("/auth/register", response_model=Token, tags=["Auth"])
@@ -79,7 +169,11 @@ def register(request: Request, body: UserRegister, background_tasks: BackgroundT
 def login(request: Request, body: UserLogin, conn: Connection = Depends(get_db_conn)):
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
-            "SELECT id, email, full_name, role, is_active, created_at, password_hash FROM users WHERE email = %s",
+            """
+            SELECT id, email, full_name, role, is_active, created_at,
+                   password_hash, auth_version
+            FROM users WHERE email = %s
+            """,
             (body.email,),
         )
         row = cur.fetchone()
@@ -92,8 +186,9 @@ def login(request: Request, body: UserLogin, conn: Connection = Depends(get_db_c
                     details={"email": body.email, "reason": "cont dezactivat"})
         raise HTTPException(status_code=403, detail="Cont dezactivat")
 
+    auth_version = row.pop("auth_version", 0)
     user = UserDB(**{k: v for k, v in row.items() if k != "password_hash"})
-    token = create_access_token(str(user.id), user.role.value)
+    token = create_access_token(str(user.id), user.role.value, auth_version)
     _audit_auth(request, "login.success", actor_user_id=str(user.id), actor_role=user.role.value,
                 status=200, details={"email": user.email})
     return Token(access_token=token, user=user)
@@ -180,29 +275,342 @@ def my_subscription(
     return SubscriptionDB(**row)
 
 
-@router.post("/admin/teachers", response_model=UserDB, tags=["Admin"])
-def create_teacher(
-    body: UserRegister,
-    _admin: UserDB = Depends(require_role(UserRole.ADMIN)),
+@router.post(
+    "/admin/users",
+    response_model=UserDB,
+    status_code=status.HTTP_201_CREATED,
+    tags=["Admin"],
+)
+@limiter.limit("10/minute")
+def create_admin_user(
+    request: Request,
+    body: AdminUserCreate,
+    admin: UserDB = Depends(require_role(UserRole.ADMIN)),
     conn: Connection = Depends(get_db_conn),
 ):
+    """Creează un cont fără ca administratorul să cunoască parola."""
+    if body.role not in _ADMIN_MANAGED_ROLES:
+        raise HTTPException(status_code=400, detail="Rolul nu poate fi gestionat din panoul de administrare")
+
+    email = _normalise_email(body.email)
+    full_name = body.full_name.strip()
+    if not full_name:
+        raise HTTPException(status_code=422, detail="Numele complet este obligatoriu")
+
+    # Hashul inițial corespunde unui secret aleator care nu este returnat și nu
+    # este transmis nimănui. Contul rămâne inactiv până la folosirea invitației.
+    unusable_password_hash = hash_password(secrets.token_urlsafe(48))
+
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("SELECT id FROM users WHERE LOWER(email) = LOWER(%s)", (email,))
+            if cur.fetchone():
+                raise HTTPException(status_code=409, detail="Email deja înregistrat")
+
+            cur.execute(
+                """
+                INSERT INTO users (email, password_hash, full_name, role, is_active, invite_pending)
+                VALUES (%s, %s, %s, %s, FALSE, TRUE)
+                RETURNING id, email, full_name, role, is_active, created_at
+                """,
+                (email, unusable_password_hash, full_name, body.role.value),
+            )
+            user_row = cur.fetchone()
+
+            if body.role in (UserRole.STUDENT, UserRole.SCHOOL_TEACHER):
+                cur.execute(
+                    "INSERT INTO subscriptions (user_id, plan_type, status) VALUES (%s, 'free', 'active')",
+                    (str(user_row["id"]),),
+                )
+
+        raw_token = _issue_password_token(
+            conn,
+            user_id=str(user_row["id"]),
+            purpose="invite",
+            created_by=str(admin.id),
+        )
+        conn.commit()
+    except UniqueViolation as exc:
+        conn.rollback()
+        raise HTTPException(status_code=409, detail="Email deja înregistrat") from exc
+
+    email_sent = send_password_setup_email(email, full_name, raw_token, "invite")
+    if not email_sent:
+        _audit_auth(
+            request,
+            "admin.user.create_email_failed",
+            actor_user_id=str(admin.id),
+            actor_role=admin.role.value,
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            details={"target_user_id": str(user_row["id"]), "target_email": email},
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Contul a fost creat, dar invitația nu a putut fi trimisă. Retrimite invitația din lista de utilizatori.",
+        )
+
+    _audit_auth(
+        request,
+        "admin.user.create",
+        actor_user_id=str(admin.id),
+        actor_role=admin.role.value,
+        status=status.HTTP_201_CREATED,
+        details={
+            "target_user_id": str(user_row["id"]),
+            "target_email": email,
+            "role": body.role.value,
+        },
+    )
+    return UserDB(**user_row)
+
+
+@router.patch("/admin/users/{user_id}/role", response_model=UserDB, tags=["Admin"])
+def update_admin_user_role(
+    request: Request,
+    user_id: uuid.UUID,
+    body: AdminUserRoleUpdate,
+    admin: UserDB = Depends(require_role(UserRole.ADMIN)),
+    conn: Connection = Depends(get_db_conn),
+):
+    """Schimbă numai roluri neprivilegiate și invalidează sesiunile țintei."""
+    if str(user_id) == str(admin.id):
+        raise HTTPException(status_code=400, detail="Nu îți poți schimba propriul rol")
+    if body.role not in _ADMIN_MANAGED_ROLES:
+        raise HTTPException(status_code=400, detail="Rolul nu poate fi gestionat din panoul de administrare")
+
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute("SELECT id FROM users WHERE email = %s", (body.email,))
-        if cur.fetchone():
-            raise HTTPException(status_code=400, detail="Email deja înregistrat")
+        cur.execute(
+            """
+            SELECT id, email, full_name, role, is_active, created_at
+            FROM users WHERE id = %s
+            FOR UPDATE
+            """,
+            (str(user_id),),
+        )
+        target = cur.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="Utilizator inexistent")
+        if target["role"] not in _ADMIN_MANAGED_ROLE_VALUES:
+            raise HTTPException(status_code=403, detail="Rolurile privilegiate nu pot fi modificate aici")
+
+        old_role = target["role"]
+        if old_role == body.role.value:
+            conn.commit()
+            return UserDB(**target)
+
+        # Relațiile părinte–elev sunt valide numai cât timp capetele lor au
+        # rolurile aferente. Eliminarea lor previne accesul rezidual la date.
+        if old_role == UserRole.PARENT.value and body.role != UserRole.PARENT:
+            cur.execute("DELETE FROM parent_student WHERE parent_id = %s", (str(user_id),))
+        if old_role == UserRole.STUDENT.value and body.role != UserRole.STUDENT:
+            cur.execute("DELETE FROM parent_student WHERE student_id = %s", (str(user_id),))
 
         cur.execute(
             """
-            INSERT INTO users (email, password_hash, full_name, role)
-            VALUES (%s, %s, %s, 'teacher')
+            UPDATE users
+            SET role = %s, auth_version = auth_version + 1, updated_at = NOW()
+            WHERE id = %s
             RETURNING id, email, full_name, role, is_active, created_at
             """,
-            (body.email, hash_password(body.password), body.full_name),
+            (body.role.value, str(user_id)),
         )
-        user_row = cur.fetchone()
+        updated = cur.fetchone()
+
+        if body.role in (UserRole.STUDENT, UserRole.SCHOOL_TEACHER):
+            cur.execute(
+                """
+                INSERT INTO subscriptions (user_id, plan_type, status)
+                SELECT %s, 'free', 'active'
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM subscriptions
+                    WHERE user_id = %s AND status = 'active'
+                )
+                """,
+                (str(user_id), str(user_id)),
+            )
+        else:
+            cur.execute(
+                "SELECT plan_type FROM subscriptions WHERE user_id = %s AND status = 'active'",
+                (str(user_id),),
+            )
+            active_plans = [row["plan_type"] for row in cur.fetchall()]
+            cur.execute(
+                """
+                UPDATE subscriptions
+                SET status = 'cancelled', updated_at = NOW()
+                WHERE user_id = %s AND status = 'active'
+                """,
+                (str(user_id),),
+            )
+            if active_plans:
+                cur.execute(
+                    "DELETE FROM user_exercise_sets WHERE user_id = %s AND linked_plan = ANY(%s)",
+                    (str(user_id), active_plans),
+                )
         conn.commit()
 
-    return UserDB(**user_row)
+    _audit_auth(
+        request,
+        "admin.user.role_change",
+        actor_user_id=str(admin.id),
+        actor_role=admin.role.value,
+        status=200,
+        details={
+            "target_user_id": str(user_id),
+            "old_role": old_role,
+            "new_role": body.role.value,
+        },
+    )
+    return UserDB(**updated)
+
+
+@router.post(
+    "/admin/users/{user_id}/password-reset",
+    status_code=status.HTTP_202_ACCEPTED,
+    tags=["Admin"],
+)
+@limiter.limit("10/minute")
+def request_admin_password_reset(
+    request: Request,
+    user_id: uuid.UUID,
+    admin: UserDB = Depends(require_role(UserRole.ADMIN)),
+    conn: Connection = Depends(get_db_conn),
+):
+    """Trimite linkul fără a expune tokenul sau o parolă administratorului."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT u.id, u.email, u.full_name, u.role, u.is_active, u.invite_pending
+            FROM users u
+            WHERE u.id = %s
+            FOR UPDATE
+            """,
+            (str(user_id),),
+        )
+        target = cur.fetchone()
+        if not target:
+            raise HTTPException(status_code=404, detail="Utilizator inexistent")
+        if target["role"] not in _ADMIN_MANAGED_ROLE_VALUES:
+            raise HTTPException(status_code=403, detail="Parola unui cont privilegiat nu poate fi resetată aici")
+
+    if not target["is_active"] and not target["invite_pending"]:
+        raise HTTPException(
+            status_code=409,
+            detail="Contul este dezactivat și nu poate fi reactivat prin resetarea parolei.",
+        )
+
+    purpose = "invite" if target["invite_pending"] else "reset"
+    raw_token = _issue_password_token(
+        conn,
+        user_id=str(user_id),
+        purpose=purpose,
+        created_by=str(admin.id),
+    )
+    conn.commit()
+    email_sent = send_password_setup_email(
+        target["email"], target["full_name"], raw_token, purpose
+    )
+    if not email_sent:
+        _audit_auth(
+            request,
+            "admin.user.password_reset_email_failed",
+            actor_user_id=str(admin.id),
+            actor_role=admin.role.value,
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            details={"target_user_id": str(user_id), "purpose": purpose},
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Linkul a fost creat, dar emailul nu a putut fi trimis. Încearcă din nou.",
+        )
+    _audit_auth(
+        request,
+        "admin.user.password_reset_requested",
+        actor_user_id=str(admin.id),
+        actor_role=admin.role.value,
+        status=status.HTTP_202_ACCEPTED,
+        details={"target_user_id": str(user_id), "purpose": purpose},
+    )
+    return {"message": "Linkul pentru alegerea parolei a fost trimis pe email."}
+
+
+@router.post(
+    "/auth/password-reset/complete",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    tags=["Auth"],
+)
+@limiter.limit("10/minute")
+def complete_password_reset(
+    request: Request,
+    body: PasswordResetComplete,
+    conn: Connection = Depends(get_db_conn),
+):
+    # bcrypt acceptă maximum 72 de octeți, nu 72 de caractere Unicode.
+    if len(body.new_password.encode("utf-8")) > 72:
+        raise HTTPException(status_code=422, detail="Parola este prea lungă")
+
+    new_password_hash = hash_password(body.new_password)
+    token_hash = _reset_token_hash(body.token.strip())
+
+    with conn.cursor(row_factory=dict_row) as cur:
+        # FOR UPDATE + condițiile de valabilitate fac operația one-time inclusiv
+        # când două requesturi încearcă simultan același token.
+        cur.execute(
+            """
+            SELECT prt.user_id, prt.purpose, u.email, u.full_name, u.role,
+                   u.is_active, u.invite_pending
+            FROM password_reset_tokens prt
+            JOIN users u ON u.id = prt.user_id
+            WHERE prt.token_hash = %s
+              AND prt.used_at IS NULL
+              AND prt.expires_at > NOW()
+            FOR UPDATE OF prt
+            """,
+            (token_hash,),
+        )
+        token_row = cur.fetchone()
+        if not token_row:
+            raise HTTPException(status_code=400, detail="Link invalid, expirat sau deja folosit")
+        if token_row["purpose"] == "invite" and not token_row["invite_pending"]:
+            raise HTTPException(status_code=400, detail="Link invalid, expirat sau deja folosit")
+
+        cur.execute(
+            """
+            UPDATE users
+            SET password_hash = %s,
+                is_active = CASE WHEN %s = 'invite' THEN TRUE ELSE is_active END,
+                invite_pending = CASE WHEN %s = 'invite' THEN FALSE ELSE invite_pending END,
+                auth_version = auth_version + 1,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
+            (
+                new_password_hash,
+                token_row["purpose"],
+                token_row["purpose"],
+                str(token_row["user_id"]),
+            ),
+        )
+        cur.execute(
+            """
+            UPDATE password_reset_tokens
+            SET used_at = NOW()
+            WHERE user_id = %s AND used_at IS NULL
+            """,
+            (str(token_row["user_id"]),),
+        )
+        conn.commit()
+
+    _audit_auth(
+        request,
+        "auth.password_reset_completed",
+        actor_user_id=str(token_row["user_id"]),
+        actor_role=token_row["role"],
+        status=status.HTTP_204_NO_CONTENT,
+        details={"purpose": token_row["purpose"]},
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/admin/teachers", tags=["Admin"])
@@ -296,7 +704,7 @@ def list_users(
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
-            SELECT u.id, u.email, u.full_name, u.role, u.is_active, u.created_at,
+            SELECT u.id, u.email, u.full_name, u.role, u.is_active, u.invite_pending, u.created_at,
                    COALESCE(
                        (SELECT json_agg(plan_type ORDER BY created_at DESC)
                         FROM subscriptions
@@ -403,4 +811,3 @@ def list_audit(
         items = cur.fetchall()
 
     return {"total": total, "limit": limit, "offset": offset, "items": items}
-

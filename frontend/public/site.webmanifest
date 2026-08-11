@@ -1,0 +1,18 @@
+{
+  "name": "E2X ACADEMY",
+  "short_name": "E2X",
+  "description": "Pregătire structurată pentru BAC la matematică.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#08111f",
+  "theme_color": "#08111f",
+  "lang": "ro-RO",
+  "icons": [
+    {
+      "src": "/logo_etox.png",
+      "sizes": "500x500",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

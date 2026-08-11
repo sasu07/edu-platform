@@ -101,7 +101,13 @@
   display: flex;
   gap: 4px;
   border-bottom: 2px solid #e5e7eb;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
+
+.lp-tabs::-webkit-scrollbar { display: none; }
 
 .lp-tab {
   display: flex;
@@ -117,6 +123,9 @@
   color: #6b7280;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
+  min-height: 44px;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .lp-tab:hover { color: #111827; }
 .lp-tab.active { color: #7c3aed; border-bottom-color: #7c3aed; }
@@ -854,4 +863,78 @@
   font-size: 0.75rem;
   font-weight: 700;
   color: #7c3aed;
+}
+
+@media (max-width: 600px) {
+  .lp-wrap {
+    width: 100%;
+    min-width: 0;
+    padding: 12px 0 28px;
+    gap: 16px;
+  }
+
+  .lp-page-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .lp-page-header > div { min-width: 0; flex: 1; }
+  .lp-page-title { font-size: 1.25rem; }
+  .lp-page-sub { overflow-wrap: anywhere; }
+
+  .lp-retake-btn {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+    margin-left: 0;
+  }
+
+  .lp-tabs {
+    margin-inline: -12px;
+    padding-inline: 12px;
+    scroll-padding-inline: 12px;
+  }
+
+  .lp-ai-plan,
+  .lp-preview-lock,
+  .lp-lock-overlay { padding: 18px 16px; }
+
+  .lp-ai-nivel { margin-left: 0; }
+  .lp-history-meta { flex-wrap: wrap; }
+  .lp-history-card-head { gap: 8px; padding: 12px; }
+  .lp-history-rank { min-width: 22px; }
+  .lp-history-score { width: 44px; height: 44px; font-size: 0.95rem; }
+  .lp-history-detail { padding: 0 12px 12px; }
+
+  .lp-node-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .lp-node-left { width: 100%; }
+  .lp-node-topic { white-space: normal; overflow-wrap: anywhere; }
+  .lp-node-right {
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    flex-direction: row;
+  }
+  .lp-node-progress-row { min-width: 0; flex: 1; }
+  .lp-node-track { width: auto; flex: 1; }
+
+  .lp-today-meta { flex-wrap: wrap; }
+  .lp-today-answer-row { flex-direction: column; }
+  .lp-today-input,
+  .lp-today-check-btn { width: 100%; min-width: 0; min-height: 44px; }
+
+  .lp-subiect-header { align-items: flex-start; gap: 8px; }
+  .lp-subiect-nodes { grid-template-columns: minmax(0, 1fr); }
+
+  .lp-upgrade-btn,
+  .lp-lock-btn,
+  .lp-retake-cta,
+  .lp-generate-btn { min-height: 44px; justify-content: center; }
 }

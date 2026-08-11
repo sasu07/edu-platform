@@ -69,7 +69,79 @@
 .prac-panel { min-height: 200px; }
 
 @media (max-width: 600px) {
-  .prac-head { flex-direction: column; }
-  .prac-cta { width: 100%; justify-content: center; }
-  .prac-head-copy h1 { font-size: 1.4rem; }
+  .prac {
+    width: 100%;
+    min-width: 0;
+    padding: 8px max(4px, env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
+    overflow-x: clip;
+  }
+
+  .prac *,
+  .prac *::before,
+  .prac *::after {
+    box-sizing: border-box;
+  }
+
+  .prac-head {
+    min-width: 0;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .prac-head-copy {
+    min-width: 0;
+  }
+
+  .prac-head-copy h1 {
+    font-size: 1.4rem;
+    overflow-wrap: anywhere;
+  }
+
+  .prac-head-copy p {
+    overflow-wrap: anywhere;
+  }
+
+  .prac-cta {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .prac-tabs {
+    gap: 0;
+    margin-inline: -4px;
+    padding-inline: 4px;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    scroll-snap-type: inline proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .prac-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .prac-tab {
+    min-height: 44px;
+    flex: 0 0 auto;
+    padding-inline: 13px;
+    scroll-snap-align: start;
+  }
+
+  .prac-panel,
+  .prac-panel > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prac *,
+  .prac *::before,
+  .prac *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

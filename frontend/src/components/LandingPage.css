@@ -238,8 +238,14 @@
   object-fit: contain;
 }
 
-.lp-brand-name { font-size: 21px; font-weight: 800; letter-spacing: -0.045em; }
-.lp-brand-name small { margin-left: 3px; color: rgba(255, 255, 255, 0.58); font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+.lp-brand-name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  white-space: nowrap;
+}
 
 .lp-desktop-nav { display: flex; align-items: center; gap: 30px; }
 
@@ -308,19 +314,16 @@
 
 .lp-hero-copy { position: relative; z-index: 10; padding: 20px 0; }
 
-.lp-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border-radius: 999px;
-  padding: 8px 12px;
+.lp-hero-kicker,
+.lp-final-kicker {
+  display: block;
   font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.035em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
-.lp-eyebrow-dark { border: 1px solid rgba(216, 255, 105, 0.22); background: rgba(216, 255, 105, 0.09); color: var(--lp-lime); }
+.lp-hero-kicker { color: var(--lp-lime); }
 .lp-hero h1 { max-width: 680px; margin-top: 25px; color: var(--lp-white); font-size: clamp(58px, 5.5vw, 78px); font-weight: 700; letter-spacing: -0.067em; line-height: 0.98; }
 .lp-hero h1 span { display: block; margin-top: 7px; color: var(--lp-lime); }
 .lp-hero-lead { max-width: 610px; margin-top: 28px; color: rgba(255, 255, 255, 0.68); font-size: 18px; line-height: 1.68; }
@@ -376,7 +379,7 @@
 .lp-window-dots span:first-child { background: #ff9c88; }
 .lp-window-dots span:nth-child(2) { background: #ffd475; }
 .lp-window-dots span:nth-child(3) { background: #91dfb2; }
-.lp-demo-badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; background: #eef1f7; color: #7a8495; padding: 5px 9px; font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+.lp-demo-badge { color: #7a8495; font-size: 9px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
 .lp-window-avatar { display: grid; width: 26px; height: 26px; justify-self: end; place-items: center; border-radius: 50%; background: var(--lp-blue-light); color: var(--lp-blue-dark); font-size: 10px; font-weight: 800; }
 
 .lp-mock-dashboard { display: grid; min-height: 425px; grid-template-columns: 72px 1fr; }
@@ -622,7 +625,7 @@
 .lp-final-cta-card::before { top: -260px; right: -70px; width: 560px; height: 560px; }
 .lp-final-cta-card::after { right: 80px; bottom: -300px; width: 480px; height: 480px; }
 .lp-final-cta-card > *:not(.lp-final-cta-decor) { position: relative; z-index: 2; }
-.lp-eyebrow-light { border: 1px solid rgba(255, 255, 255, 0.28); background: rgba(255, 255, 255, 0.1); color: var(--lp-white); }
+.lp-final-kicker { color: rgba(255, 255, 255, 0.82); }
 .lp-final-cta h2 { max-width: 780px; margin-top: 24px; color: var(--lp-white); font-size: clamp(44px, 5vw, 72px); font-weight: 700; letter-spacing: -0.065em; line-height: 0.99; }
 .lp-final-cta p { max-width: 650px; margin-top: 22px; color: rgba(255, 255, 255, 0.75); font-size: 16px; line-height: 1.65; }
 .lp-final-cta-decor { position: absolute; right: 21%; bottom: -43px; color: rgba(255, 255, 255, 0.07); font-family: ui-monospace, monospace; font-size: 230px; font-weight: 800; letter-spacing: -0.12em; transform: rotate(-8deg); }
@@ -756,11 +759,11 @@
   .lp-site-header { min-height: 112px; }
   .lp-brand { gap: 9px; }
   .lp-brand-mark { width: 36px; height: 36px; flex-basis: 36px; }
-  .lp-brand-name { font-size: 19px; }
-  .lp-brand-name small { display: none; }
+  .lp-brand-name { font-size: 17px; }
   .lp-chapter { scroll-margin-top: 128px; }
   .lp-hero-content { padding-top: calc(152px + env(safe-area-inset-top)); padding-bottom: 35px; }
-  .lp-eyebrow { font-size: 10px; }
+  .lp-hero-kicker,
+  .lp-final-kicker { font-size: 10px; }
   .lp-hero h1 { margin-top: 21px; font-size: clamp(43px, 13vw, 60px); line-height: 1; }
   .lp-hero-lead { margin-top: 23px; font-size: 16px; line-height: 1.62; }
   .lp-hero-buttons { align-items: flex-start; flex-direction: column; gap: 20px; margin-top: 29px; }
@@ -796,7 +799,6 @@
   .lp-audience-card { min-height: 320px; border-radius: 24px; padding: 25px; }
   .lp-pricing-grid { grid-template-columns: 1fr; }
   .lp-price-card { min-height: auto; }
-  .lp-price-card.is-featured { order: -1; }
   .lp-faq-list summary { min-height: 100px; font-size: 16px; }
   .lp-final-cta { padding-bottom: 20px; }
   .lp-final-cta-card { min-height: auto; border-radius: 25px; padding: 42px 26px; }

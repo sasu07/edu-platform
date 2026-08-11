@@ -133,6 +133,11 @@
   color: var(--color-gray-900);
 }
 
+.spc-mobile-date,
+.spc-mobile-empty {
+  display: none;
+}
+
 .spc-markers {
   display: inline-flex;
   gap: 4px;
@@ -225,20 +230,121 @@
 
 @media (max-width: 640px) {
   .spc {
-    padding: 14px;
+    padding: 14px 12px;
+    border-radius: 16px;
   }
 
-  .spc-grid {
-    gap: 4px;
+  .spc-head {
+    gap: 14px;
   }
 
-  .spc-cell {
-    min-height: 76px;
+  .spc-summary {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .spc-summary span {
+    min-width: 0;
+    text-align: center;
+    white-space: normal;
+  }
+
+  .spc-toolbar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .spc-nav {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+  }
+
+  .spc-month-label {
+    flex: 1;
+    min-width: 0;
+    text-align: center;
+  }
+
+  .spc-grid-head {
+    display: none;
+  }
+
+  .spc-grid:not(.spc-grid-head) {
+    display: block;
+    margin-top: 14px;
+  }
+
+  .spc-grid:not(.spc-grid-head) .spc-cell {
+    display: none;
+    min-height: 0;
+    margin-top: 8px;
+    padding: 11px 12px;
     border-radius: 12px;
   }
 
+  .spc-grid:not(.spc-grid-head) .spc-cell.is-today:not(.is-outside),
+  .spc-grid:not(.spc-grid-head) .spc-cell.has-active:not(.is-outside),
+  .spc-grid:not(.spc-grid-head) .spc-cell.has-plan:not(.is-outside),
+  .spc-grid:not(.spc-grid-head) .spc-cell.has-streak:not(.is-outside) {
+    display: block;
+  }
+
+  .spc-mobile-date {
+    display: inline;
+    color: var(--color-gray-900);
+    font-size: 0.9rem;
+    font-weight: 850;
+    text-transform: capitalize;
+  }
+
+  .spc-day-num {
+    display: none;
+  }
+
+  .spc-cell-body {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
   .spc-chip {
-    padding: 4px 6px;
-    font-size: 0.68rem;
+    padding: 6px 8px;
+    font-size: 0.75rem;
+  }
+
+  .spc-mobile-empty {
+    padding: 16px 10px 6px;
+    color: var(--color-gray-500);
+    font-size: 0.86rem;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  .spc-legend {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  .spc-summary,
+  .spc-cell-body,
+  .spc-legend {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spc *,
+  .spc *::before,
+  .spc *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

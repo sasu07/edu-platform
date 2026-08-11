@@ -18,6 +18,7 @@ import {
 } from '../api';
 import LatexRenderer from './LatexRenderer';
 import ProgressiveHints from './ProgressiveHints';
+import { evaluateNumericExpression } from '../utils/numericExpression';
 import './StudySession.css';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -83,58 +84,6 @@ function formatTime(sec: number) {
   const s = sec % 60;
   if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
   return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-}
-
-function normalizeNumericExpression(value: string) {
-  let expr = value.trim();
-  if (!expr) return '';
-  expr = expr.replace(/\$/g, '');
-  expr = expr.replace(/^\s*[a-zA-Z]\s*=\s*/, '');
-  if (expr.includes('=')) {
-    const parts = expr.split('=').map((part) => part.trim()).filter(Boolean);
-    expr = parts[parts.length - 1] || expr;
-  }
-  expr = expr.replace(/,/g, '.');
-  expr = expr.replace(/\\left|\\right/g, '');
-  expr = expr.replace(/\\text\{[^}]*\}/g, '');
-  expr = expr.replace(/\\mathrm\{([^}]*)\}/g, '$1');
-  expr = expr.replace(/\\cdot|\\times/g, '*');
-  expr = expr.replace(/\\div/g, '/');
-  expr = expr.replace(/\\pi/g, 'Math.PI');
-  expr = expr.replace(/\bpi\b/gi, 'Math.PI');
-  expr = expr.replace(/\bsqrt\s*\(/gi, 'Math.sqrt(');
-
-  const fracPattern = /\\(?:d)?frac\s*\{([^{}]+)\}\{([^{}]+)\}/g;
-  while (fracPattern.test(expr)) {
-    expr = expr.replace(fracPattern, '(($1)/($2))');
-  }
-
-  const sqrtPattern = /\\sqrt\s*\{([^{}]+)\}/g;
-  while (sqrtPattern.test(expr)) {
-    expr = expr.replace(sqrtPattern, 'Math.sqrt($1)');
-  }
-
-  expr = expr.replace(/\{/g, '(').replace(/\}/g, ')');
-  expr = expr.replace(/\s+/g, '');
-  return expr;
-}
-
-function evaluateNumericExpression(value: string): number | null {
-  const expr = normalizeNumericExpression(value);
-  if (!expr) return null;
-  if (/[a-zA-Z]/.test(expr.replace(/Math|PI|sqrt/g, ''))) {
-    const fallbackMatch = expr.match(/([\-]?\d+(?:\.\d+)?(?:\/[\-]?\d+(?:\.\d+)?)?)$/);
-    if (!fallbackMatch) return null;
-    return evaluateNumericExpression(fallbackMatch[1]);
-  }
-  if (!/^[0-9+\-*/().MathPIsqrt]+$/.test(expr)) return null;
-  try {
-    const result = Function(`"use strict"; return (${expr});`)();
-    if (typeof result !== 'number' || !Number.isFinite(result)) return null;
-    return result;
-  } catch {
-    return null;
-  }
 }
 
 function isNumericAutoCheckAvailable(answer: string | undefined | null, numericValue?: number | null) {

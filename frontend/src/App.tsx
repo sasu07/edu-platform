@@ -9,7 +9,17 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
-import { Menu, X, Play } from "lucide-react";
+import {
+  Menu,
+  X,
+  Play,
+  Home,
+  BookOpen,
+  BarChart3,
+  Users,
+  UserRound,
+  LogOut,
+} from "lucide-react";
 import { PrimaryCTA } from "./components/StateViews";
 
 import Login from "./components/Login";
@@ -52,6 +62,7 @@ const LearningPath = lazy(() => import("./components/LearningPath"));
 const SourceLibrary = lazy(() => import("./components/SourceLibrary"));
 const Practice = lazy(() => import("./components/Practice"));
 const Progress = lazy(() => import("./components/Progress"));
+const ResetPassword = lazy(() => import("./components/ResetPassword"));
 
 function RouteLoader() {
   return <div className="auth-loading">Se încarcă...</div>;
@@ -62,6 +73,13 @@ function RequireAuth({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="auth-loading">Se încarcă...</div>;
   if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+function RequireAdmin({ children }: { children: React.ReactElement }) {
+  const { loading, isAdmin } = useAuth();
+  if (loading) return <div className="auth-loading">Se încarcă...</div>;
+  if (!isAdmin) return <Navigate to="/app" replace />;
   return children;
 }
 
@@ -598,8 +616,10 @@ function AppShell() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [isOnline, setIsOnline] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { isTeacher, isAdmin, isParent } = useAuth();
+  const { user, logout, isTeacher, isAdmin, isParent } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
+  const isStudent = !isTeacher && !isParent;
 
   const bumpRefresh = () => setRefreshKey((k) => k + 1);
 
@@ -617,6 +637,21 @@ function AppShell() {
   }, [menuOpen]);
 
   useEffect(() => {
+    if (!menuOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [menuOpen]);
+
+  const handleMobileLogout = () => {
+    logout();
+    setMenuOpen(false);
+    navigate("/login");
+  };
+
+  useEffect(() => {
     const checkConnection = async () => {
       try {
         const response = await fetch(buildApiUrl("/health"));
@@ -632,17 +667,17 @@ function AppShell() {
   }, []);
 
   return (
-    <div className="app">
+    <div className={`app${isStudent ? " app-student" : ""}`}>
       <nav className="navbar">
         <div className="navbar-content">
           <Link to="/app" className="navbar-brand">
             <img
               src={BRAND_LOGO_URL}
-              alt="EtoX Academy"
+              alt="e2x Academy"
               className="navbar-logo"
             />
             <div>
-              <div className="navbar-title">EtoX Platform</div>
+              <div className="navbar-title">e2x Platform</div>
               <div className="navbar-subtitle">
                 Platforma de Generare Subiecte BAC
               </div>
@@ -651,6 +686,7 @@ function AppShell() {
 
           <button
             className="navbar-burger"
+            aria-controls="app-navigation"
             aria-label={menuOpen ? "Închide meniul" : "Deschide meniul"}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((o) => !o)}
@@ -667,6 +703,7 @@ function AppShell() {
           )}
 
           <div
+            id="app-navigation"
             className={`navbar-links${menuOpen ? " open" : ""}`}
             onClick={() => setMenuOpen(false)}
           >
@@ -754,6 +791,21 @@ function AppShell() {
                 </NavLink>
               </>
             )}
+
+            <div className="navbar-mobile-account">
+              <div className="navbar-mobile-account-user">
+                <span className="navbar-mobile-account-icon" aria-hidden="true">
+                  <UserRound size={18} />
+                </span>
+                <span>
+                  <strong>{user?.full_name || "Contul meu"}</strong>
+                  <small>{user?.email}</small>
+                </span>
+              </div>
+              <button type="button" className="navbar-mobile-logout" onClick={handleMobileLogout}>
+                <LogOut size={18} /> Ieși din cont
+              </button>
+            </div>
           </div>
 
           <div className="navbar-right">
@@ -864,9 +916,11 @@ function AppShell() {
           <Route
             path="admin"
             element={
-              <Suspense fallback={<RouteLoader />}>
-                <AdminPanel />
-              </Suspense>
+              <RequireAdmin>
+                <Suspense fallback={<RouteLoader />}>
+                  <AdminPanel />
+                </Suspense>
+              </RequireAdmin>
             }
           />
           <Route
@@ -881,11 +935,53 @@ function AppShell() {
         </Routes>
       </main>
 
+      {isStudent && (
+        <nav className="mobile-bottom-nav" aria-label="Navigare principală elev">
+          <NavLink
+            to="/app"
+            end
+            className={({ isActive }) =>
+              isActive ? "mobile-bottom-link active" : "mobile-bottom-link"
+            }
+          >
+            <Home size={21} aria-hidden="true" />
+            <span>Acasă</span>
+          </NavLink>
+          <NavLink
+            to="/app/practice"
+            className={({ isActive }) =>
+              isActive ? "mobile-bottom-link active" : "mobile-bottom-link"
+            }
+          >
+            <BookOpen size={21} aria-hidden="true" />
+            <span>Exersează</span>
+          </NavLink>
+          <NavLink
+            to="/app/progress"
+            className={({ isActive }) =>
+              isActive ? "mobile-bottom-link active" : "mobile-bottom-link"
+            }
+          >
+            <BarChart3 size={21} aria-hidden="true" />
+            <span>Progres</span>
+          </NavLink>
+          <NavLink
+            to="/app/league"
+            className={({ isActive }) =>
+              isActive ? "mobile-bottom-link active" : "mobile-bottom-link"
+            }
+          >
+            <Users size={21} aria-hidden="true" />
+            <span>Clasa mea</span>
+          </NavLink>
+        </nav>
+      )}
+
       <footer className="footer">
         <div className="footer-content">
           <div className="footer-left">
-            <img src={BRAND_LOGO_URL} alt="EtoX" className="footer-logo" />
-            <span>© 2026 EtoX Academy</span>
+            <img src={BRAND_LOGO_URL} alt="e2x" className="footer-logo" />
+            <span>© 2026 e2x Academy</span>
           </div>
           <div className="footer-right">Platforma de Generare Subiecte BAC</div>
         </div>
@@ -909,6 +1005,14 @@ export default function App() {
           />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route
+            path="/reset-password"
+            element={
+              <Suspense fallback={<RouteLoader />}>
+                <ResetPassword />
+              </Suspense>
+            }
+          />
           <Route
             path="/app/*"
             element={

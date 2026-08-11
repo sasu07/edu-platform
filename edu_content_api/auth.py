@@ -46,9 +46,9 @@ def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
-def create_access_token(user_id: str, role: str) -> str:
+def create_access_token(user_id: str, role: str, auth_version: int = 0) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    payload = {"sub": user_id, "role": role, "exp": expire}
+    payload = {"sub": user_id, "role": role, "ver": auth_version, "exp": expire}
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -61,6 +61,14 @@ def decode_token(token: str) -> dict:
             detail="Token invalid sau expirat",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+def _payload_auth_version(payload: dict) -> Optional[int]:
+    """Versiunea din JWT; tokenurile vechi fără ``ver`` aparțin versiunii 0."""
+    value = payload.get("ver", 0)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return None
+    return value
 
 
 def get_optional_user(
@@ -79,11 +87,13 @@ def get_optional_user(
         return None
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
-            "SELECT id, email, full_name, role, is_active, created_at FROM users WHERE id = %s",
+            "SELECT id, email, full_name, role, is_active, created_at, auth_version FROM users WHERE id = %s",
             (user_id,),
         )
         row = cur.fetchone()
     if not row or not row["is_active"]:
+        return None
+    if _payload_auth_version(payload) != row.pop("auth_version", 0):
         return None
     return UserDB(**row)
 
@@ -105,13 +115,19 @@ def get_current_user(
 
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
-            "SELECT id, email, full_name, role, is_active, created_at FROM users WHERE id = %s",
+            "SELECT id, email, full_name, role, is_active, created_at, auth_version FROM users WHERE id = %s",
             (user_id,),
         )
         row = cur.fetchone()
 
     if not row or not row["is_active"]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Utilizator inexistent sau inactiv")
+    if _payload_auth_version(payload) != row.pop("auth_version", 0):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesiunea a fost invalidată. Autentifică-te din nou.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     return UserDB(**row)
 
@@ -138,11 +154,14 @@ def _has_help_access(user_id: str, conn: Connection) -> bool:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
-            SELECT id FROM subscriptions
-            WHERE user_id = %s
-              AND plan_type IN ('premium', 'premium_help')
-              AND status = 'active'
-              AND (expires_at IS NULL OR expires_at > NOW())
+            SELECT s.id FROM subscriptions s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.user_id = %s
+              AND u.is_active = TRUE
+              AND u.role = 'student'
+              AND s.plan_type IN ('premium', 'premium_help')
+              AND s.status = 'active'
+              AND (s.expires_at IS NULL OR s.expires_at > NOW())
             LIMIT 1
             """,
             (user_id,),
@@ -155,11 +174,14 @@ def _has_active_premium(user_id: str, conn: Connection) -> bool:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
-            SELECT id FROM subscriptions
-            WHERE user_id = %s
-              AND plan_type IN ('premium', 'premium_help', 'premium_pdf', 'premium_gen')
-              AND status = 'active'
-              AND (expires_at IS NULL OR expires_at > NOW())
+            SELECT s.id FROM subscriptions s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.user_id = %s
+              AND u.is_active = TRUE
+              AND u.role = 'student'
+              AND s.plan_type IN ('premium', 'premium_help', 'premium_pdf', 'premium_gen')
+              AND s.status = 'active'
+              AND (s.expires_at IS NULL OR s.expires_at > NOW())
             LIMIT 1
             """,
             (user_id,),
@@ -172,11 +194,14 @@ def _has_gen_access(user_id: str, conn: Connection) -> bool:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
-            SELECT id FROM subscriptions
-            WHERE user_id = %s
-              AND plan_type IN ('premium', 'premium_gen')
-              AND status = 'active'
-              AND (expires_at IS NULL OR expires_at > NOW())
+            SELECT s.id FROM subscriptions s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.user_id = %s
+              AND u.is_active = TRUE
+              AND u.role IN ('student', 'school_teacher')
+              AND s.plan_type IN ('premium', 'premium_gen')
+              AND s.status = 'active'
+              AND (s.expires_at IS NULL OR s.expires_at > NOW())
             LIMIT 1
             """,
             (user_id,),
@@ -189,11 +214,14 @@ def _has_pdf_access(user_id: str, conn: Connection) -> bool:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """
-            SELECT id FROM subscriptions
-            WHERE user_id = %s
-              AND plan_type IN ('premium', 'premium_pdf')
-              AND status = 'active'
-              AND (expires_at IS NULL OR expires_at > NOW())
+            SELECT s.id FROM subscriptions s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.user_id = %s
+              AND u.is_active = TRUE
+              AND u.role IN ('student', 'school_teacher')
+              AND s.plan_type IN ('premium', 'premium_pdf')
+              AND s.status = 'active'
+              AND (s.expires_at IS NULL OR s.expires_at > NOW())
             LIMIT 1
             """,
             (user_id,),
@@ -208,6 +236,11 @@ def require_premium(
     """Verifică că userul poate trimite cereri de ajutor (Premium Help sau Premium Full)."""
     if current_user.role in (UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN):
         return current_user
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Doar elevii pot trimite cereri de ajutor",
+        )
     if _has_help_access(str(current_user.id), conn):
         return current_user
     raise HTTPException(
@@ -223,6 +256,11 @@ def require_pdf_premium(
     """Verifică că userul are acces la descărcare PDF (premium_pdf sau premium)."""
     if current_user.role in (UserRole.TEACHER, UserRole.SCHOOL_TEACHER, UserRole.ADMIN):
         return current_user
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acest rol nu poate descărca variantele elevului",
+        )
     if _has_pdf_access(str(current_user.id), conn):
         return current_user
     raise HTTPException(

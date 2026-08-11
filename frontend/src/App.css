@@ -137,8 +137,8 @@
   display: none;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border: 1.5px solid var(--gray-200);
   background: #fff;
   border-radius: var(--radius-md);
@@ -148,31 +148,45 @@
 .navbar-burger:hover { background: var(--gray-50); }
 
 .navbar-overlay { display: none; }
+.navbar-mobile-account,
+.mobile-bottom-nav { display: none; }
 
 /* ─────────────────────────────────────────────────────────────
    NAVBAR MOBIL — drawer lateral + top-bar compact
    ───────────────────────────────────────────────────────────── */
 @media (max-width: 900px) {
   .navbar {
-    padding: 10px 16px;
+    padding: calc(10px + env(safe-area-inset-top)) 14px 10px;
     z-index: 300;                 /* deasupra overlay-ului și a drawer-ului */
   }
-  .navbar-content { gap: 8px; }
+  .navbar-content { gap: 6px; }
 
   .navbar-subtitle { display: none; }
-  .navbar-title { font-size: 1.05rem; }
+  .navbar-title {
+    max-width: 112px;
+    overflow: hidden;
+    font-size: 0.98rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .navbar-logo { width: 34px; height: 34px; }
 
   /* ordine pe mobil: brand | zona user (compactă) | hamburger */
-  .navbar-brand { order: 1; min-width: 0; }
+  .navbar-brand { order: 1; min-width: 0; min-height: 44px; }
   .navbar-right { order: 2; margin-left: auto; gap: 6px; }
-  .navbar-burger { display: inline-flex; order: 3; }
+  .navbar-burger {
+    position: relative;
+    z-index: 260;
+    display: inline-flex;
+    order: 3;
+  }
 
   /* elemente grele ascunse din top-bar pe mobil */
   .navbar-status,
   .navbar-xp-strip,
   .navbar-user-name,
-  .navbar-user-badge { display: none; }
+  .navbar-user-badge,
+  .navbar-logout-btn { display: none; }
 
   /* fundal semi-transparent când drawer-ul e deschis */
   .navbar-overlay {
@@ -192,7 +206,7 @@
     height: 100dvh;
     width: min(82vw, 320px);
     margin: 0;
-    padding: 76px 16px 28px;
+    padding: calc(76px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
     flex-direction: column;
     align-items: stretch;
     gap: 4px;
@@ -201,15 +215,131 @@
     transform: translateX(100%);
     transition: transform 0.25s ease;
     overflow-y: auto;
+    visibility: hidden;
+    pointer-events: none;
     z-index: 250;
   }
-  .navbar-links.open { transform: translateX(0); }
+  .navbar-links.open {
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+  }
 
   .nav-link {
     display: block;
+    min-height: 44px;
     padding: 13px 14px;
     font-size: 1rem;
     border-radius: 10px;
+  }
+
+  .navbar-mobile-account {
+    display: grid;
+    gap: 12px;
+    margin-top: auto;
+    border-top: 1px solid var(--gray-200);
+    padding-top: 16px;
+  }
+
+  .navbar-mobile-account-user {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    padding: 0 8px;
+  }
+
+  .navbar-mobile-account-icon {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: none;
+    place-items: center;
+    border-radius: 12px;
+    background: var(--blue-50);
+    color: var(--blue-700);
+  }
+
+  .navbar-mobile-account-user > span:last-child {
+    display: grid;
+    min-width: 0;
+  }
+
+  .navbar-mobile-account-user strong,
+  .navbar-mobile-account-user small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .navbar-mobile-account-user strong {
+    color: var(--gray-900);
+    font-size: 0.9rem;
+  }
+
+  .navbar-mobile-account-user small {
+    color: var(--gray-500);
+    font-size: 0.78rem;
+  }
+
+  .navbar-mobile-logout {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid var(--red-100);
+    border-radius: 12px;
+    background: var(--red-50);
+    color: var(--red-600);
+    font-weight: 700;
+  }
+
+  .app-student {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 280;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border-top: 1px solid rgba(148, 163, 184, 0.24);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    backdrop-filter: blur(18px);
+  }
+
+  .mobile-bottom-link {
+    display: flex;
+    min-width: 0;
+    min-height: 54px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 3px;
+    border-radius: 12px;
+    color: var(--gray-500);
+    font-size: 0.68rem;
+    font-weight: 700;
+    line-height: 1.1;
+    text-decoration: none;
+  }
+
+  .mobile-bottom-link.active {
+    background: var(--blue-50);
+    color: var(--blue-700);
+  }
+
+  .mobile-bottom-link span {
+    overflow: hidden;
+    max-width: 100%;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -689,6 +819,9 @@
 }
 
 .hub-secondary-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--gray-500);
@@ -1302,9 +1435,6 @@
   .landing-metrics {
     grid-template-columns: 1fr;
   }
-  .navbar-links {
-    display: none;
-  }
   .navbar-xp-strip {
     display: none;
   }
@@ -1331,7 +1461,7 @@
 /* Navbar aplicație — mobil: previne suprapunerea brand (stânga) / user (dreapta) */
 @media (max-width: 600px) {
   .navbar {
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
   }
   .navbar-content {
     gap: 8px;
@@ -1363,6 +1493,11 @@
   }
 }
 
+@media (max-width: 350px) {
+  .navbar-title { display: none; }
+  .navbar-brand { gap: 0; }
+}
+
 @media (max-width: 600px) {
   .hub-grid {
     grid-template-columns: 1fr;
@@ -1388,7 +1523,7 @@
 
 @media (max-width: 560px) {
   .hub-student-summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
   }
 
   .hub-detail-card summary,
@@ -1437,18 +1572,20 @@
   align-items: center;
 }
 
-.auth-logo {
-  width: 56px;
-  height: 56px;
-  background: var(--color-primary, #2563eb);
-  color: #fff;
-  border-radius: 14px;
+.auth-logo-link {
+  width: min(190px, 64vw);
+  min-height: 64px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.4rem;
-  font-weight: 700;
   margin-bottom: 16px;
+}
+
+.auth-brand-logo {
+  display: block;
+  width: 100%;
+  max-height: 76px;
+  object-fit: contain;
 }
 
 .auth-title {
@@ -1485,10 +1622,11 @@
 
 .auth-field input,
 .auth-field select {
+  min-height: 46px;
   padding: 10px 12px;
   border: 1px solid var(--color-gray-300, #d1d5db);
   border-radius: 8px;
-  font-size: 0.95rem;
+  font-size: 1rem;
   transition: border-color 0.15s;
   outline: none;
   background: #fff;
@@ -1510,6 +1648,7 @@
 }
 
 .auth-btn {
+  min-height: 48px;
   padding: 11px;
   background: var(--color-primary, #2563eb);
   color: #fff;
@@ -1703,11 +1842,18 @@ html, body { overflow-x: clip; }   /* clip, nu hidden → previne scroll orizont
   .btn-lg, .btn-xl { width: 100%; }
 
   /* Autentificare */
-  .auth-page { padding: 16px; }
-  .auth-card { padding: 28px 20px; }
+  .auth-page {
+    min-height: 100dvh;
+    padding: max(14px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+  .auth-card {
+    padding: 25px 18px;
+    border-radius: 18px;
+  }
+  .auth-logo-link { width: min(168px, 58vw); margin-bottom: 12px; }
 }
 
 /* Touch targets — pe ecrane cu deget, elementele interactive minim 40px înălțime */
 @media (max-width: 600px) and (pointer: coarse) {
-  .nav-link, .btn, .hub-compact-link { min-height: 42px; }
+  .nav-link, .btn, .hub-compact-link { min-height: 44px; }
 }

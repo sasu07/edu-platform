@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authRegister } from '../api';
 import { useAuth } from '../AuthContext';
+import { BRAND_LOGO_URL } from '../brand';
 
 export default function Register() {
   const { login } = useAuth();
@@ -40,9 +41,11 @@ export default function Register() {
   return (
     <div className="auth-page">
       <div className="auth-card">
-        <div className="auth-logo">EX</div>
+        <Link to="/" className="auth-logo-link" aria-label="Înapoi la e2x Academy">
+          <img src={BRAND_LOGO_URL} alt="e2x Academy" className="auth-brand-logo" />
+        </Link>
         <h1 className="auth-title">Creează cont</h1>
-        <p className="auth-subtitle">EtoX Platform</p>
+        <p className="auth-subtitle">e2x Platform</p>
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="auth-field">

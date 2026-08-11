@@ -5,14 +5,17 @@
 # backend pe portul 8001 (ca să nu intre în conflict cu localul pe 8000).
 # Folosește imaginea slim (ca producția) → oglindește prod + build rapid.
 #
-# Pornire:   docker compose -f docker-compose.test.yml up -d --build
+# Pornire:   docker compose -p etox-test -f docker-compose.test.yml up -d --build
 # Backend:   http://localhost:8001   (ENV=development → /docs vizibil)
-# Frontend:  rulează separat, țintind backend-ul de test:
-#              cd frontend && VITE_API_URL=http://localhost:8001 npm run dev
-# Reset DB:  docker compose -f docker-compose.test.yml down -v   (șterge tot volumul)
+# Frontend:  http://localhost:3001
+# Mailpit:   http://localhost:8025   (emailurile de test nu părăsesc mediul local)
+# Reset DB:  docker compose -p etox-test -f docker-compose.test.yml down -v
+#            (șterge exclusiv volumul bazei de date de test)
 #
 # Valorile de mai jos sunt de TEST (fără secrete reale) — de aceea fișierul e comis.
 # ─────────────────────────────────────────────────────────────────────────────
+name: etox-test
+
 services:
   test-db:
     image: postgres:17-alpine          # la fel ca Neon (PG 17) — evită incompatibilități de schemă
@@ -22,7 +25,7 @@ services:
       POSTGRES_PASSWORD: etox_test
       POSTGRES_DB: etox_test
     ports:
-      - "5433:5432"          # 5433 pe host — ca să nu se bată cu alt Postgres local
+      - "127.0.0.1:5433:5432"  # accesibil doar de pe calculatorul local
     volumes:
       - test_db_data:/var/lib/postgresql/data
       # Schema de bază (extrasă din Neon) — rulează AUTOMAT la prima inițializare a DB-ului.
@@ -40,18 +43,43 @@ services:
       dockerfile: Dockerfile.prod    # slim, la fel ca producția
     container_name: etox-test-backend
     ports:
-      - "8001:8000"
+      - "127.0.0.1:8001:8000"
     environment:
       - PYTHONUNBUFFERED=1
       - DATABASE_URL=postgresql://etox:etox_test@test-db:5432/etox_test?sslmode=disable
       - JWT_SECRET_KEY=test-only-secret-nu-folosi-in-productie-minim-32-caractere
       - ENV=development
-      - APP_URL=http://localhost:5173
-      - ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3001
+      - APP_URL=http://localhost:3001
+      # Acceptă atât frontendul Docker (:3001), cât și serverele locale uzuale.
+      # Toate sunt loopback; nicio origine externă/producție nu este permisă.
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:5173,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:5173
       - EXAM_DATE=2027-06-30   # data BAC pentru countdown (config, nu hardcodat)
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_USE_TLS=false
+      - SMTP_FROM=test@e2xacademy.local
     depends_on:
       test-db:
         condition: service_healthy
+      mailpit:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Captură locală pentru toate emailurile generate în test. Portul SMTP rămâne
+  # exclusiv în rețeaua Docker; doar interfața web este expusă pe host.
+  mailpit:
+    image: axllent/mailpit:v1.27.4
+    container_name: etox-test-mailpit
+    expose:
+      - "1025"
+    ports:
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
     restart: unless-stopped
 
   # Frontend de test — servit din container pe :3001, construit ca să țintească
@@ -64,9 +92,16 @@ services:
         VITE_API_URL: http://localhost:8001
     container_name: etox-test-frontend
     ports:
-      - "3001:80"
+      - "127.0.0.1:3001:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     restart: unless-stopped
 
 volumes:

@@ -266,3 +266,165 @@
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 640px) {
+  .league-page {
+    width: 100%;
+    min-width: 0;
+    padding: 16px max(12px, env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    overflow-x: clip;
+  }
+
+  .league-page *,
+  .league-page *::before,
+  .league-page *::after {
+    box-sizing: border-box;
+  }
+
+  .league-hero,
+  .league-grid {
+    gap: 12px;
+  }
+
+  .league-hero > div:first-child,
+  .league-join-box,
+  .league-card,
+  .league-empty-state {
+    min-width: 0;
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .league-hero h1 {
+    font-size: clamp(1.55rem, 8vw, 1.85rem);
+    line-height: 1.12;
+    overflow-wrap: anywhere;
+  }
+
+  .league-hero p,
+  .league-card-title,
+  .league-challenge-title,
+  .league-challenge-desc,
+  .league-challenge-meta,
+  .league-empty-note,
+  .league-empty-state {
+    overflow-wrap: anywhere;
+  }
+
+  .league-input,
+  .league-textarea {
+    min-width: 0;
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .league-primary-btn,
+  .league-secondary-btn,
+  .league-class-tab {
+    min-height: 44px;
+  }
+
+  .league-primary-btn,
+  .league-secondary-btn {
+    display: inline-flex;
+    align-items: center;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .league-checkbox {
+    min-height: 44px;
+    margin-block: 4px 10px;
+    line-height: 1.35;
+  }
+
+  .league-checkbox input {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+  }
+
+  .league-class-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    scroll-snap-type: inline proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .league-class-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .league-class-tab {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .league-class-meta {
+    flex-direction: column;
+    gap: 5px;
+    overflow-wrap: anywhere;
+  }
+
+  .league-row {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .league-rank {
+    min-width: 0;
+  }
+
+  .league-name,
+  .league-progress-row > span:first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .league-xp {
+    white-space: nowrap;
+  }
+
+  .league-challenge {
+    padding: 13px;
+    border-radius: 14px;
+  }
+
+  .league-challenge-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .league-challenge-status {
+    align-self: flex-start;
+  }
+
+  .league-form-row {
+    gap: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .league-row {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .league-xp {
+    grid-column: 2;
+    justify-self: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .league-page *,
+  .league-page *::before,
+  .league-page *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

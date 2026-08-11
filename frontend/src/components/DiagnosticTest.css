@@ -585,6 +585,54 @@
 
 /* ── Mobil ── */
 @media (max-width: 600px) {
-  .dt-nav-btn { flex: 1; justify-content: center; }
-  .dt-score-card { padding: 16px; }
+  .dt-wrap { width: 100%; min-width: 0; padding: 12px 0 28px; }
+  .dt-welcome { padding: 20px 4px; }
+  .dt-welcome-icon { width: 68px; height: 68px; }
+  .dt-welcome-title { font-size: 1.35rem; }
+  .dt-start-btn { width: 100%; min-height: 48px; }
+
+  .dt-ex-card { padding: 16px 14px; }
+  .dt-ex-type { width: 100%; margin-left: 0; }
+  .dt-mcq-option { min-height: 54px; padding: 12px; }
+
+  .dt-test-nav { flex-wrap: wrap; gap: 8px; }
+  .dt-nav-btn { display: inline-flex; align-items: center; flex: 1 1 calc(50% - 4px); min-height: 44px; padding-inline: 12px; justify-content: center; }
+  .dt-test-dots { order: 3; width: 100%; gap: 0; }
+  .dt-dot {
+    position: relative;
+    display: grid;
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    place-items: center;
+    padding: 0;
+    background: transparent !important;
+    transform: none !important;
+  }
+  .dt-dot::after {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    content: '';
+    transition: background 0.15s, transform 0.1s;
+  }
+  .dt-dot.done::after { background: #a78bfa; }
+  .dt-dot.active::after { background: #7c3aed; transform: scale(1.35); }
+
+  .dt-score-card {
+    align-items: center;
+    flex-direction: column;
+    gap: 16px;
+    padding: 16px;
+    text-align: center;
+  }
+  .dt-score-stats { width: 100%; align-items: flex-start; text-align: left; }
+  .dt-topic-bar-top,
+  .dt-topic-meta { gap: 8px; }
+
+  .dt-upload-section,
+  .dt-cta-section { padding: 16px; }
+  .dt-upload-btn,
+  .dt-generate-btn { width: 100%; min-height: 44px; justify-content: center; }
 }

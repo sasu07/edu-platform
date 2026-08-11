@@ -1,147 +1,314 @@
-import { useState, useEffect } from 'react';
-import { Shield, Crown, UserCheck, XCircle, UserPlus, Link2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {
-  getAdminUsers, upgradeSubscription, cancelSubscription, createTeacher,
-  adminGetParentStudents, adminLinkParentStudent, adminRemoveParentStudentLink,
+  Crown,
+  KeyRound,
+  Link2,
+  LockKeyhole,
+  Mail,
+  RefreshCw,
+  Save,
+  Search,
+  Shield,
+  UserCheck,
+  UserPlus,
+  Users,
+  XCircle,
+} from 'lucide-react';
+import {
+  adminGetParentStudents,
+  adminLinkParentStudent,
+  adminRemoveParentStudentLink,
+  cancelSubscription,
+  createAdminUser,
+  getAdminUsers,
+  requestAdminPasswordReset,
+  updateAdminUserRole,
+  upgradeSubscription,
+  type AdminUser,
+  type ManagedUserRole,
 } from '../api';
+import { useAuth } from '../AuthContext';
 import AuditLog from './AuditLog';
 import './AdminPanel.css';
 
-interface UserRow {
-  id: string;
-  email: string;
-  full_name: string;
-  role: string;
-  is_active: boolean;
-  created_at: string;
-  active_plans: string[];
-}
-
 const PLAN_LABELS: Record<string, string> = {
-  premium:      '👑 Full',
+  premium: '👑 Full',
   premium_help: '✍️ Help',
-  premium_pdf:  '📄 PDF',
-  premium_gen:  '⚡ Gen',
-  free:         'Free',
-};
-
-const ROLE_BADGE: Record<string, string> = {
-  admin:          'badge-admin',
-  teacher:        'badge-teacher',
-  school_teacher: 'badge-teacher',
-  student:        'badge-student',
+  premium_pdf: '📄 PDF',
+  premium_gen: '⚡ Gen',
+  free: 'Free',
 };
 
 const PLANS = [
   { key: 'premium_help', label: '✍️ Help', title: 'Activează Premium Help (cereri ajutor)' },
-  { key: 'premium_pdf',  label: '📄 PDF',  title: 'Activează Premium PDF (descărcare PDF)' },
-  { key: 'premium_gen',  label: '⚡ Gen',  title: 'Activează Premium Gen (generare nelimitată exerciții + variante BAC)' },
-  { key: 'premium',      label: '👑 Full',  title: 'Activează Premium Full (toate facilitățile)' },
+  { key: 'premium_pdf', label: '📄 PDF', title: 'Activează Premium PDF (descărcare PDF)' },
+  { key: 'premium_gen', label: '⚡ Gen', title: 'Activează Premium Gen (generare nelimitată)' },
+  { key: 'premium', label: '👑 Full', title: 'Activează Premium Full (toate facilitățile)' },
 ];
 
-function AdminParentSection({ users }: { users: UserRow[] }) {
-  const [links, setLinks] = useState<any[]>([]);
+const ROLE_OPTIONS: Array<{ value: ManagedUserRole; label: string }> = [
+  { value: 'student', label: 'Elev' },
+  { value: 'teacher', label: 'Profesor platformă' },
+  { value: 'school_teacher', label: 'Profesor de școală' },
+  { value: 'parent', label: 'Părinte' },
+];
+
+const ROLE_LABELS: Record<string, string> = {
+  student: 'Elev',
+  teacher: 'Profesor platformă',
+  school_teacher: 'Profesor de școală',
+  parent: 'Părinte',
+  admin: 'Administrator',
+};
+
+interface ParentStudentLinkRow {
+  id: string;
+  parent_name: string;
+  parent_email: string;
+  student_name: string;
+  student_email: string;
+}
+
+function getApiError(error: unknown, fallback: string): string {
+  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const firstMessage = detail.find((item) => typeof item === 'object' && item !== null && 'msg' in item) as { msg?: unknown } | undefined;
+    if (typeof firstMessage?.msg === 'string') return firstMessage.msg;
+  }
+  return fallback;
+}
+
+function isManagedRole(role: string): role is ManagedUserRole {
+  return ROLE_OPTIONS.some((option) => option.value === role);
+}
+
+function AdminParentSection({ users }: { users: AdminUser[] }) {
+  const [links, setLinks] = useState<ParentStudentLinkRow[]>([]);
   const [loadingLinks, setLoadingLinks] = useState(true);
   const [parentId, setParentId] = useState('');
   const [studentId, setStudentId] = useState('');
   const [adding, setAdding] = useState(false);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  const loadLinks = () => {
+  const loadLinks = useCallback(() => {
     setLoadingLinks(true);
     adminGetParentStudents()
-      .then(r => setLinks(r.data))
-      .catch(() => {})
+      .then((response) => setLinks(Array.isArray(response.data) ? response.data : []))
+      .catch(() => setMsg({ text: 'Legăturile nu au putut fi încărcate.', ok: false }))
       .finally(() => setLoadingLinks(false));
-  };
+  }, []);
 
-  useEffect(() => { loadLinks(); }, []);
+  useEffect(() => { loadLinks(); }, [loadLinks]);
 
-  const parents = users.filter(u => u.role === 'parent');
-  const students = users.filter(u => u.role === 'student' || u.role === 'school_teacher');
+  const parents = users.filter((user) => user.role === 'parent');
+  const students = users.filter((user) => user.role === 'student');
 
   const handleAdd = async () => {
     if (!parentId || !studentId) return;
-    setAdding(true); setMsg(null);
+    setAdding(true);
+    setMsg(null);
     try {
       await adminLinkParentStudent({ parent_id: parentId, student_id: studentId });
-      setMsg({ text: 'Legătură creată.', ok: true });
-      setParentId(''); setStudentId('');
+      setMsg({ text: 'Legătura părinte–elev a fost creată.', ok: true });
+      setParentId('');
+      setStudentId('');
       loadLinks();
-    } catch (e: any) {
-      setMsg({ text: e?.response?.data?.detail || 'Eroare.', ok: false });
-    } finally { setAdding(false); }
+    } catch (error: unknown) {
+      setMsg({ text: getApiError(error, 'Legătura nu a putut fi creată.'), ok: false });
+    } finally {
+      setAdding(false);
+    }
   };
 
   const handleRemove = async (linkId: string) => {
+    if (!window.confirm('Ștergi această legătură părinte–elev?')) return;
     try {
       await adminRemoveParentStudentLink(linkId);
-      setLinks(l => l.filter(x => x.id !== linkId));
-    } catch { /* ignore */ }
+      setLinks((current) => current.filter((link) => link.id !== linkId));
+      setMsg({ text: 'Legătura a fost ștearsă.', ok: true });
+    } catch (error: unknown) {
+      setMsg({ text: getApiError(error, 'Legătura nu a putut fi ștearsă.'), ok: false });
+    }
   };
 
   return (
-    <div className="admin-section">
-      <h3 className="admin-section-title"><Link2 size={16} /> Legătură Părinte–Elev</h3>
+    <section className="admin-section" aria-labelledby="parent-student-title">
+      <h3 id="parent-student-title" className="admin-section-title">
+        <Link2 size={18} /> Legături părinte–elev
+      </h3>
 
       <div className="admin-parent-form">
-        <select className="admin-select" value={parentId} onChange={e => setParentId(e.target.value)}>
-          <option value="">— Selectează părinte —</option>
-          {parents.map(p => <option key={p.id} value={p.id}>{p.full_name} ({p.email})</option>)}
-        </select>
-        <select className="admin-select" value={studentId} onChange={e => setStudentId(e.target.value)}>
-          <option value="">— Selectează elev —</option>
-          {students.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.email})</option>)}
-        </select>
-        <button className="admin-btn" onClick={handleAdd} disabled={adding || !parentId || !studentId}>
-          {adding ? '...' : '+ Leagă'}
+        <label>
+          <span>Părinte</span>
+          <select value={parentId} onChange={(event) => setParentId(event.target.value)}>
+            <option value="">Selectează părintele</option>
+            {parents.map((parent) => (
+              <option key={parent.id} value={parent.id}>{parent.full_name} ({parent.email})</option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Elev</span>
+          <select value={studentId} onChange={(event) => setStudentId(event.target.value)}>
+            <option value="">Selectează elevul</option>
+            {students.map((student) => (
+              <option key={student.id} value={student.id}>{student.full_name} ({student.email})</option>
+            ))}
+          </select>
+        </label>
+        <button className="admin-btn admin-btn--primary" onClick={handleAdd} disabled={adding || !parentId || !studentId}>
+          {adding ? 'Se salvează…' : 'Creează legătura'}
         </button>
       </div>
-      {msg && <div className={`admin-msg ${msg.ok ? 'ok' : 'err'}`}>{msg.text}</div>}
 
-      {loadingLinks && <div className="admin-empty">Se încarcă...</div>}
-      {!loadingLinks && links.length === 0 && <div className="admin-empty">Nicio legătură activă.</div>}
+      {msg && <div className={`admin-msg ${msg.ok ? 'ok' : 'err'}`} role="status">{msg.text}</div>}
+      {loadingLinks && <div className="admin-empty">Se încarcă legăturile…</div>}
+      {!loadingLinks && links.length === 0 && <div className="admin-empty">Nu există legături active.</div>}
+
       <div className="admin-links-list">
-        {links.map(l => (
-          <div key={l.id} className="admin-link-row">
-            <span className="admin-link-parent">👨‍👩‍👧 {l.parent_name} <small>({l.parent_email})</small></span>
-            <span className="admin-link-arrow">→</span>
-            <span className="admin-link-student">🎓 {l.student_name} <small>({l.student_email})</small></span>
-            <button className="admin-cancel-btn" onClick={() => handleRemove(l.id)} title="Șterge legătura">
-              <XCircle size={14} />
+        {links.map((link) => (
+          <article key={link.id} className="admin-link-row">
+            <div>
+              <strong>{link.parent_name}</strong>
+              <span>{link.parent_email}</span>
+            </div>
+            <span className="admin-link-arrow" aria-hidden="true">→</span>
+            <div>
+              <strong>{link.student_name}</strong>
+              <span>{link.student_email}</span>
+            </div>
+            <button className="admin-btn admin-btn--danger admin-link-remove" onClick={() => handleRemove(link.id)}>
+              <XCircle size={16} /> Șterge
             </button>
-          </div>
+          </article>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 
 export default function AdminPanel() {
-  const [users, setUsers] = useState<UserRow[]>([]);
+  const { user: currentUser } = useAuth();
+  const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [query, setQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
   const [upgrading, setUpgrading] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [savingRole, setSavingRole] = useState<string | null>(null);
+  const [resettingPassword, setResettingPassword] = useState<string | null>(null);
+  const [roleDrafts, setRoleDrafts] = useState<Record<string, ManagedUserRole>>({});
   const [msg, setMsg] = useState<{ id: string; text: string; ok: boolean } | null>(null);
 
-  const [showNewTeacher, setShowNewTeacher] = useState(false);
-  const [newTeacher, setNewTeacher] = useState({ full_name: '', email: '', password: '' });
-  const [teacherMsg, setTeacherMsg] = useState<{ text: string; ok: boolean } | null>(null);
-  const [creatingTeacher, setCreatingTeacher] = useState(false);
+  const [showNewUser, setShowNewUser] = useState(false);
+  const [newUser, setNewUser] = useState<{ full_name: string; email: string; role: ManagedUserRole }>({
+    full_name: '',
+    email: '',
+    role: 'student',
+  });
+  const [createMsg, setCreateMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [creatingUser, setCreatingUser] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
+  const load = useCallback(async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
+    setLoadError('');
     try {
-      const res = await getAdminUsers();
-      setUsers(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      setUsers([]);
+      const response = await getAdminUsers();
+      const nextUsers = Array.isArray(response.data) ? response.data : [];
+      setUsers(nextUsers);
+      setRoleDrafts((current) => {
+        const next = { ...current };
+        nextUsers.forEach((account) => {
+          if (isManagedRole(account.role)) next[account.id] = account.role;
+        });
+        return next;
+      });
+    } catch (error: unknown) {
+      setLoadError(getApiError(error, 'Utilizatorii nu au putut fi încărcați.'));
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const visibleUsers = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase('ro-RO');
+    return users.filter((account) => {
+      const matchesQuery = !normalizedQuery
+        || account.full_name.toLocaleLowerCase('ro-RO').includes(normalizedQuery)
+        || account.email.toLocaleLowerCase('ro-RO').includes(normalizedQuery);
+      const matchesRole = roleFilter === 'all' || account.role === roleFilter;
+      return matchesQuery && matchesRole;
+    });
+  }, [query, roleFilter, users]);
+
+  const handleCreateUser = async (event: FormEvent) => {
+    event.preventDefault();
+    setCreatingUser(true);
+    setCreateMsg(null);
+    try {
+      await createAdminUser({
+        full_name: newUser.full_name.trim(),
+        email: newUser.email.trim().toLocaleLowerCase('ro-RO'),
+        role: newUser.role,
+      });
+      setCreateMsg({ text: 'Contul a fost creat. Utilizatorul a primit linkul securizat pentru alegerea parolei.', ok: true });
+      setNewUser({ full_name: '', email: '', role: 'student' });
+      setShowNewUser(false);
+      await load(false);
+    } catch (error: unknown) {
+      setCreateMsg({ text: getApiError(error, 'Contul nu a putut fi creat.'), ok: false });
+      await load(false);
+    } finally {
+      setCreatingUser(false);
     }
   };
 
-  useEffect(() => { load(); }, []);
+  const handleRoleChange = async (account: AdminUser) => {
+    const nextRole = roleDrafts[account.id];
+    const previousRole = isManagedRole(account.role) ? account.role : null;
+    if (!nextRole || nextRole === account.role || account.role === 'admin' || account.id === currentUser?.id) return;
+    const confirmed = window.confirm(
+      `Schimbi rolul lui ${account.full_name} din „${ROLE_LABELS[account.role]}” în „${ROLE_LABELS[nextRole]}”? Utilizatorul va trebui să se autentifice din nou.`,
+    );
+    if (!confirmed) {
+      if (previousRole) setRoleDrafts((current) => ({ ...current, [account.id]: previousRole }));
+      return;
+    }
+
+    setSavingRole(account.id);
+    setMsg(null);
+    try {
+      await updateAdminUserRole(account.id, nextRole);
+      setMsg({ id: account.id, text: 'Rolul a fost actualizat, iar sesiunile vechi au fost închise.', ok: true });
+      await load(false);
+    } catch (error: unknown) {
+      if (previousRole) setRoleDrafts((current) => ({ ...current, [account.id]: previousRole }));
+      setMsg({ id: account.id, text: getApiError(error, 'Rolul nu a putut fi actualizat.'), ok: false });
+    } finally {
+      setSavingRole(null);
+    }
+  };
+
+  const handlePasswordReset = async (account: AdminUser) => {
+    if (account.role === 'admin' || (!account.is_active && !account.invite_pending)) return;
+    const action = account.invite_pending ? 'activarea contului' : 'resetarea parolei';
+    if (!window.confirm(`Trimiți către ${account.email} un link securizat pentru ${action}?`)) return;
+
+    setResettingPassword(account.id);
+    setMsg(null);
+    try {
+      await requestAdminPasswordReset(account.id);
+      setMsg({ id: account.id, text: 'Linkul securizat a fost trimis pe email.', ok: true });
+    } catch (error: unknown) {
+      setMsg({ id: account.id, text: getApiError(error, 'Linkul nu a putut fi trimis.'), ok: false });
+    } finally {
+      setResettingPassword(null);
+    }
+  };
 
   const handleUpgrade = async (userId: string, planType: string) => {
     const key = `${userId}:${planType}`;
@@ -149,183 +316,248 @@ export default function AdminPanel() {
     setMsg(null);
     try {
       await upgradeSubscription(userId, planType);
-      const planLabel = PLANS.find(p => p.key === planType)?.label ?? planType;
-      setMsg({ id: userId, text: `Abonament ${planLabel} activat!`, ok: true });
-      load();
-    } catch (err: any) {
-      setMsg({ id: userId, text: err.response?.data?.detail || 'Eroare', ok: false });
+      const planLabel = PLANS.find((plan) => plan.key === planType)?.label ?? planType;
+      setMsg({ id: userId, text: `Abonamentul ${planLabel} a fost activat.`, ok: true });
+      await load(false);
+    } catch (error: unknown) {
+      setMsg({ id: userId, text: getApiError(error, 'Abonamentul nu a putut fi activat.'), ok: false });
     } finally {
       setUpgrading(null);
     }
   };
 
   const handleCancel = async (userId: string) => {
+    if (!window.confirm('Dezactivezi toate abonamentele active ale acestui utilizator?')) return;
     setCancelling(userId);
     setMsg(null);
     try {
       await cancelSubscription(userId);
-      setMsg({ id: userId, text: 'Abonament dezactivat.', ok: true });
-      load();
-    } catch (err: any) {
-      setMsg({ id: userId, text: err.response?.data?.detail || 'Eroare', ok: false });
+      setMsg({ id: userId, text: 'Abonamentele active au fost dezactivate.', ok: true });
+      await load(false);
+    } catch (error: unknown) {
+      setMsg({ id: userId, text: getApiError(error, 'Abonamentele nu au putut fi dezactivate.'), ok: false });
     } finally {
       setCancelling(null);
     }
   };
 
-  const handleCreateTeacher = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCreatingTeacher(true);
-    setTeacherMsg(null);
-    try {
-      await createTeacher(newTeacher);
-      setTeacherMsg({ text: 'Cont profesor creat cu succes.', ok: true });
-      setNewTeacher({ full_name: '', email: '', password: '' });
-      setShowNewTeacher(false);
-      load();
-    } catch (err: any) {
-      setTeacherMsg({ text: err.response?.data?.detail || 'Eroare', ok: false });
-    } finally {
-      setCreatingTeacher(false);
-    }
-  };
-
-  if (loading) return <div className="admin-panel">Se încarcă...</div>;
+  if (loading) return <div className="admin-panel admin-panel--loading">Se încarcă panoul de administrare…</div>;
 
   return (
-    <div className="admin-panel">
-      <div className="admin-header">
-        <h2><Shield size={20} /> Panou Administrator</h2>
-        <button className="admin-refresh-btn" onClick={load}>Refresh</button>
-      </div>
+    <main className="admin-panel">
+      <header className="admin-header">
+        <div>
+          <span className="admin-eyebrow">Control central</span>
+          <h1><Shield size={24} /> Administrare</h1>
+          <p>Utilizatori, acces și legături — într-un singur loc.</p>
+        </div>
+        <button className="admin-btn admin-btn--secondary" onClick={() => void load(false)} aria-label="Reîncarcă datele">
+          <RefreshCw size={17} /> <span>Reîncarcă</span>
+        </button>
+      </header>
 
-      <div className="admin-section">
+      {loadError && <div className="admin-alert admin-alert--error" role="alert">{loadError}</div>}
+
+      <section className="admin-section admin-create-section" aria-labelledby="create-user-title">
         <div className="admin-section-head">
-          <h3 className="admin-section-title">Profesori platformă</h3>
-          <button className="admin-add-teacher-btn" onClick={() => setShowNewTeacher(v => !v)}>
-            <UserPlus size={15} />
-            {showNewTeacher ? 'Anulează' : 'Adaugă profesor'}
+          <div>
+            <h2 id="create-user-title" className="admin-section-title"><UserPlus size={19} /> Utilizator nou</h2>
+            <p className="admin-section-description">Fără parole temporare: utilizatorul își alege parola dintr-un link securizat primit pe email.</p>
+          </div>
+          <button
+            className="admin-btn admin-btn--primary"
+            onClick={() => { setShowNewUser((current) => !current); setCreateMsg(null); }}
+            aria-expanded={showNewUser}
+          >
+            <UserPlus size={17} /> {showNewUser ? 'Închide formularul' : 'Creează utilizator'}
           </button>
         </div>
 
-        {showNewTeacher && (
-          <form className="admin-new-teacher-form" onSubmit={handleCreateTeacher}>
-            <div className="admin-nt-fields">
+        {showNewUser && (
+          <form className="admin-create-form" onSubmit={handleCreateUser}>
+            <label>
+              <span>Nume complet</span>
               <input
-                placeholder="Nume complet"
-                value={newTeacher.full_name}
-                onChange={e => setNewTeacher({ ...newTeacher, full_name: e.target.value })}
+                value={newUser.full_name}
+                onChange={(event) => setNewUser({ ...newUser, full_name: event.target.value })}
+                placeholder="Ex. Maria Popescu"
+                autoComplete="name"
+                minLength={2}
+                maxLength={120}
                 required
               />
+            </label>
+            <label>
+              <span>Email</span>
               <input
                 type="email"
-                placeholder="Email"
-                value={newTeacher.email}
-                onChange={e => setNewTeacher({ ...newTeacher, email: e.target.value })}
+                value={newUser.email}
+                onChange={(event) => setNewUser({ ...newUser, email: event.target.value })}
+                placeholder="maria@exemplu.ro"
+                autoComplete="email"
+                maxLength={254}
                 required
               />
-              <input
-                type="password"
-                placeholder="Parolă temporară"
-                value={newTeacher.password}
-                onChange={e => setNewTeacher({ ...newTeacher, password: e.target.value })}
-                required
-                minLength={6}
-              />
-              <button type="submit" className="admin-premium-btn" disabled={creatingTeacher}>
-                {creatingTeacher ? '...' : 'Creează cont'}
-              </button>
-            </div>
-            {teacherMsg && (
-              <span className={`admin-msg ${teacherMsg.ok ? 'ok' : 'err'}`}>{teacherMsg.text}</span>
-            )}
+            </label>
+            <label>
+              <span>Rol inițial</span>
+              <select value={newUser.role} onChange={(event) => setNewUser({ ...newUser, role: event.target.value as ManagedUserRole })}>
+                {ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+            <button type="submit" className="admin-btn admin-btn--primary admin-create-submit" disabled={creatingUser}>
+              <Mail size={17} /> {creatingUser ? 'Se creează…' : 'Creează și trimite invitația'}
+            </button>
           </form>
         )}
-      </div>
+        {createMsg && <div className={`admin-alert ${createMsg.ok ? 'admin-alert--success' : 'admin-alert--error'}`} role="status">{createMsg.text}</div>}
+      </section>
 
-      <div className="admin-section">
-        <h3 className="admin-section-title">Utilizatori înregistrați ({users.length})</h3>
-
-        <div className="admin-users-table">
-          <div className="admin-table-head">
-            <span>Nume</span>
-            <span>Email</span>
-            <span>Rol</span>
-            <span>Înregistrat</span>
-            <span>Acțiuni</span>
+      <section className="admin-section" aria-labelledby="users-title">
+        <div className="admin-section-head admin-users-heading">
+          <div>
+            <h2 id="users-title" className="admin-section-title"><Users size={19} /> Utilizatori</h2>
+            <p className="admin-section-description">{visibleUsers.length} din {users.length} conturi afișate</p>
           </div>
-
-          {users.map((u) => (
-            <div key={u.id} className="admin-table-row">
-              <span className="admin-user-name">
-                {u.full_name}
-                {!u.is_active && <span className="admin-inactive-badge">Inactiv</span>}
-              </span>
-              <span className="admin-user-email">{u.email}</span>
-              <span className={`navbar-user-badge ${ROLE_BADGE[u.role] || ''}`}>{u.role}</span>
-              <span className="admin-user-date">
-                {new Date(u.created_at).toLocaleDateString('ro-RO')}
-              </span>
-              <div className="admin-user-actions">
-                {u.active_plans?.length > 0 && u.active_plans.map((plan) => (
-                  <span key={plan} className="admin-active-plan-badge">
-                    {PLAN_LABELS[plan] ?? plan}
-                  </span>
-                ))}
-                {(u.role === 'student' || u.role === 'school_teacher') && PLANS.map((plan) => (
-                  <button
-                    key={plan.key}
-                    className={`admin-premium-btn ${u.active_plans?.includes(plan.key) ? 'admin-premium-btn--active' : ''}`}
-                    onClick={() => handleUpgrade(u.id, plan.key)}
-                    disabled={upgrading === `${u.id}:${plan.key}`}
-                    title={u.active_plans?.includes(plan.key) ? `${plan.title} (deja activ)` : plan.title}
-                  >
-                    <Crown size={14} />
-                    {upgrading === `${u.id}:${plan.key}` ? '...' : plan.label}
-                  </button>
-                ))}
-                {u.active_plans?.length > 0 && (u.role === 'student' || u.role === 'school_teacher') && (
-                  <button
-                    className="admin-cancel-btn"
-                    onClick={() => handleCancel(u.id)}
-                    disabled={cancelling === u.id}
-                    title="Dezactivează toate abonamentele active"
-                  >
-                    <XCircle size={14} />
-                    {cancelling === u.id ? '...' : 'Dezactivează tot'}
-                  </button>
-                )}
-                {msg?.id === u.id && (
-                  <span className={`admin-msg ${msg.ok ? 'ok' : 'err'}`}>{msg.text}</span>
-                )}
-              </div>
-            </div>
-          ))}
-
-          {users.length === 0 && (
-            <div className="admin-empty">Nu există utilizatori înregistrați.</div>
-          )}
+          <div className="admin-filters">
+            <label className="admin-search">
+              <Search size={17} aria-hidden="true" />
+              <span className="sr-only">Caută utilizator</span>
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Caută nume sau email" />
+            </label>
+            <label>
+              <span className="sr-only">Filtrează după rol</span>
+              <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
+                <option value="all">Toate rolurile</option>
+                {ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                <option value="admin">Administrator</option>
+              </select>
+            </label>
+          </div>
         </div>
-      </div>
 
-      <div className="admin-section admin-info">
-        <h3 className="admin-section-title"><UserCheck size={16} /> Planuri de abonament</h3>
+        <div className="admin-user-list">
+          {visibleUsers.map((account) => {
+            const protectedAccount = account.role === 'admin';
+            const ownAccount = account.id === currentUser?.id;
+            const draftRole = roleDrafts[account.id];
+            const canSaveRole = !!draftRole && draftRole !== account.role && !protectedAccount && !ownAccount;
+            const hasPlans = account.active_plans?.length > 0;
+            const canManagePlans = account.role === 'student' || account.role === 'school_teacher';
+
+            return (
+              <article key={account.id} className="admin-user-card">
+                <header className="admin-user-card-head">
+                  <div className="admin-user-avatar" aria-hidden="true">{account.full_name.trim().charAt(0).toLocaleUpperCase('ro-RO') || '?'}</div>
+                  <div className="admin-user-identity">
+                    <h3>{account.full_name}</h3>
+                    <a href={`mailto:${account.email}`}>{account.email}</a>
+                  </div>
+                  <div className="admin-user-badges">
+                    <span className={`admin-role-badge admin-role-badge--${account.role}`}>{ROLE_LABELS[account.role] || account.role}</span>
+                    <span className={`admin-status-badge ${account.is_active ? 'is-active' : 'is-inactive'}`}>
+                      {account.is_active ? 'Activ' : account.invite_pending ? 'Invitație în așteptare' : 'Dezactivat'}
+                    </span>
+                  </div>
+                </header>
+
+                <div className="admin-user-meta">
+                  <span>Creat la {new Date(account.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                  {ownAccount && <span>Acesta este contul tău</span>}
+                </div>
+
+                {protectedAccount ? (
+                  <div className="admin-protected-note"><LockKeyhole size={16} /> Conturile de administrator sunt protejate și nu se modifică din această listă.</div>
+                ) : (
+                  <div className="admin-user-management">
+                    <label className="admin-role-field">
+                      <span>Rol</span>
+                      <select
+                        value={draftRole || account.role}
+                        onChange={(event) => setRoleDrafts((current) => ({ ...current, [account.id]: event.target.value as ManagedUserRole }))}
+                        disabled={ownAccount || savingRole === account.id}
+                      >
+                        {ROLE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                    </label>
+                    <button
+                      className="admin-btn admin-btn--secondary"
+                      onClick={() => void handleRoleChange(account)}
+                      disabled={!canSaveRole || savingRole === account.id}
+                    >
+                      <Save size={16} /> {savingRole === account.id ? 'Se salvează…' : 'Salvează rolul'}
+                    </button>
+                    <button
+                      className="admin-btn admin-btn--outline"
+                      onClick={() => void handlePasswordReset(account)}
+                      disabled={resettingPassword === account.id || (!account.is_active && !account.invite_pending)}
+                      title={!account.is_active && !account.invite_pending ? 'Contul dezactivat nu poate fi reactivat prin resetarea parolei.' : undefined}
+                    >
+                      <KeyRound size={16} />
+                      {resettingPassword === account.id
+                        ? 'Se trimite…'
+                        : account.invite_pending ? 'Retrimite invitația' : 'Trimite resetare parolă'}
+                    </button>
+                  </div>
+                )}
+
+                {canManagePlans && (
+                  <details className="admin-plan-details">
+                    <summary>Abonamente și acces</summary>
+                    <div className="admin-plan-content">
+                      {hasPlans ? (
+                        <div className="admin-active-plans">
+                          {account.active_plans.map((plan) => <span key={plan}>{PLAN_LABELS[plan] ?? plan}</span>)}
+                        </div>
+                      ) : <p>Niciun plan premium activ.</p>}
+                      <div className="admin-plan-actions">
+                        {PLANS.map((plan) => (
+                          <button
+                            key={plan.key}
+                            className={`admin-btn admin-plan-btn ${account.active_plans?.includes(plan.key) ? 'is-active' : ''}`}
+                            onClick={() => void handleUpgrade(account.id, plan.key)}
+                            disabled={upgrading === `${account.id}:${plan.key}`}
+                            title={plan.title}
+                          >
+                            <Crown size={15} /> {upgrading === `${account.id}:${plan.key}` ? '…' : plan.label}
+                          </button>
+                        ))}
+                        {hasPlans && (
+                          <button className="admin-btn admin-btn--danger" onClick={() => void handleCancel(account.id)} disabled={cancelling === account.id}>
+                            <XCircle size={15} /> {cancelling === account.id ? 'Se dezactivează…' : 'Dezactivează toate'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </details>
+                )}
+
+                {msg?.id === account.id && <div className={`admin-alert ${msg.ok ? 'admin-alert--success' : 'admin-alert--error'}`} role="status">{msg.text}</div>}
+              </article>
+            );
+          })}
+
+          {visibleUsers.length === 0 && <div className="admin-empty">Nu am găsit utilizatori pentru filtrele alese.</div>}
+        </div>
+      </section>
+
+      <section className="admin-section admin-info" aria-labelledby="plans-title">
+        <h2 id="plans-title" className="admin-section-title"><UserCheck size={18} /> Planuri de abonament</h2>
         <ul>
-          <li><strong>Free</strong> — 3 generări exerciții/lună · 1 variantă BAC/lună · vizualizare rezolvări</li>
-          <li><strong>✍️ Premium Help</strong> — generare nelimitată + cereri de ajutor (scris, video, live Zoom)</li>
-          <li><strong>📄 Premium PDF</strong> — generare nelimitată + descărcare PDF variante BAC</li>
-          <li><strong>⚡ Premium Gen</strong> — generare nelimitată exerciții + variante BAC nelimitate + PDF</li>
-          <li><strong>👑 Premium Full</strong> — toate facilitățile: generare, PDF, ajutor profesori, sesiuni live</li>
-          <li>Profesorii platformă și adminii au implicit acces complet</li>
+          <li><strong>Free</strong> — accesul de bază al elevului</li>
+          <li><strong>Premium Help</strong> — generare nelimitată și cereri de ajutor</li>
+          <li><strong>Premium PDF</strong> — generare nelimitată și descărcare PDF</li>
+          <li><strong>Premium Gen</strong> — exerciții și variante BAC nelimitate</li>
+          <li><strong>Premium Full</strong> — toate facilitățile platformei</li>
         </ul>
-      </div>
+      </section>
 
       <AdminParentSection users={users} />
 
-      <div className="admin-section">
-        <h3 className="admin-section-title"><Shield size={16} /> Jurnal de audit</h3>
+      <section className="admin-section" aria-labelledby="audit-title">
+        <h2 id="audit-title" className="admin-section-title"><Shield size={18} /> Jurnal de audit</h2>
         <AuditLog />
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }

@@ -201,7 +201,7 @@ export default function ParentDashboard() {
     <div className="pd-container">
       <div className="pd-header">
         <h1 className="pd-title">Dashboard Progres Elev</h1>
-        <p className="pd-subtitle">Urmărești activitatea copilului tău pe platforma EtoX.</p>
+        <p className="pd-subtitle">Urmărești activitatea copilului tău pe platforma e2x.</p>
       </div>
 
       {loading && <div className="pd-loading">Se încarcă...</div>}

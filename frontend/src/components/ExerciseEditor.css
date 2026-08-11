@@ -188,3 +188,83 @@
 .help-box p {
   margin: 0;
 }
+
+@media (max-width: 900px) {
+  .editor-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.25rem;
+  }
+
+  .preview-sticky {
+    position: static;
+  }
+}
+
+@media (max-width: 600px) {
+  .editor-container {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+  }
+
+  .editor-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding: 0.875rem;
+  }
+
+  .btn-back {
+    min-height: 44px;
+    width: fit-content;
+  }
+
+  .header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .header-actions > * {
+    flex: 1 1 130px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .editor-form {
+    gap: 1rem;
+  }
+
+  .form-section,
+  .form-section textarea {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .status-selector {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .status-btn {
+    min-width: 0;
+    min-height: 44px;
+    padding: 0.5rem 0.35rem;
+  }
+
+  .editor-preview,
+  .preview-content {
+    padding: 0.875rem;
+  }
+
+  .preview-content {
+    min-height: 240px;
+  }
+
+  .rendered-math {
+    max-width: 100%;
+    -webkit-overflow-scrolling: touch;
+  }
+}

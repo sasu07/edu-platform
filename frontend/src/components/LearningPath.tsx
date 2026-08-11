@@ -18,6 +18,7 @@ import {
 } from '../api';
 import DiagnosticTest from './DiagnosticTest';
 import LatexRenderer from './LatexRenderer';
+import { evaluateNumericExpression } from '../utils/numericExpression';
 import './LearningPath.css';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -215,10 +216,8 @@ function TodayView() {
     let correct = false;
     const target = rec.answer_numeric_value;
     if (target !== undefined && target !== null) {
-      try {
-        const val = eval(ans.replace(/sqrt\(/g, 'Math.sqrt('));  // noqa
-        correct = Math.abs(val - target) < 1e-4;
-      } catch { /* */ }
+      const value = evaluateNumericExpression(ans);
+      correct = value !== null && Math.abs(value - target) < 1e-4;
     }
 
     setResults(prev => ({ ...prev, [rec.id]: correct }));

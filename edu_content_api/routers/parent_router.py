@@ -28,7 +28,7 @@ def link_parent_to_student(
     conn: Connection = Depends(get_db_conn),
     current_user=Depends(get_current_user),
 ):
-    if current_user.role not in (UserRole.STUDENT, UserRole.SCHOOL_TEACHER):
+    if current_user.role != UserRole.STUDENT:
         raise HTTPException(status_code=403, detail="Doar elevii pot adăuga un părinte")
 
     parent_email = body.parent_email.strip().lower()
@@ -105,6 +105,8 @@ def link_parent_to_student(
 
 @router.get("/student/my-parents", response_model=list[ParentStudentDB], tags=["Parent"])
 def get_my_parents(conn: Connection = Depends(get_db_conn), current_user=Depends(get_current_user)):
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Doar elevii pot accesa această resursă")
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             """SELECT ps.id, ps.parent_id, ps.student_id, ps.linked_at,
@@ -122,6 +124,8 @@ def get_my_parents(conn: Connection = Depends(get_db_conn), current_user=Depends
 
 @router.delete("/student/my-parents/{parent_id}", tags=["Parent"])
 def remove_parent_link(parent_id: str, conn: Connection = Depends(get_db_conn), current_user=Depends(get_current_user)):
+    if current_user.role != UserRole.STUDENT:
+        raise HTTPException(status_code=403, detail="Doar elevii pot modifica această legătură")
     with conn.cursor() as cur:
         cur.execute("DELETE FROM parent_student WHERE student_id=%s AND parent_id=%s", (str(current_user.id), parent_id))
         conn.commit()
@@ -140,7 +144,10 @@ def get_my_students(conn: Connection = Depends(get_db_conn), current_user=Depend
                FROM parent_student ps
                JOIN users p ON p.id = ps.parent_id
                JOIN users s ON s.id = ps.student_id
-               WHERE ps.parent_id=%s ORDER BY ps.linked_at DESC""",
+               WHERE ps.parent_id=%s
+                 AND p.role='parent'
+                 AND s.role='student'
+               ORDER BY ps.linked_at DESC""",
             (str(current_user.id),),
         )
         rows = cur.fetchall()
@@ -158,7 +165,7 @@ def get_student_stats(student_id: str, conn: Connection = Depends(get_db_conn), 
         raise HTTPException(status_code=403, detail="Acces interzis")
 
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute("SELECT full_name, email FROM users WHERE id=%s", (student_id,))
+        cur.execute("SELECT full_name, email FROM users WHERE id=%s AND role='student'", (student_id,))
         student = cur.fetchone()
         if not student:
             raise HTTPException(status_code=404, detail="Elevul nu există")
@@ -275,10 +282,12 @@ def admin_link_parent_student(
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("SELECT id, full_name, email, role FROM users WHERE id=%s", (parent_id,))
         parent = cur.fetchone()
-        cur.execute("SELECT id, full_name, email FROM users WHERE id=%s", (student_id,))
+        cur.execute("SELECT id, full_name, email, role FROM users WHERE id=%s", (student_id,))
         student = cur.fetchone()
         if not parent or not student:
             raise HTTPException(status_code=404, detail="Utilizator inexistent")
+        if parent["role"] != UserRole.PARENT.value or student["role"] != UserRole.STUDENT.value:
+            raise HTTPException(status_code=400, detail="Legătura necesită un părinte și un elev")
 
         cur.execute(
             """INSERT INTO parent_student (parent_id, student_id)

@@ -1,8 +1,10 @@
 import os
 import smtplib
 import logging
+from html import escape
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from urllib.parse import quote
 
 log = logging.getLogger(__name__)
 
@@ -10,28 +12,78 @@ SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "")
 SMTP_PASS = os.getenv("SMTP_PASS", "")
-SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER)
+SMTP_FROM = os.getenv("SMTP_FROM", "") or SMTP_USER or "no-reply@e2xacademy.local"
+_SMTP_TLS_SETTING = os.getenv("SMTP_STARTTLS", os.getenv("SMTP_USE_TLS", "true"))
+SMTP_STARTTLS = _SMTP_TLS_SETTING.strip().lower() not in ("0", "false", "no", "off")
 APP_URL   = os.getenv("APP_URL", "http://localhost:3000")
 
 
-def _send(to: str, subject: str, html: str) -> None:
-    if not SMTP_HOST or not SMTP_USER:
-        log.info("Email disabled (SMTP_HOST/SMTP_USER not set). Would send to %s: %s", to, subject)
-        return
+def _send(to: str, subject: str, html: str) -> bool:
+    if not SMTP_HOST:
+        log.info("Email disabled (SMTP_HOST not set). Would send to %s: %s", to, subject)
+        return False
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"]    = f"EtoX Platform <{SMTP_FROM}>"
+        msg["From"]    = f"e2x Platform <{SMTP_FROM}>"
         msg["To"]      = to
         msg.attach(MIMEText(html, "html", "utf-8"))
 
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as s:
             s.ehlo()
-            s.starttls()
-            s.login(SMTP_USER, SMTP_PASS)
+            if SMTP_STARTTLS:
+                s.starttls()
+                s.ehlo()
+            if SMTP_USER:
+                s.login(SMTP_USER, SMTP_PASS)
             s.sendmail(SMTP_FROM, [to], msg.as_string())
+        return True
     except Exception:
         log.exception("Failed to send email to %s", to)
+        return False
+
+
+def send_password_setup_email(
+    email: str,
+    full_name: str,
+    token: str,
+    purpose: str,
+) -> bool:
+    """Trimite invitația/resetarea fără să scrie tokenul în loguri.
+
+    Tokenul este pus în fragmentul URL (după ``#``), astfel nu ajunge în
+    requesturile și logurile serverului web. Frontendul îl consumă local.
+    """
+    is_invite = purpose == "invite"
+    first_name = escape((full_name or "").strip().split(" ")[0] or "salut")
+    action = "Activează contul" if is_invite else "Alege o parolă nouă"
+    intro = (
+        "Administratorul ți-a creat un cont pe platforma e2x. "
+        "Alege-ți parola pentru a activa contul."
+        if is_invite
+        else "Administratorul a inițiat resetarea parolei contului tău e2x."
+    )
+    validity = "24 de ore" if is_invite else "30 de minute"
+    link = f"{APP_URL.rstrip('/')}/reset-password#token={quote(token, safe='')}"
+    safe_link = escape(link, quote=True)
+    html = f"""
+    <div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a232e;line-height:1.6;max-width:560px;">
+      <h2 style="font-size:22px;margin:0 0 12px;">Bună, {first_name}!</h2>
+      <p>{intro}</p>
+      <p style="margin:24px 0;">
+        <a href="{safe_link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;">
+          {action}
+        </a>
+      </p>
+      <p style="color:#55616f;font-size:0.9em;">Linkul este valabil {validity} și poate fi folosit o singură dată.</p>
+      <p style="color:#55616f;font-size:0.9em;">Dacă nu te așteptai la acest mesaj, îl poți ignora.</p>
+      <p style="color:#8b97a5;font-size:0.85em;margin-top:24px;border-top:1px solid #e5e9ee;padding-top:12px;">
+        e2x Academy · e2xacademy.ro
+      </p>
+    </div>
+    """
+    subject = "Activează contul tău e2x" if is_invite else "Resetează parola contului tău e2x"
+    return _send(email, subject, html)
 
 
 def send_welcome_email(email: str, full_name: str) -> None:
@@ -44,7 +96,7 @@ def send_welcome_email(email: str, full_name: str) -> None:
       <h2 style="font-size:22px;margin:0 0 4px;">Bine ai venit, {first_name}! 🎓</h2>
       <p style="color:#55616f;margin:0 0 20px;">Ai făcut primul pas spre un BAC la matematică mai bun.</p>
 
-      <p><strong>EtoX</strong> te ajută să te pregătești pentru Bacalaureatul la matematică
+      <p><strong>e2x</strong> te ajută să te pregătești pentru Bacalaureatul la matematică
       <strong>inteligent, nu doar mult</strong> — știi mereu exact unde ești și ce ai de făcut mai departe.</p>
 
       <p style="font-weight:700;margin:22px 0 8px;">Cum te ajută concret:</p>
@@ -70,11 +122,11 @@ def send_welcome_email(email: str, full_name: str) -> None:
 
       <p style="color:#55616f;">Fiecare exercițiu rezolvat te apropie de nota dorită. Succes! 💪</p>
       <p style="color:#8b97a5;font-size:0.85em;margin-top:24px;border-top:1px solid #e5e9ee;padding-top:12px;">
-        EtoX — pregătire BAC la matematică · e2xacademy.ro
+        e2x — pregătire BAC la matematică · e2xacademy.ro
       </p>
     </div>
     """
-    _send(email, "Bine ai venit pe EtoX — hai să începem pregătirea pentru BAC 🎓", html)
+    _send(email, "Bine ai venit pe e2x — hai să începem pregătirea pentru BAC 🎓", html)
 
 
 def send_new_request_to_teacher(teacher_email: str, teacher_name: str,
@@ -96,7 +148,7 @@ def send_new_request_to_teacher(teacher_email: str, teacher_name: str,
         Vezi cererea
       </a>
     </p>
-    <p style="color:#6b7280;font-size:0.85em;">EtoX Platform</p>
+    <p style="color:#6b7280;font-size:0.85em;">e2x Platform</p>
     """
     _send(teacher_email, f"Cerere nouă de ajutor — {student_name}", html)
 
@@ -108,7 +160,7 @@ def send_parent_invite(parent_email: str, parent_name: str,
     html = f"""
     <p>Bună, <strong>{parent_name}</strong>,</p>
     <p>
-      <strong>{student_name}</strong> te-a adăugat ca părinte pe platforma <strong>EtoX</strong>.
+      <strong>{student_name}</strong> te-a adăugat ca părinte pe platforma <strong>e2x</strong>.
       Poți urmări progresul elevului — exerciții rezolvate, variante generate, întrebări trimise.
     </p>
     <p>
@@ -126,9 +178,9 @@ def send_parent_invite(parent_email: str, parent_name: str,
         Intră în cont
       </a>
     </p>
-    <p style="color:#6b7280;font-size:0.85em;">EtoX Platform</p>
+    <p style="color:#6b7280;font-size:0.85em;">e2x Platform</p>
     """
-    _send(parent_email, f"Ai fost adăugat ca părinte al lui {student_name} — EtoX", html)
+    _send(parent_email, f"Ai fost adăugat ca părinte al lui {student_name} — e2x", html)
 
 
 def send_parent_linked(parent_email: str, parent_name: str, student_name: str) -> None:
@@ -137,7 +189,7 @@ def send_parent_linked(parent_email: str, parent_name: str, student_name: str) -
     html = f"""
     <p>Bună, <strong>{parent_name}</strong>,</p>
     <p>
-      Contul tău a fost legat de profilul elevului <strong>{student_name}</strong> pe platforma EtoX.
+      Contul tău a fost legat de profilul elevului <strong>{student_name}</strong> pe platforma e2x.
       Acum poți urmări progresul său direct din dashboard-ul pentru părinți.
     </p>
     <p>
@@ -147,9 +199,9 @@ def send_parent_linked(parent_email: str, parent_name: str, student_name: str) -
         Vezi dashboard
       </a>
     </p>
-    <p style="color:#6b7280;font-size:0.85em;">EtoX Platform</p>
+    <p style="color:#6b7280;font-size:0.85em;">e2x Platform</p>
     """
-    _send(parent_email, f"Cont legat de {student_name} — EtoX", html)
+    _send(parent_email, f"Cont legat de {student_name} — e2x", html)
 
 
 def send_weekly_digest(parent_email: str, parent_name: str, student_name: str,
@@ -186,9 +238,9 @@ def send_weekly_digest(parent_email: str, parent_name: str, student_name: str,
         Vezi detalii complete
       </a>
     </p>
-    <p style="color:#6b7280;font-size:0.85em;">EtoX Platform — raport săptămânal</p>
+    <p style="color:#6b7280;font-size:0.85em;">e2x Platform — raport săptămânal</p>
     """
-    _send(parent_email, f"Raport săptămânal {student_name} — EtoX", html)
+    _send(parent_email, f"Raport săptămânal {student_name} — e2x", html)
 
 
 def send_response_to_student(student_email: str, student_name: str,
@@ -210,6 +262,6 @@ def send_response_to_student(student_email: str, student_name: str,
         Vezi răspunsul
       </a>
     </p>
-    <p style="color:#6b7280;font-size:0.85em;">EtoX Platform</p>
+    <p style="color:#6b7280;font-size:0.85em;">e2x Platform</p>
     """
     _send(student_email, f"Ai primit un răspuns de la {teacher_name}", html)

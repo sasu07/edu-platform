@@ -1,5 +1,6 @@
-import { useState, useEffect, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getAuditLog } from '../api';
+import './AuditLog.css';
 
 interface AuditItem {
   id: number;
@@ -13,7 +14,7 @@ interface AuditItem {
   resource_id: string | null;
   ip: string | null;
   status: number | null;
-  details: any;
+  details: Record<string, unknown> | null;
 }
 
 const PAGE = 50;
@@ -35,7 +36,7 @@ export default function AuditLog() {
   const [action, setAction] = useState('');
   const [since, setSince] = useState<number | ''>('');
 
-  const loadPage = (o: number) => {
+  const loadPage = useCallback((o: number) => {
     setLoading(true);
     setOffset(o);
     getAuditLog({
@@ -54,77 +55,90 @@ export default function AuditLog() {
         setTotal(0);
       })
       .finally(() => setLoading(false));
-  };
+  }, [action, q, since]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadPage(0); }, []);
+  useEffect(() => {
+    setLoading(true);
+    getAuditLog({ limit: PAGE, offset: 0 })
+      .then((response) => {
+        setItems(response.data.items);
+        setTotal(response.data.total);
+      })
+      .catch(() => {
+        setItems([]);
+        setTotal(0);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
   return (
-    <div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
+    <div className="audit-log">
+      <div className="audit-filters">
         <input
           placeholder="Caută în path (ex: /exercises)"
           value={q}
           onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && loadPage(0)}
-          style={inp}
+          aria-label="Caută în cale"
         />
         <input
           placeholder="Acțiune (ex: login.fail)"
           value={action}
           onChange={(e) => setAction(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && loadPage(0)}
-          style={inp}
+          aria-label="Caută după acțiune"
         />
-        <select value={since} onChange={(e) => setSince(e.target.value ? Number(e.target.value) : '')} style={inp}>
+        <select value={since} onChange={(e) => setSince(e.target.value ? Number(e.target.value) : '')} aria-label="Interval audit">
           <option value="">Oricând</option>
           <option value={1}>Ultima oră</option>
           <option value={24}>Ultimele 24h</option>
           <option value={168}>Ultimele 7 zile</option>
         </select>
-        <button onClick={() => loadPage(0)} style={btn}>Filtrează</button>
-        <span style={{ marginLeft: 'auto', color: '#6b7280', fontSize: 13 }}>{total} evenimente</span>
+        <button className="audit-filter-button" onClick={() => loadPage(0)}>Filtrează</button>
+        <span className="audit-total">{total} evenimente</span>
       </div>
 
       {loading ? (
-        <div style={{ color: '#6b7280', padding: 20 }}>Se încarcă…</div>
+        <div className="audit-loading">Se încarcă…</div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+        <div className="audit-table-wrap">
+          <table className="audit-table">
             <thead>
-              <tr style={{ textAlign: 'left', color: '#6b7280', borderBottom: '1px solid #e5e7eb' }}>
-                <th style={th}>Când</th>
-                <th style={th}>Cine</th>
-                <th style={th}>Acțiune</th>
-                <th style={th}>Status</th>
-                <th style={th}>Resursă</th>
-                <th style={th}>IP</th>
+              <tr>
+                <th>Când</th>
+                <th>Cine</th>
+                <th>Acțiune</th>
+                <th>Status</th>
+                <th>Resursă</th>
+                <th>IP</th>
               </tr>
             </thead>
             <tbody>
               {items.map((it) => (
-                <tr key={it.id} style={{ borderBottom: '1px solid #f1f3f5' }}>
-                  <td style={{ ...td, whiteSpace: 'nowrap' }}>{new Date(it.created_at).toLocaleString('ro-RO')}</td>
-                  <td style={td}>
+                <tr key={it.id}>
+                  <td data-label="Când" className="audit-date">{new Date(it.created_at).toLocaleString('ro-RO')}</td>
+                  <td data-label="Cine">
                     {it.actor_email ? (
-                      <span>{it.actor_email} <span style={{ color: '#9ca3af' }}>({it.actor_role})</span></span>
+                      <span>{it.actor_email} <span className="audit-muted">({it.actor_role})</span></span>
                     ) : (
-                      <span style={{ color: '#9ca3af' }}>anonim{it.details?.email ? ` · ${it.details.email}` : ''}</span>
+                      <span className="audit-muted">
+                        anonim{typeof it.details?.email === 'string' ? ` · ${it.details.email}` : ''}
+                      </span>
                     )}
                   </td>
-                  <td style={{ ...td, fontFamily: 'monospace' }}>{it.action}</td>
-                  <td style={td}>
-                    <span style={{ color: statusColor(it.status), fontWeight: 700 }}>{it.status ?? '—'}</span>
+                  <td data-label="Acțiune" className="audit-mono">{it.action}</td>
+                  <td data-label="Status">
+                    <span className="audit-status" style={{ color: statusColor(it.status) }}>{it.status ?? '—'}</span>
                   </td>
-                  <td style={{ ...td, fontFamily: 'monospace', color: '#6b7280' }}>
+                  <td data-label="Resursă" className="audit-mono audit-muted">
                     {it.resource_type || ''}{it.resource_id ? ` ${String(it.resource_id).slice(0, 8)}…` : ''}
                   </td>
-                  <td style={{ ...td, fontFamily: 'monospace', color: '#9ca3af' }}>{it.ip || '—'}</td>
+                  <td data-label="IP" className="audit-mono audit-muted">{it.ip || '—'}</td>
                 </tr>
               ))}
               {items.length === 0 && (
-                <tr>
-                  <td colSpan={6} style={{ ...td, color: '#9ca3af', textAlign: 'center', padding: 24 }}>Niciun eveniment.</td>
+                <tr className="audit-empty-row">
+                  <td colSpan={6}>Niciun eveniment.</td>
                 </tr>
               )}
             </tbody>
@@ -133,17 +147,12 @@ export default function AuditLog() {
       )}
 
       {total > PAGE && (
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16, alignItems: 'center' }}>
-          <button disabled={offset === 0} onClick={() => loadPage(Math.max(0, offset - PAGE))} style={btn}>← Înapoi</button>
-          <span style={{ color: '#6b7280', fontSize: 13 }}>{offset + 1}–{Math.min(offset + PAGE, total)} din {total}</span>
-          <button disabled={offset + PAGE >= total} onClick={() => loadPage(offset + PAGE)} style={btn}>Înainte →</button>
+        <div className="audit-pagination">
+          <button disabled={offset === 0} onClick={() => loadPage(Math.max(0, offset - PAGE))}>← Înapoi</button>
+          <span>{offset + 1}–{Math.min(offset + PAGE, total)} din {total}</span>
+          <button disabled={offset + PAGE >= total} onClick={() => loadPage(offset + PAGE)}>Înainte →</button>
         </div>
       )}
     </div>
   );
 }
-
-const inp: CSSProperties = { padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 8, fontSize: 13 };
-const btn: CSSProperties = { padding: '8px 14px', border: '1px solid #d1d5db', borderRadius: 8, background: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 };
-const th: CSSProperties = { padding: '8px 10px', fontWeight: 600, whiteSpace: 'nowrap' };
-const td: CSSProperties = { padding: '8px 10px', verticalAlign: 'top' };

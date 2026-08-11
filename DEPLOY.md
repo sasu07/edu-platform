@@ -74,6 +74,10 @@ SMTP_FROM=...
 ENV=production
 APP_URL=https://e2xacademy.ro
 ALLOWED_ORIGINS=https://e2xacademy.ro,https://www.e2xacademy.ro
+EXAM_DATE=<YYYY-MM-DD>
+
+# Invitații și resetări de parolă din administrarea utilizatorilor
+SMTP_STARTTLS=true
 ```
 
 **b) Build frontend** cu URL-ul API de producție (backend-ul e pe subdomeniul `api`):

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -497,6 +497,36 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: str
     password: str
+
+
+class AdminUserCreate(BaseModel):
+    """Datele minime pentru un cont creat de administrator.
+
+    Parola lipsește intenționat: utilizatorul o setează singur prin linkul
+    one-time primit pe email.
+    """
+
+    email: str = Field(..., min_length=3, max_length=255)
+    full_name: str = Field(..., min_length=1, max_length=255)
+    role: UserRole
+
+
+class AdminUserRoleUpdate(BaseModel):
+    role: UserRole
+
+
+class PasswordResetComplete(BaseModel):
+    token: str = Field(..., min_length=32, max_length=512)
+    new_password: str = Field(..., min_length=12, max_length=72)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, value: str) -> str:
+        if not any(character.isalpha() for character in value):
+            raise ValueError("Parola trebuie să conțină cel puțin o literă")
+        if not any(character.isdigit() for character in value):
+            raise ValueError("Parola trebuie să conțină cel puțin o cifră")
+        return value
 
 
 class UserDB(BaseModel):

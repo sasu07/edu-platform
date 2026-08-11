@@ -359,6 +359,97 @@
   padding: 8px 0;
 }
 
+@media (max-width: 700px) {
+  .upload-card {
+    position: static;
+    top: auto;
+    max-width: 100%;
+    border-radius: 16px;
+  }
+
+  .upload-card-header,
+  .upload-form {
+    padding: 16px;
+  }
+
+  .upload-card-header {
+    align-items: flex-start;
+  }
+
+  .upload-card-icon {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+  }
+
+  .drop-zone {
+    padding: 20px 14px;
+  }
+
+  .drop-zone--barem,
+  .drop-zone.has-file {
+    padding: 12px;
+  }
+
+  .form-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .form-input,
+  .form-select,
+  .form-textarea,
+  .submit-button {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .file-remove {
+    width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+
+  .file-preview {
+    gap: 10px;
+  }
+
+  .file-icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .drop-zone-text,
+  .drop-zone-hint,
+  .message {
+    overflow-wrap: anywhere;
+  }
+}
+
+@media (max-width: 360px) {
+  .upload-card-header,
+  .upload-form {
+    padding-inline: 13px;
+  }
+
+  .upload-card-title { font-size: 1rem; }
+  .upload-card-subtitle { font-size: 0.78rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drop-zone,
+  .file-remove,
+  .form-input,
+  .form-select,
+  .form-textarea,
+  .submit-button,
+  .progress-fill {
+    transition: none;
+  }
+
+  .message { animation: none; }
+}
+
 .file-icon--barem {
   color: #059669;
 }

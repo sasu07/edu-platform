@@ -12,7 +12,6 @@ import {
   GraduationCap,
   MessageCircleMore,
   Route,
-  Sparkles,
   Target,
   TrendingUp,
   UsersRound,
@@ -157,9 +156,7 @@ function Brand() {
       <span className="lp-brand-mark" aria-hidden="true">
         <img src={BRAND_LOGO_URL} alt="" />
       </span>
-      <span className="lp-brand-name">
-        e2x <small>Academy</small>
-      </span>
+      <span className="lp-brand-name">E2X ACADEMY</span>
     </span>
   );
 }
@@ -310,7 +307,7 @@ export default function LandingPage() {
 
       <div className="lp-header-fixed">
         <header className="lp-site-header lp-shell">
-          <Link to="/" className="lp-brand-link" aria-label="e2x Academy — Acasă">
+          <Link to="/" className="lp-brand-link" aria-label="E2X ACADEMY — Acasă">
             <Brand />
           </Link>
 
@@ -351,17 +348,14 @@ export default function LandingPage() {
 
         <div className="lp-hero-content lp-shell" id="continut">
           <div className="lp-hero-copy">
-            <div className="lp-eyebrow lp-eyebrow-dark">
-              <Sparkles size={15} aria-hidden="true" />
-              Pregătire inteligentă pentru BAC la matematică
-            </div>
+            <p className="lp-hero-kicker">Pregătire structurată pentru BAC la matematică</p>
             <h1>
               Nu înveți mai mult.
               <span>Înveți ce trebuie.</span>
             </h1>
             <p className="lp-hero-lead">
-              e2x transformă fiecare exercițiu într-un pas clar: îți testează nivelul,
-              îți construiește traseul și îți arată progresul — până în ziua examenului.
+              E2X ACADEMY aduce într-un singur loc evaluarea nivelului, exercițiile potrivite,
+              calendarul și progresul până în ziua examenului.
             </p>
             <div className="lp-hero-buttons">
               <PrimaryLink to={primaryTo}>{primaryLabel}</PrimaryLink>
@@ -375,7 +369,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="lp-hero-product" role="img" aria-label="Exemplu vizual al platformei e2x">
+          <div className="lp-hero-product" role="img" aria-label="Exemplu vizual al platformei E2X ACADEMY">
             <div className="lp-product-orbit lp-product-orbit-one" aria-hidden="true" />
             <div className="lp-product-orbit lp-product-orbit-two" aria-hidden="true" />
 
@@ -392,13 +386,13 @@ export default function LandingPage() {
             <div className="lp-product-window" aria-hidden="true">
               <div className="lp-window-topbar">
                 <div className="lp-window-dots"><span /><span /><span /></div>
-                <div className="lp-demo-badge"><Sparkles size={12} /> Exemplu platformă</div>
+                <div className="lp-demo-badge">Previzualizare platformă</div>
                 <div className="lp-window-avatar">A</div>
               </div>
 
               <div className="lp-mock-dashboard">
                 <aside className="lp-mock-sidebar">
-                    <div className="lp-sidebar-logo">e2x</div>
+                    <div className="lp-sidebar-logo">E2X</div>
                   <span className="lp-sidebar-item is-active" />
                   <span className="lp-sidebar-item" />
                   <span className="lp-sidebar-item is-short" />
@@ -527,7 +521,7 @@ export default function LandingPage() {
                   <div className="lp-exercise-tag">Exercițiul 4 / 12</div>
                   <div className="lp-formula">x² − 5x + 6 = 0</div>
                   <div className="lp-answer-row"><span>x₁ = 2, x₂ = 3</span><CircleCheck size={20} /></div>
-                  <div className="lp-feedback-message"><Sparkles size={15} /> Corect. Ai folosit metoda potrivită.</div>
+                  <div className="lp-feedback-message"><CircleCheck size={15} /> Răspuns corect. Metoda este potrivită.</div>
                 </div>
                 <div className="lp-card-copy">
                   <span className="lp-card-number">03</span>
@@ -628,7 +622,7 @@ export default function LandingPage() {
               </div>
               <div className="lp-pricing-note">
                 <CircleCheck size={19} />
-                <p>Contul Free nu cere card. Planurile plătite se activează împreună cu echipa e2x.</p>
+                <p>Contul Free nu cere card. Planurile plătite se activează împreună cu echipa E2X ACADEMY.</p>
               </div>
             </div>
 
@@ -684,9 +678,9 @@ export default function LandingPage() {
 
         <section className="lp-final-cta">
           <div className="lp-shell lp-final-cta-card" data-lp-reveal="up">
-            <div className="lp-final-cta-decor" aria-hidden="true">e2x</div>
+            <div className="lp-final-cta-decor" aria-hidden="true">E2X</div>
             <div>
-              <span className="lp-eyebrow lp-eyebrow-light"><Sparkles size={15} /> Primul pas e gratuit</span>
+              <span className="lp-final-kicker">Primul pas este gratuit</span>
               <h2>BAC-ul nu se pregătește la întâmplare.</h2>
               <p>Descoperă unde ești acum și primește traseul care te duce mai aproape de obiectiv.</p>
             </div>
@@ -698,7 +692,7 @@ export default function LandingPage() {
       <footer className="lp-site-footer">
         <div className="lp-shell lp-footer-main">
           <div className="lp-footer-brand">
-            <Link to="/" aria-label="e2x Academy — Acasă"><Brand /></Link>
+            <Link to="/" aria-label="E2X ACADEMY — Acasă"><Brand /></Link>
             <p>Pregătire pentru BAC la matematică, construită în jurul progresului real.</p>
           </div>
           <div className="lp-footer-links">
@@ -707,7 +701,7 @@ export default function LandingPage() {
             <div><strong>Contact</strong><a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">WhatsApp</a><a href="tel:+40745960848">+40 745 960 848</a></div>
           </div>
         </div>
-        <div className="lp-shell lp-footer-bottom"><span>© 2026 e2x Academy</span><span>Creat pentru progres, nu pentru presiune.</span></div>
+        <div className="lp-shell lp-footer-bottom"><span>© 2026 E2X ACADEMY</span><span>Creat pentru progres, nu pentru presiune.</span></div>
       </footer>
     </div>
   );

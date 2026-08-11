@@ -129,13 +129,13 @@ export default function StudyPrepCalendar({
       </div>
 
       <div className="spc-toolbar">
-        <button type="button" className="spc-nav" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1, 12))}>
+        <button type="button" className="spc-nav" aria-label="Luna precedentă" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() - 1, 1, 12))}>
           ←
         </button>
         <div className="spc-month-label">
           {MONTHS_RO[monthCursor.getMonth()]} {monthCursor.getFullYear()}
         </div>
-        <button type="button" className="spc-nav" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1, 12))}>
+        <button type="button" className="spc-nav" aria-label="Luna următoare" onClick={() => setMonthCursor(new Date(monthCursor.getFullYear(), monthCursor.getMonth() + 1, 1, 12))}>
           →
         </button>
       </div>
@@ -167,6 +167,9 @@ export default function StudyPrepCalendar({
               title={titleParts.join("\n")}
             >
               <div className="spc-cell-top">
+                <span className="spc-mobile-date">
+                  {day.toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'short' })}
+                </span>
                 <span className="spc-day-num">{day.getDate()}</span>
                 <span className="spc-markers">
                   {activeCount > 0 && <span className="spc-dot active" />}
@@ -188,6 +191,10 @@ export default function StudyPrepCalendar({
           );
         })}
       </div>
+
+      {activeDaysThisMonth === 0 && plannedDaysThisMonth === 0 && (
+        <div className="spc-mobile-empty">Nu există activitate sau sesiuni planificate în această lună.</div>
+      )}
 
       <div className="spc-legend">
         <span><i className="spc-dot active" /> zi de studiu</span>

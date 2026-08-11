@@ -448,7 +448,13 @@
   margin-bottom: 24px;
   border-bottom: 2px solid #e5e7eb;
   padding-bottom: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
+
+.teacher-tabs::-webkit-scrollbar { display: none; }
 
 .teacher-tab-btn {
   display: flex;
@@ -464,6 +470,9 @@
   color: #6b7280;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
+  flex: 0 0 auto;
+  min-height: 44px;
+  white-space: nowrap;
 }
 
 .teacher-tab-btn:hover { color: #111827; }
@@ -766,7 +775,13 @@
   gap: 8px;
   margin-bottom: 20px;
   border-bottom: 2px solid #e5e7eb;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
+
+.teacher-dash-tabs::-webkit-scrollbar { display: none; }
 
 .td-tab-btn {
   padding: 10px 20px;
@@ -779,6 +794,9 @@
   color: #6b7280;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
+  flex: 0 0 auto;
+  min-height: 44px;
+  white-space: nowrap;
 }
 .td-tab-btn:hover { color: #111827; }
 .td-tab-btn.active { color: #7c3aed; border-bottom-color: #7c3aed; }
@@ -888,4 +906,196 @@
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+}
+
+@media (max-width: 600px) {
+  .teacher-dashboard {
+    width: 100%;
+    min-width: 0;
+    padding: 16px 0;
+  }
+
+  .teacher-dash-header {
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding-inline: 4px;
+  }
+
+  .teacher-dash-header h2 {
+    min-width: 0;
+    font-size: 1.2rem;
+  }
+
+  .teacher-refresh-btn {
+    min-height: 44px;
+  }
+
+  .teacher-stats-panel,
+  .submission-card,
+  .live-req-card {
+    padding: 14px;
+  }
+
+  .teacher-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .teacher-stat-card {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .teacher-selector-bar {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .teacher-selector-select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .teacher-requests-section-title {
+    flex-wrap: wrap;
+  }
+
+  .teacher-tabs,
+  .teacher-dash-tabs {
+    margin-inline: -12px;
+    padding-inline: 12px;
+  }
+
+  .teacher-request-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px;
+  }
+
+  .teacher-req-left,
+  .teacher-req-left > div,
+  .teacher-req-title,
+  .teacher-req-student {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .teacher-req-left {
+    align-items: flex-start;
+  }
+
+  .teacher-req-right {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+  }
+
+  .teacher-req-path {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .teacher-request-body,
+  .respond-form {
+    padding: 14px;
+  }
+
+  .teacher-req-meta,
+  .sub-photo-row {
+    flex-wrap: wrap;
+  }
+
+  .teacher-req-actions,
+  .sub-review-btns {
+    flex-wrap: wrap;
+  }
+
+  .teacher-req-actions > button,
+  .sub-review-btns > button {
+    flex: 1 1 130px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .respond-actions,
+  .respond-submit-btn,
+  .sub-file-upload-label,
+  .sub-assign-all-btn {
+    width: 100%;
+  }
+
+  .respond-submit-btn,
+  .sub-file-upload-label,
+  .sub-assign-all-btn {
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .sub-stat-pill {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+    min-height: 72px;
+    padding-inline: 8px;
+  }
+
+  .sub-filter-btn,
+  .sub-photo-btn {
+    min-height: 44px;
+  }
+
+  .sub-card-email,
+  .sub-statement,
+  .sub-teacher-note,
+  .live-req-notes,
+  .live-req-zoom {
+    overflow-wrap: anywhere;
+  }
+
+  .sub-photo-overlay {
+    align-items: flex-end;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .sub-photo-modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 88dvh;
+    border-radius: 16px;
+  }
+
+  .sub-photo-close {
+    width: 44px;
+    height: 44px;
+  }
+
+  .live-sched-row {
+    flex-direction: column;
+  }
+
+  .live-sched-input,
+  .live-req-schedule-btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .live-req-schedule-btn {
+    justify-content: center;
+  }
+
+  .live-sched-btns {
+    flex-wrap: wrap;
+  }
+
+  .live-sched-btns > button {
+    flex: 1 1 120px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 350px) {
+  .teacher-stats-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

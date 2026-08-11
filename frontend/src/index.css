@@ -513,3 +513,23 @@ a:hover { color: var(--color-primary-hover); }
 }
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .text-center { text-align: center; }
+
+/* Mobile interaction baseline: no iOS focus zoom and comfortable finger targets. */
+@media (max-width: 600px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px !important;
+  }
+
+  button {
+    min-height: 44px;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 20px;
+    height: 20px;
+  }
+}

@@ -130,6 +130,19 @@ export interface User {
   created_at: string;
 }
 
+export type ManagedUserRole = 'student' | 'teacher' | 'school_teacher' | 'parent';
+
+export interface AdminUser extends User {
+  invite_pending: boolean;
+  active_plans: string[];
+}
+
+export interface AdminUserCreate {
+  email: string;
+  full_name: string;
+  role: ManagedUserRole;
+}
+
 export interface Subscription {
   id: string;
   user_id: string;
@@ -218,7 +231,15 @@ export const getExerciseHints = (id: string) =>
 // Listă de exerciții cu tag-urile incluse (1 query) — pentru administrare, fără N+1 de tag-uri.
 export const getExercisesWithTags = () =>
   api.get<(Exercise & { tags: ExerciseTag[] })[]>('/exercises/with-tags');
-export const getAdminUsers = () => api.get<any[]>('/admin/users');
+export const getAdminUsers = () => api.get<AdminUser[]>('/admin/users');
+export const createAdminUser = (data: AdminUserCreate) =>
+  api.post<User>('/admin/users', data);
+export const updateAdminUserRole = (userId: string, role: ManagedUserRole) =>
+  api.patch<User>(`/admin/users/${userId}/role`, { role });
+export const requestAdminPasswordReset = (userId: string) =>
+  api.post<{ message: string }>(`/admin/users/${userId}/password-reset`);
+export const completePasswordReset = (data: { token: string; new_password: string }) =>
+  api.post<void>('/auth/password-reset/complete', data);
 
 export const getAuditLog = (params?: {
   action?: string; method?: string; status_code?: number;
@@ -232,8 +253,6 @@ export const upgradeSubscription = (userId: string, planType: string = 'premium'
   });
 export const cancelSubscription = (userId: string) =>
   api.delete(`/admin/subscriptions/${userId}`);
-export const createTeacher = (data: { email: string; password: string; full_name: string }) =>
-  api.post('/admin/teachers', { ...data, role: 'teacher' });
 export const getMyAccess = () => api.get<{ can_help_requests: boolean; can_download_pdf: boolean; can_unlimited_gen: boolean }>('/auth/me/access');
 
 export interface GenLimits {

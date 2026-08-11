@@ -370,10 +370,144 @@
 }
 
 @media (max-width: 600px) {
+  .pd-container {
+    width: 100%;
+    min-width: 0;
+    padding: 20px max(12px, env(safe-area-inset-right)) calc(28px + env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+    overflow-x: clip;
+  }
+
+  .pd-container *,
+  .pd-container *::before,
+  .pd-container *::after {
+    box-sizing: border-box;
+  }
+
+  .pd-header {
+    margin-bottom: 20px;
+  }
+
+  .pd-title {
+    font-size: 1.35rem;
+    overflow-wrap: anywhere;
+  }
+
+  .pd-student-card,
+  .pd-student-info,
+  .pd-sess-type {
+    min-width: 0;
+  }
+
+  .pd-student-header {
+    min-height: 72px;
+    gap: 10px;
+    padding: 14px 12px;
+  }
+
+  .pd-student-name,
+  .pd-student-meta {
+    overflow-wrap: anywhere;
+  }
+
   .pd-stats-row {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .pd-stat {
+    min-width: 0;
+    padding: 13px 8px;
+  }
+
+  .pd-stat-label {
+    overflow-wrap: anywhere;
+  }
+
+  .pd-section-title {
+    padding-inline: 12px;
+    overflow-wrap: anywhere;
+  }
+
+  .pd-chart {
+    min-width: 0;
+    padding-inline: 12px;
+  }
+
+  .pd-chart-legend {
+    flex-wrap: wrap;
+    padding-inline: 12px;
+    line-height: 1.45;
+  }
+
   .pd-week-row {
     grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  .pd-week-item {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .pd-subiect-row {
+    gap: 8px;
+    padding-inline: 12px;
+  }
+
+  .pd-subiect-item {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+    padding-inline: 8px;
+  }
+
+  .pd-sessions-list {
+    padding-inline: 12px;
+  }
+
+  .pd-session-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px 10px;
+    padding: 10px;
+  }
+
+  .pd-sess-stat,
+  .pd-sess-pct,
+  .pd-sess-xp {
+    justify-self: start;
+  }
+
+  .pd-calendar-wrap {
+    padding: 0 8px 16px;
+  }
+
+  .pd-calendar .spc-mobile-date {
+    color: #f8fafc;
+  }
+
+  .pd-empty {
+    padding: 40px 12px;
+  }
+}
+
+@media (max-width: 360px) {
+  .pd-stats-row,
+  .pd-week-row {
+    grid-template-columns: 1fr;
+  }
+
+  .pd-subiect-item {
+    flex-basis: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pd-container *,
+  .pd-container *::before,
+  .pd-container *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

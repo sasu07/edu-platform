@@ -236,7 +236,13 @@
   margin-bottom: 24px;
   border-bottom: 2px solid #e5e7eb;
   padding-bottom: 0;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
+
+.my-req-tabs::-webkit-scrollbar { display: none; }
 
 .my-req-tab-btn {
   display: flex;
@@ -252,6 +258,9 @@
   color: #6b7280;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
+  flex: 0 0 auto;
+  min-height: 44px;
+  white-space: nowrap;
 }
 
 .my-req-tab-btn:hover { color: #111827; }
@@ -391,4 +400,102 @@
 .sol-xp-breakdown span {
   font-size: 0.72rem;
   color: #9ca3af;
+}
+
+@media (max-width: 600px) {
+  .my-requests {
+    width: 100%;
+    min-width: 0;
+    padding: 16px 0;
+  }
+
+  .my-req-header {
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding-inline: 4px;
+  }
+
+  .my-req-header h2 {
+    min-width: 0;
+    font-size: 1.2rem;
+  }
+
+  .my-req-tabs {
+    margin-inline: -12px;
+    margin-bottom: 16px;
+    padding-inline: 12px;
+  }
+
+  .my-req-card-header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px;
+  }
+
+  .my-req-left {
+    min-width: 0;
+    align-items: flex-start;
+  }
+
+  .my-req-left > div,
+  .my-req-flag-label,
+  .my-req-statement,
+  .my-req-resp-text,
+  .sol-teacher-note {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .my-req-right {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .my-req-path {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .my-req-body,
+  .my-req-response {
+    padding: 14px;
+  }
+
+  .my-req-exercise,
+  .sol-feedback-block {
+    padding: 12px;
+  }
+
+  .sol-statement-preview {
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .sol-badges {
+    justify-content: flex-start;
+  }
+
+  .my-req-zoom,
+  .my-req-zoom-btn,
+  .sol-file-btn {
+    width: 100%;
+  }
+
+  .my-req-zoom-btn,
+  .sol-file-btn {
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .my-req-waiting {
+    align-items: flex-start;
+  }
+
+  .my-req-empty {
+    padding: 40px 16px;
+  }
 }

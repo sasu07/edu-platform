@@ -328,3 +328,20 @@
   color: #718096;
   border: 2px dashed #e2e8f0;
 }
+
+@media (max-width: 600px) {
+  .exercise-list-container { width: 100%; min-width: 0; padding: 0; }
+  .list-header { align-items: stretch; flex-direction: column; gap: 10px; }
+  .btn-refresh { width: 100%; min-height: 44px; }
+  .exercise-grid { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .exercise-card { min-width: 0; padding: 16px 14px; }
+  .exercise-card-header { align-items: flex-start; flex-wrap: wrap; gap: 8px; }
+  .statement-preview,
+  .tag-label { overflow-wrap: anywhere; }
+  .tag-add-btn,
+  .btn-action { width: 44px; height: 44px; }
+  .tag-picker-dropdown { width: min(280px, calc(100vw - 48px)); min-width: 0; }
+  .exercise-actions { width: 100%; flex-wrap: wrap; }
+  .btn-view-more { min-height: 44px; }
+  .empty-state { padding: 28px 16px; }
+}
