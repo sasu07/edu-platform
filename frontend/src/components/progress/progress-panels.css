@@ -1,0 +1,251 @@
+/* Panouri pentru zona „Progres" (Epic 3): Rezumat, Istoric, De revizuit.
+   Clase prefixate `pg-` ca să nu se ciocnească cu restul stilurilor. */
+
+.pg-section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--gray-800, #1f2937);
+  margin: 0 0 12px;
+}
+
+/* ─── Rezumat: grilă de statistici ─── */
+.pg-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.pg-stat {
+  background: #fff;
+  border: 1px solid var(--gray-200, #e5e7eb);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+}
+
+.pg-stat-val {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--color-primary, #2563eb);
+  line-height: 1.1;
+}
+
+.pg-stat-label {
+  font-size: 0.78rem;
+  color: var(--gray-500, #6b7280);
+  margin-top: 4px;
+}
+
+/* ─── Rezumat: progres pe subiecte ─── */
+.pg-subject-block { margin-bottom: 24px; }
+
+.pg-subject-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.pg-subject-label {
+  flex: 0 0 34%;
+  font-size: 0.85rem;
+  color: var(--gray-700, #374151);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pg-subject-bar {
+  flex: 1;
+  height: 8px;
+  background: var(--gray-200, #e5e7eb);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.pg-subject-fill {
+  height: 100%;
+  background: var(--color-primary, #2563eb);
+  border-radius: 6px;
+}
+
+.pg-subject-pct {
+  flex: 0 0 auto;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gray-600, #4b5563);
+  min-width: 36px;
+  text-align: right;
+}
+
+/* ─── Recomandare ─── */
+.pg-reco {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+}
+
+.pg-reco-text { font-size: 0.9rem; color: #1e3a5f; }
+
+.pg-reco-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-primary, #2563eb);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ─── Listă sesiuni (Rezumat recent + Istoric) ─── */
+.pg-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pg-session-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid var(--gray-200, #e5e7eb);
+  border-left-width: 4px;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.pg-session-card.status-completed { border-left-color: #22c55e; }
+.pg-session-card.status-abandoned { border-left-color: #f59e0b; }
+.pg-session-card.status-active    { border-left-color: #3b82f6; }
+
+.pg-session-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pg-session-icon { font-size: 1.2rem; }
+.pg-session-type { font-weight: 600; font-size: 0.9rem; color: var(--gray-800, #1f2937); }
+.pg-session-date { font-size: 0.78rem; color: var(--gray-500, #6b7280); }
+
+.pg-session-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.pg-session-stat { font-size: 0.8rem; color: var(--gray-600, #4b5563); }
+.pg-session-xp { font-size: 0.8rem; font-weight: 600; color: #b45309; }
+
+.pg-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+.pg-badge.completed { background: #dcfce7; color: #166534; }
+.pg-badge.abandoned { background: #fef3c7; color: #92400e; }
+.pg-badge.active    { background: #dbeafe; color: #1e40af; }
+
+/* ─── De revizuit ─── */
+.pg-review-lead {
+  font-size: 0.88rem;
+  color: var(--gray-600, #4b5563);
+  margin-bottom: 16px;
+}
+
+.pg-review-list { display: flex; flex-direction: column; gap: 12px; }
+
+.pg-review-card {
+  background: #fff;
+  border: 1px solid var(--gray-200, #e5e7eb);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.pg-review-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.pg-reason {
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: #f3f4f6;
+  color: #374151;
+}
+.pg-reason.wrong { background: #fee2e2; color: #b91c1c; }
+.pg-reason.incomplete { background: #fef3c7; color: #92400e; }
+.pg-reason.manual { background: #e0e7ff; color: #3730a3; }
+
+.pg-review-meta {
+  font-size: 0.76rem;
+  color: var(--gray-500, #6b7280);
+  margin-left: auto;
+}
+
+.pg-review-body {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--gray-100, #f3f4f6);
+}
+
+.pg-review-answer {
+  margin-top: 10px;
+  font-size: 0.9rem;
+}
+.pg-review-answer-label { font-weight: 600; margin-right: 6px; color: var(--gray-600, #4b5563); }
+
+.pg-review-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.pg-act {
+  border: 1px solid var(--gray-300, #d1d5db);
+  background: #fff;
+  border-radius: 8px;
+  padding: 7px 13px;
+  font: inherit;
+  font-size: 0.83rem;
+  cursor: pointer;
+  color: var(--gray-700, #374151);
+}
+.pg-act:hover { background: var(--gray-50, #f9fafb); }
+.pg-act.primary { border-color: var(--color-primary, #2563eb); color: var(--color-primary, #2563eb); }
+.pg-act.danger { border-color: #fca5a5; color: #b91c1c; }
+.pg-act:disabled { opacity: 0.6; cursor: default; }
+
+.pg-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--gray-500, #6b7280);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 640px) {
+  .pg-stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .pg-subject-label { flex-basis: 40%; }
+  .pg-session-card { flex-direction: column; align-items: flex-start; }
+  .pg-session-right { justify-content: flex-start; }
+}

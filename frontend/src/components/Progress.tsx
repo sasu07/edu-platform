@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { Route, CalendarDays, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, RotateCcw, History, Route } from 'lucide-react';
 import {
   getStudySessions, getStudyPlan, getMyGamification,
   type StudySession, type StudyPlanDay, type GamificationProfile,
@@ -8,22 +8,26 @@ import { LoadingState } from './StateViews';
 import StudyPrepCalendar from './StudyPrepCalendar';
 import './Practice.css';
 
-/* „Progres" (brief §3.1 / Epic 3) — o singură destinație pentru traseu, plan și calendar.
-   (De revizuit + Istoric vor fi mutate aici într-un pas următor.) */
+/* „Progres" (brief §3.1 / Epic 3) — o singură destinație pentru tot ce arată cât ai avansat:
+   Rezumat, Calendar, De revizuit, Istoric și Traseul meu. */
 
+const SummaryPanel = lazy(() => import('./progress/SummaryPanel'));
+const ReviewList = lazy(() => import('./progress/ReviewList'));
+const HistoryList = lazy(() => import('./progress/HistoryList'));
 const LearningPath = lazy(() => import('./LearningPath'));
-const StudyPlan = lazy(() => import('./StudyPlan'));
 
 const TABS = [
-  { id: 'traseu', label: 'Traseul meu', icon: Route },
-  { id: 'plan', label: 'Plan', icon: ClipboardList },
+  { id: 'rezumat', label: 'Rezumat', icon: LayoutDashboard },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
+  { id: 'revizuit', label: 'De revizuit', icon: RotateCcw },
+  { id: 'istoric', label: 'Istoric', icon: History },
+  { id: 'traseu', label: 'Traseul meu', icon: Route },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
 
 export default function Progress() {
-  const [tab, setTab] = useState<TabId>('traseu');
+  const [tab, setTab] = useState<TabId>('rezumat');
   const [sessions, setSessions] = useState<StudySession[]>([]);
   const [planDays, setPlanDays] = useState<StudyPlanDay[]>([]);
   const [gamification, setGamification] = useState<GamificationProfile | null>(null);
@@ -47,7 +51,7 @@ export default function Progress() {
       <header className="prac-head">
         <div className="prac-head-copy">
           <h1>Progres</h1>
-          <p>Traseul tău, planul și calendarul — tot ce arată cât ai avansat, într-un singur loc.</p>
+          <p>Tot ce arată cât ai avansat — rezumat, calendar, de revizuit, istoric și traseul tău — într-un singur loc.</p>
         </div>
       </header>
 
@@ -67,8 +71,10 @@ export default function Progress() {
 
       <div className="prac-panel">
         <Suspense fallback={<LoadingState lines={4} />}>
+          {tab === 'rezumat' && <SummaryPanel />}
+          {tab === 'revizuit' && <ReviewList />}
+          {tab === 'istoric' && <HistoryList />}
           {tab === 'traseu' && <LearningPath />}
-          {tab === 'plan' && <StudyPlan />}
           {tab === 'calendar' && (
             loadedCal ? (
               <StudyPrepCalendar
