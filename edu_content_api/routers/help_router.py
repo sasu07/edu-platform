@@ -149,10 +149,18 @@ def pending_help_requests(
                 u.full_name AS student_name, u.email AS student_email,
                 e.statement_latex, e.difficulty, e.points,
                 e.metadata->>'path' AS exercise_path,
-                hr.exercise_id, hr.student_id
+                hr.exercise_id, hr.student_id,
+                resp.content_text, resp.zoom_link, resp.scheduled_at
             FROM help_requests hr
             JOIN users u ON u.id = hr.student_id
             JOIN exercises e ON e.id = hr.exercise_id
+            LEFT JOIN LATERAL (
+                SELECT content_text, zoom_link, scheduled_at
+                FROM help_responses hrsp
+                WHERE hrsp.request_id = hr.id
+                ORDER BY hrsp.created_at DESC
+                LIMIT 1
+            ) resp ON TRUE
             WHERE hr.status IN ('pending', 'assigned')
             ORDER BY hr.created_at ASC
             """

@@ -7,8 +7,9 @@ import {
   uploadTeacherFile,
   assignPendingSubmissions,
   getSubmissionStats,
-  getLiveHelpRequests,
   scheduleLiveHelp,
+  pendingHelpRequests,
+  respondToHelpRequest,
   openAuthedFile,
   fetchAuthedObjectUrl,
 } from '../api';
@@ -287,26 +288,38 @@ function SubmissionsTab() {
   );
 }
 
-// ─── Live Help Requests Tab ───────────────────────────────────────────────────
+// ─── Cereri de ajutor (Faza 2): inbox unificat — scris + live ─────────────────
 
-interface LiveRequest {
+const HELP_FLAG_META: Record<string, { icon: string; label: string }> = {
+  WRITTEN: { icon: '✍️', label: 'Explicație scrisă' },
+  VIDEO:   { icon: '🎥', label: 'Rezolvare video' },
+  LIVE:    { icon: '🎙️', label: 'Sesiune live' },
+};
+
+interface HelpReq {
   id: string;
+  flag_type: string;
+  status: string;
+  notes: string | null;
+  created_at: string;
   student_name: string;
   student_email: string;
-  exercise_id: string;
-  statement_text: string | null;
   statement_latex: string | null;
   difficulty: number | null;
-  notes: string | null;
-  status: string;
-  scheduled_at: string | null;
-  zoom_link: string | null;
-  created_at: string;
+  exercise_path?: string | null;
+  exercise_id: string;
+  content_text?: string | null;
+  zoom_link?: string | null;
+  scheduled_at?: string | null;
 }
 
-function LiveRequestsTab() {
-  const [requests, setRequests] = useState<LiveRequest[]>([]);
+function HelpRequestsTab() {
+  const [requests, setRequests] = useState<HelpReq[]>([]);
   const [loading, setLoading] = useState(true);
+  // răspuns scris
+  const [replyingId, setReplyingId] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState('');
+  // programare live
   const [schedulingId, setSchedulingId] = useState<string | null>(null);
   const [schedDate, setSchedDate] = useState('');
   const [schedTime, setSchedTime] = useState('');
@@ -316,7 +329,7 @@ function LiveRequestsTab() {
 
   const load = () => {
     setLoading(true);
-    getLiveHelpRequests()
+    pendingHelpRequests()
       .then(r => setRequests(Array.isArray(r.data) ? r.data : []))
       .catch(() => setRequests([]))
       .finally(() => setLoading(false));
@@ -339,79 +352,124 @@ function LiveRequestsTab() {
     } finally { setSaving(false); }
   };
 
+  const handleReplyText = async (id: string) => {
+    if (!replyText.trim()) { setMsg('Scrie un răspuns.'); return; }
+    setSaving(true);
+    setMsg('');
+    try {
+      await respondToHelpRequest(id, { content_text: replyText.trim() });
+      setReplyingId(null);
+      setReplyText('');
+      load();
+    } catch (e: any) {
+      setMsg(e?.response?.data?.detail || 'Eroare la trimiterea răspunsului.');
+    } finally { setSaving(false); }
+  };
+
   if (loading) return <div className="teacher-empty">Se încarcă...</div>;
 
   if (requests.length === 0) return (
     <div className="teacher-empty">
       <Video size={40} />
-      <p>Nu există cereri de ajutor live.</p>
+      <p>Nu există cereri de ajutor.</p>
     </div>
   );
 
   return (
     <div className="live-requests-list">
-      {requests.map(req => (
-        <div key={req.id} className={`live-req-card${req.scheduled_at ? ' scheduled' : ''}`}>
-          <div className="live-req-header">
-            <div>
-              <strong>{req.student_name}</strong>
-              <span className="sub-card-email">{req.student_email}</span>
-            </div>
-            <div className="live-req-meta">
-              {req.difficulty && <span className="sub-diff">Dif: {req.difficulty}/10</span>}
-              <span className="sub-date">{new Date(req.created_at).toLocaleDateString('ro-RO')}</span>
-              {req.scheduled_at && (
-                <span className="live-req-scheduled-badge">
-                  📅 {new Date(req.scheduled_at).toLocaleString('ro-RO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                </span>
-              )}
-            </div>
-          </div>
-
-          {(req.statement_text || req.statement_latex) && (
-            <div className="sub-statement">
-              <LatexRenderer text={req.statement_latex || req.statement_text || ''} />
-            </div>
-          )}
-
-          {req.notes && (
-            <div className="live-req-notes">💬 <em>{req.notes}</em></div>
-          )}
-
-          {req.zoom_link && (
-            <div className="live-req-zoom">
-              🔗 <a href={req.zoom_link} target="_blank" rel="noopener noreferrer">{req.zoom_link}</a>
-            </div>
-          )}
-
-          {!req.scheduled_at && (
-            schedulingId === req.id ? (
-              <div className="live-sched-form">
-                <div className="live-sched-row">
-                  <input type="date" className="live-sched-input" value={schedDate}
-                    min={new Date().toISOString().split('T')[0]}
-                    onChange={e => setSchedDate(e.target.value)} />
-                  <input type="time" className="live-sched-input" value={schedTime}
-                    onChange={e => setSchedTime(e.target.value)} />
-                </div>
-                <input type="url" className="live-sched-input" placeholder="Link Zoom/Meet (opțional)"
-                  value={schedZoom} onChange={e => setSchedZoom(e.target.value)} />
-                {msg && <div className="flag-msg-err">{msg}</div>}
-                <div className="live-sched-btns">
-                  <button className="sub-btn-cancel" onClick={() => { setSchedulingId(null); setMsg(''); }}>Anulează</button>
-                  <button className="sub-btn-correct" onClick={() => handleSchedule(req.id)} disabled={saving}>
-                    <Calendar size={14} /> {saving ? 'Se salvează...' : 'Confirmă programarea'}
-                  </button>
-                </div>
+      {requests.map(req => {
+        const meta = HELP_FLAG_META[req.flag_type] || { icon: '❓', label: req.flag_type };
+        const isLive = req.flag_type === 'LIVE';
+        return (
+          <div key={req.id} className={`live-req-card${req.scheduled_at ? ' scheduled' : ''}`}>
+            <div className="live-req-header">
+              <div>
+                <span className="help-req-type">{meta.icon} {meta.label}</span>
+                <strong>{req.student_name}</strong>
+                <span className="sub-card-email">{req.student_email}</span>
               </div>
+              <div className="live-req-meta">
+                {req.difficulty && <span className="sub-diff">Dif: {req.difficulty}/10</span>}
+                <span className="sub-date">{new Date(req.created_at).toLocaleDateString('ro-RO')}</span>
+                {req.scheduled_at && (
+                  <span className="live-req-scheduled-badge">
+                    📅 {new Date(req.scheduled_at).toLocaleString('ro-RO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {req.statement_latex && (
+              <div className="sub-statement">
+                <LatexRenderer text={req.statement_latex} />
+              </div>
+            )}
+
+            {req.notes && (
+              <div className="live-req-notes">💬 <em>{req.notes}</em></div>
+            )}
+
+            {req.zoom_link && (
+              <div className="live-req-zoom">
+                🔗 <a href={req.zoom_link} target="_blank" rel="noopener noreferrer">{req.zoom_link}</a>
+              </div>
+            )}
+
+            {/* Acțiune: LIVE → programare; scris/video → răspuns text */}
+            {isLive ? (
+              !req.scheduled_at && (
+                schedulingId === req.id ? (
+                  <div className="live-sched-form">
+                    <div className="live-sched-row">
+                      <input type="date" className="live-sched-input" value={schedDate}
+                        min={new Date().toISOString().split('T')[0]}
+                        onChange={e => setSchedDate(e.target.value)} />
+                      <input type="time" className="live-sched-input" value={schedTime}
+                        onChange={e => setSchedTime(e.target.value)} />
+                    </div>
+                    <input type="url" className="live-sched-input" placeholder="Link Zoom/Meet (opțional)"
+                      value={schedZoom} onChange={e => setSchedZoom(e.target.value)} />
+                    {msg && <div className="flag-msg-err">{msg}</div>}
+                    <div className="live-sched-btns">
+                      <button className="sub-btn-cancel" onClick={() => { setSchedulingId(null); setMsg(''); }}>Anulează</button>
+                      <button className="sub-btn-correct" onClick={() => handleSchedule(req.id)} disabled={saving}>
+                        <Calendar size={14} /> {saving ? 'Se salvează...' : 'Confirmă programarea'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button className="live-req-schedule-btn" onClick={() => { setSchedulingId(req.id); setMsg(''); }}>
+                    <Video size={14} /> Programează sesiunea live
+                  </button>
+                )
+              )
             ) : (
-              <button className="live-req-schedule-btn" onClick={() => { setSchedulingId(req.id); setMsg(''); }}>
-                <Video size={14} /> Programează sesiunea live
-              </button>
-            )
-          )}
-        </div>
-      ))}
+              replyingId === req.id ? (
+                <div className="live-sched-form">
+                  <textarea
+                    className="help-reply-input"
+                    value={replyText}
+                    onChange={e => setReplyText(e.target.value)}
+                    placeholder="Scrie explicația pentru elev (poți folosi $...$ pentru formule)."
+                    rows={4}
+                  />
+                  {msg && <div className="flag-msg-err">{msg}</div>}
+                  <div className="live-sched-btns">
+                    <button className="sub-btn-cancel" onClick={() => { setReplyingId(null); setReplyText(''); setMsg(''); }}>Anulează</button>
+                    <button className="sub-btn-correct" onClick={() => handleReplyText(req.id)} disabled={saving}>
+                      <CheckCircle size={14} /> {saving ? 'Se trimite...' : 'Trimite răspunsul'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button className="live-req-schedule-btn" onClick={() => { setReplyingId(req.id); setReplyText(''); setMsg(''); }}>
+                  <CheckCircle size={14} /> Răspunde în scris
+                </button>
+              )
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -429,11 +487,11 @@ export default function TeacherDashboard() {
           📝 Verificare soluții
         </button>
         <button className={`td-tab-btn${tab === 'live' ? ' active' : ''}`} onClick={() => setTab('live')}>
-          📹 Cereri ajutor live
+          📬 Cereri de ajutor
         </button>
       </div>
       {tab === 'submissions' && <SubmissionsTab />}
-      {tab === 'live' && <LiveRequestsTab />}
+      {tab === 'live' && <HelpRequestsTab />}
     </div>
   );
 }

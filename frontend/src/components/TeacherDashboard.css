@@ -853,6 +853,36 @@
   background: #f9fafb;
   border-radius: 6px;
   padding: 8px 12px;
+  white-space: pre-wrap;
+}
+
+.help-req-type {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #4338ca;
+  background: #eef2ff;
+  border-radius: 20px;
+  padding: 2px 10px;
+  margin-right: 8px;
+}
+
+.help-reply-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.help-reply-input:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
 }
 
 .live-req-zoom {

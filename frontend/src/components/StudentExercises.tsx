@@ -78,7 +78,7 @@ function HelpModal({ exerciseId, isPremium, onChooseVerify, onClose }: {
   onChooseVerify: () => void;
   onClose: () => void;
 }) {
-  const [mode, setMode] = useState<'menu' | 'live' | 'done'>('menu');
+  const [mode, setMode] = useState<'menu' | 'written' | 'live' | 'done'>('menu');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -114,11 +114,27 @@ function HelpModal({ exerciseId, isPremium, onChooseVerify, onClose }: {
     }
   };
 
+  const handleWritten = async () => {
+    if (!isPremium) return;
+    setBusy(true);
+    setMessage('');
+    try {
+      await openReviewItem(exerciseId, 'blocked');
+      await createHelpRequest({ exercise_id: exerciseId, flag_type: 'WRITTEN', notes: notes.trim() || undefined });
+      setDoneText('Întrebarea a fost trimisă! Profesorul îți va răspunde în scris — vezi răspunsul în „Activitatea mea".');
+      setMode('done');
+    } catch (err: any) {
+      setMessage(err?.response?.data?.detail || 'Eroare la trimiterea cererii.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="flag-modal-overlay" onClick={onClose}>
       <div className="flag-modal" onClick={e => e.stopPropagation()}>
         <div className="flag-modal-header">
-          <h3>{mode === 'live' ? 'Cere o sesiune live' : 'Cere ajutor'}</h3>
+          <h3>{mode === 'live' ? 'Cere o sesiune live' : mode === 'written' ? 'Cere o explicație scrisă' : 'Cere ajutor'}</h3>
           <button className="flag-modal-close" onClick={onClose}>×</button>
         </div>
 
@@ -129,6 +145,16 @@ function HelpModal({ exerciseId, isPremium, onChooseVerify, onClose }: {
               <span>
                 <span className="flag-option-label">Trimite soluția spre verificare</span>
                 <div className="flag-option-desc">Ai o rezolvare — profesorul o corectează și îți spune dacă e bună.</div>
+              </span>
+            </button>
+
+            <button className="flag-option" onClick={() => setMode('written')} disabled={!isPremium}>
+              <span className="flag-option-icon">✍️</span>
+              <span>
+                <span className="flag-option-label">Cere o explicație scrisă {!isPremium && '🔒'}</span>
+                <div className="flag-option-desc">
+                  {isPremium ? 'Profesorul îți răspunde în scris la ce nu-ți iese.' : 'Disponibil cu abonament premium.'}
+                </div>
               </span>
             </button>
 
@@ -152,6 +178,28 @@ function HelpModal({ exerciseId, isPremium, onChooseVerify, onClose }: {
 
             {message && <div className="flag-msg-err">{message}</div>}
           </div>
+        )}
+
+        {mode === 'written' && (
+          <>
+            <p className="flag-modal-subtitle">
+              Exercițiul intră în „De revizuit", iar profesorul îți răspunde în scris. Spune-i pe scurt unde te-ai blocat.
+            </p>
+            <div className="flag-notes">
+              <label>Ce nu-ți iese? (opțional, dar ajută)</label>
+              <textarea
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+                placeholder="Ex: nu înțeleg de ce la pasul 2 se schimbă semnul..."
+                rows={3}
+              />
+            </div>
+            {message && <div className="flag-msg-err">{message}</div>}
+            <div className="flag-modal-actions">
+              <button className="flag-cancel-btn" onClick={() => setMode('menu')} disabled={busy}>Înapoi</button>
+              <button className="flag-live-btn" onClick={handleWritten} disabled={busy}>✍️ Trimite întrebarea</button>
+            </div>
+          </>
         )}
 
         {mode === 'live' && (
