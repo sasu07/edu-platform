@@ -601,6 +601,13 @@
   margin-top: 10px;
 }
 
+.ss-answer-locked {
+  margin-top: 10px;
+  font-size: 0.82rem;
+  color: var(--gray-500, #6b7280);
+  font-style: italic;
+}
+
 /* Footer */
 .ss-active-footer {
   display: flex;

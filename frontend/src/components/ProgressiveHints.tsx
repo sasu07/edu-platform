@@ -10,13 +10,21 @@ import './ProgressiveHints.css';
  * vedea răspunsul — încurajează să încerce singur. Indiciile se încarcă lazy
  * la primul click și sunt cache-uite pe backend per exercițiu.
  */
-export default function ProgressiveHints({ exerciseId }: { exerciseId: string }) {
+export default function ProgressiveHints({
+  exerciseId,
+  onReveal,
+}: {
+  exerciseId: string;
+  /** Se apelează când elevul cere ajutor (deblochează soluția la cerere în părinte). */
+  onReveal?: () => void;
+}) {
   const [hints, setHints] = useState<string[] | null>(null);
   const [revealed, setRevealed] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
 
   const handleNext = async () => {
+    onReveal?.();
     if (hints === null) {
       setLoading(true);
       setError(false);

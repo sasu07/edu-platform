@@ -11,6 +11,7 @@ import {
   markExerciseComplete,
   getCompletedExerciseIds,
   getExerciseSets,
+  openReviewItem,
   type SessionType,
   type StudySession as StudySessionType,
   type StudyStats,
@@ -301,6 +302,12 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
   const [revealedAnswers, setRevealedAnswers] = useState<Set<string>>(new Set());
   const [answerInputs, setAnswerInputs] = useState<Record<string, string>>({});
   const [answerChecks, setAnswerChecks] = useState<Record<string, { status: 'correct' | 'incorrect' | 'invalid' | 'pending'; message: string }>>({});
+  // Câte încercări greșite are elevul la fiecare exercițiu (pentru „De revizuit" după a 2-a).
+  const [wrongAttempts, setWrongAttempts] = useState<Record<string, number>>({});
+  // Exerciții la care elevul a cerut ajutor (deblochează „Vezi răspunsul oficial").
+  const [hintsUsed, setHintsUsed] = useState<Set<string>>(new Set());
+  // Exerciții deja trimise în lista „De revizuit" (ca să nu apelăm de mai multe ori).
+  const [reviewMarked, setReviewMarked] = useState<Set<string>>(new Set());
   const [completing, setCompleting] = useState(false);
   // Durata: cea aleasă (10/20/40, stocată în filters) sau implicit pe tip.
   const sessionMinutes = (session.filters as any)?.duration_minutes || SESSION_CONFIG[session.session_type].minutes;
@@ -371,11 +378,31 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
       return;
     }
 
+    const attempts = (wrongAttempts[exerciseId] || 0) + 1;
+    setWrongAttempts((prev) => ({ ...prev, [exerciseId]: attempts }));
+
+    // După a 2-a greșeală, exercițiul intră automat în lista „De revizuit".
+    let addedToReview = false;
+    if (attempts >= 2 && !reviewMarked.has(exerciseId)) {
+      setReviewMarked((prev) => new Set(prev).add(exerciseId));
+      addedToReview = true;
+      openReviewItem(exerciseId, 'wrong').catch(() => {
+        // dacă apelul eșuează, scoatem marcajul ca să se poată reîncerca
+        setReviewMarked((prev) => {
+          const next = new Set(prev);
+          next.delete(exerciseId);
+          return next;
+        });
+      });
+    }
+
     setAnswerChecks((prev) => ({
       ...prev,
       [exerciseId]: {
         status: 'incorrect',
-        message: 'Nu pare să fie valoarea corectă. Mai verifică încă o dată calculele.',
+        message: addedToReview
+          ? 'Tot nu iese. L-am adăugat la „De revizuit" — cere un indiciu sau vezi răspunsul oficial mai jos.'
+          : 'Nu pare să fie valoarea corectă. Mai verifică încă o dată calculele — sau cere un indiciu.',
       },
     }));
   };
@@ -485,22 +512,33 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
                     )}
                   </div>
 
-                  <ProgressiveHints exerciseId={ex.id} />
+                  <ProgressiveHints
+                    exerciseId={ex.id}
+                    onReveal={() => setHintsUsed((prev) => (prev.has(ex.id) ? prev : new Set(prev).add(ex.id)))}
+                  />
 
+                  {/* Soluția la cerere, DUPĂ indicii: se deblochează după ce elevul a cerut
+                      un indiciu sau a greșit de 2 ori — niciodată automat după prima greșeală. */}
                   {ex.answer_latex && (
-                    <div className="ss-answer-toggle-wrap">
-                      <button
-                        className="ss-answer-toggle-btn"
-                        onClick={() => setRevealedAnswers((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(ex.id)) next.delete(ex.id);
-                          else next.add(ex.id);
-                          return next;
-                        })}
-                      >
-                        {revealed ? 'Ascunde răspunsul oficial' : 'Vezi răspunsul oficial'}
-                      </button>
-                    </div>
+                    hintsUsed.has(ex.id) || (wrongAttempts[ex.id] || 0) >= 2 ? (
+                      <div className="ss-answer-toggle-wrap">
+                        <button
+                          className="ss-answer-toggle-btn"
+                          onClick={() => setRevealedAnswers((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(ex.id)) next.delete(ex.id);
+                            else next.add(ex.id);
+                            return next;
+                          })}
+                        >
+                          {revealed ? 'Ascunde răspunsul oficial' : 'Vezi răspunsul oficial'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="ss-answer-locked">
+                        Cere întâi un indiciu — apoi poți vedea răspunsul oficial.
+                      </div>
+                    )
                   )}
 
                   {revealed && ex.answer_latex && (
