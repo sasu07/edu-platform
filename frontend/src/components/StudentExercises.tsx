@@ -68,25 +68,45 @@ function clearWorkspaceDraft(userId: string | undefined, exerciseId: string) {
   window.localStorage.removeItem(getWorkspaceStorageKey(userId, exerciseId));
 }
 
-function BlockedModal({ exerciseId, onClose, isPremium }: { exerciseId: string; onClose: () => void; isPremium: boolean }) {
+// ─── Cere ajutor (Faza 1) ─────────────────────────────────────────────────────
+// O singură intrare cu trei intenții clare, în locul butoanelor separate
+// „M-am blocat" și „Vreau corectare".
+
+function HelpModal({ exerciseId, isPremium, onChooseVerify, onClose }: {
+  exerciseId: string;
+  isPremium: boolean;
+  onChooseVerify: () => void;
+  onClose: () => void;
+}) {
+  const [mode, setMode] = useState<'menu' | 'live' | 'done'>('menu');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  const [sent, setSent] = useState(false);
+  const [doneText, setDoneText] = useState('');
 
-  const handleLiveRequest = async () => {
+  const handleReview = async () => {
+    setBusy(true);
+    setMessage('');
+    try {
+      await openReviewItem(exerciseId, 'blocked');
+      setDoneText('Exercițiul a fost adăugat la „De revizuit". Îl regăsești în Progres.');
+      setMode('done');
+    } catch {
+      setMessage('Nu am putut salva. Încearcă din nou.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleLive = async () => {
     if (!isPremium) return;
     setBusy(true);
     setMessage('');
     try {
       await openReviewItem(exerciseId, 'blocked');
-      await createHelpRequest({
-        exercise_id: exerciseId,
-        flag_type: 'LIVE',
-        notes: notes.trim() || undefined,
-      });
-      setSent(true);
-      setMessage('Cererea a fost trimisă! Profesorul va stabili o oră pentru sesiunea live.');
+      await createHelpRequest({ exercise_id: exerciseId, flag_type: 'LIVE', notes: notes.trim() || undefined });
+      setDoneText('Cererea a fost trimisă! Profesorul va stabili o oră pentru sesiunea live — o vei vedea în „Activitatea mea".');
+      setMode('done');
     } catch (err: any) {
       setMessage(err?.response?.data?.detail || 'Eroare la trimiterea cererii.');
     } finally {
@@ -94,28 +114,51 @@ function BlockedModal({ exerciseId, onClose, isPremium }: { exerciseId: string; 
     }
   };
 
-  const handleSaveReview = async () => {
-    setBusy(true);
-    try {
-      await openReviewItem(exerciseId, 'blocked');
-      onClose();
-    } catch { /* ignore */ } finally { setBusy(false); }
-  };
-
   return (
     <div className="flag-modal-overlay" onClick={onClose}>
       <div className="flag-modal" onClick={e => e.stopPropagation()}>
         <div className="flag-modal-header">
-          <h3>M-am blocat</h3>
+          <h3>{mode === 'live' ? 'Cere o sesiune live' : 'Cere ajutor'}</h3>
           <button className="flag-modal-close" onClick={onClose}>×</button>
         </div>
 
-        {!sent ? (
+        {mode === 'menu' && (
+          <div className="flag-options">
+            <button className="flag-option" onClick={onChooseVerify}>
+              <span className="flag-option-icon">📤</span>
+              <span>
+                <span className="flag-option-label">Trimite soluția spre verificare</span>
+                <div className="flag-option-desc">Ai o rezolvare — profesorul o corectează și îți spune dacă e bună.</div>
+              </span>
+            </button>
+
+            <button className="flag-option" onClick={() => setMode('live')} disabled={!isPremium}>
+              <span className="flag-option-icon">🎥</span>
+              <span>
+                <span className="flag-option-label">Cere o sesiune live {!isPremium && '🔒'}</span>
+                <div className="flag-option-desc">
+                  {isPremium ? 'Lămurești exercițiul direct cu un profesor.' : 'Disponibil cu abonament premium.'}
+                </div>
+              </span>
+            </button>
+
+            <button className="flag-option" onClick={handleReview} disabled={busy}>
+              <span className="flag-option-icon">🔖</span>
+              <span>
+                <span className="flag-option-label">Salvează la revizuit</span>
+                <div className="flag-option-desc">Te-ai blocat — îl pui deoparte și te întorci mai târziu.</div>
+              </span>
+            </button>
+
+            {message && <div className="flag-msg-err">{message}</div>}
+          </div>
+        )}
+
+        {mode === 'live' && (
           <>
             <p className="flag-modal-subtitle">
-              Exercițiul va fi adăugat în lista ta de revizuit. Dacă ai nevoie de explicații live, poți cere sprijin direct de la un profesor.
+              Exercițiul intră în „De revizuit", iar profesorul primește cererea ta pentru o sesiune live.
             </p>
-
             <div className="flag-notes">
               <label>Ce ai încercat? (opțional)</label>
               <textarea
@@ -125,29 +168,19 @@ function BlockedModal({ exerciseId, onClose, isPremium }: { exerciseId: string; 
                 rows={3}
               />
             </div>
-
             {message && <div className="flag-msg-err">{message}</div>}
-
             <div className="flag-modal-actions">
-              <button className="flag-cancel-btn" onClick={handleSaveReview} disabled={busy}>
-                Adaugă la revizuit
-              </button>
-              {isPremium ? (
-                <button className="flag-live-btn" onClick={handleLiveRequest} disabled={busy}>
-                  📹 Cer ajutor live
-                </button>
-              ) : (
-                <div className="flag-premium-lock">
-                  🔒 <span>Ajutor live disponibil doar cu abonament premium</span>
-                </div>
-              )}
+              <button className="flag-cancel-btn" onClick={() => setMode('menu')} disabled={busy}>Înapoi</button>
+              <button className="flag-live-btn" onClick={handleLive} disabled={busy}>📹 Trimite cererea</button>
             </div>
           </>
-        ) : (
+        )}
+
+        {mode === 'done' && (
           <div className="flag-sent">
             <div className="flag-sent-icon">✅</div>
-            <div className="flag-sent-text">Cerere trimisă!</div>
-            <p>{message}</p>
+            <div className="flag-sent-text">Gata!</div>
+            <p>{doneText}</p>
             <button className="flag-cancel-btn" onClick={onClose}>Închide</button>
           </div>
         )}
@@ -156,59 +189,48 @@ function BlockedModal({ exerciseId, onClose, isPremium }: { exerciseId: string; 
   );
 }
 
-function BlockedButton({ exerciseId, isPremium }: { exerciseId: string; isPremium: boolean }) {
-  const [showModal, setShowModal] = useState(false);
-  return (
-    <>
-      <button className="student-btn-flag" onClick={() => setShowModal(true)} title="Salvează blocajul sau cere sprijin">
-        <Flag size={15} />
-        M-am blocat
-      </button>
-      {showModal && <BlockedModal exerciseId={exerciseId} onClose={() => setShowModal(false)} isPremium={isPremium} />}
-    </>
-  );
-}
-
-function CorrectionButton({ exerciseId, completedIds, onToggleComplete }: {
+function HelpButton({ exerciseId, isPremium, onToggleComplete }: {
   exerciseId: string;
-  completedIds: Set<string>;
+  isPremium: boolean;
   onToggleComplete: (id: string, val: boolean, xp: number, badges: string[]) => void;
 }) {
-  const [showModal, setShowModal] = useState(false);
+  const [view, setView] = useState<'none' | 'pick' | 'eval'>('none');
   const [existing, setExisting] = useState<ExerciseSubmission | null>(null);
-  const isCompleted = completedIds.has(exerciseId);
 
-  const handleOpen = async () => {
+  const openVerify = async () => {
     try {
       const res = await getMySubmission(exerciseId);
       setExisting(res.data ?? null);
     } catch {
       setExisting(null);
     }
-    setShowModal(true);
-  };
-
-  const handleDone = (xp: number) => {
-    setShowModal(false);
-    onToggleComplete(exerciseId, true, xp, []);
+    setView('eval');
   };
 
   return (
     <>
       <button
-        className={`student-btn-correction ${isCompleted ? 'active' : ''}`}
-        onClick={handleOpen}
-        title="Trimite soluția pentru corectare"
+        className="student-btn-flag"
+        onClick={() => setView('pick')}
+        title="Trimite soluția, cere o sesiune live sau salvează la revizuit"
       >
         <Flag size={15} />
-        Vreau corectare
+        Cere ajutor
       </button>
-      {showModal && (
+      {view === 'pick' && (
+        <HelpModal
+          exerciseId={exerciseId}
+          isPremium={isPremium}
+          onChooseVerify={openVerify}
+          onClose={() => setView('none')}
+        />
+      )}
+      {view === 'eval' && (
         <EvalModal
           exerciseId={exerciseId}
           existing={existing}
-          onDone={handleDone}
-          onClose={() => setShowModal(false)}
+          onDone={(xp) => { setView('none'); onToggleComplete(exerciseId, true, xp, []); }}
+          onClose={() => setView('none')}
         />
       )}
     </>
@@ -721,8 +743,7 @@ function SimpleExerciseCard({ exercise, index, isPremium, completedIds, pendingI
         </div>
         <div className="student-ex-actions">
           <CompleteButton exerciseId={exercise.id} completedIds={completedIds} pendingIds={pendingIds} onToggleComplete={onToggleComplete} />
-          <BlockedButton exerciseId={exercise.id} isPremium={isPremium} />
-          <CorrectionButton exerciseId={exercise.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
+          <HelpButton exerciseId={exercise.id} isPremium={isPremium} onToggleComplete={onToggleComplete} />
           {hasSolution && (
             <button
               className={`student-btn-solution ${showSolution ? 'active' : ''}`}
@@ -804,8 +825,7 @@ function GroupedExerciseCard({ parent, children, index, isPremium, completedIds,
                   <span className="student-ex-points">{child.points} pct</span>
                 )}
                 <CompleteButton exerciseId={child.id} completedIds={completedIds} pendingIds={pendingIds} onToggleComplete={onToggleComplete} />
-                <BlockedButton exerciseId={child.id} isPremium={isPremium} />
-                <CorrectionButton exerciseId={child.id} completedIds={completedIds} onToggleComplete={onToggleComplete} />
+                <HelpButton exerciseId={child.id} isPremium={isPremium} onToggleComplete={onToggleComplete} />
                 {hasSolution && (
                   <button
                     className={`student-btn-solution ${isOpen ? 'active' : ''}`}

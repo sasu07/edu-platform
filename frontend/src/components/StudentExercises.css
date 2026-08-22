@@ -1182,6 +1182,16 @@
   background: #eff6ff;
 }
 
+.flag-option:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.flag-option:disabled:hover {
+  border-color: #e5e7eb;
+  background: #f9fafb;
+}
+
 .flag-option-icon {
   font-size: 1.5rem;
   flex-shrink: 0;
