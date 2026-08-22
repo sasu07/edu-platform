@@ -300,7 +300,6 @@ function TeacherEscalation({ exerciseId, canHelp, answer, notesText, hintCount, 
   attempts: number;
 }) {
   const [open, setOpen] = useState(false);
-  const [modality, setModality] = useState<'WRITTEN' | 'VIDEO' | 'LIVE'>('WRITTEN');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -308,33 +307,31 @@ function TeacherEscalation({ exerciseId, canHelp, answer, notesText, hintCount, 
 
   if (!canHelp) {
     return (
-      <div className="ss-help-locked">🔒 Ajutorul de la profesor este disponibil cu abonament premium.</div>
+      <div className="ss-help-locked">🔒 Sesiunea live cu profesorul este disponibilă cu abonament premium.</div>
     );
   }
 
   if (sent) {
     return (
-      <div className="ss-help-sent">✓ Cererea a fost trimisă profesorului, împreună cu ce ai lucrat. Vei primi răspuns în „Cereri".</div>
+      <div className="ss-help-sent">✓ Cererea a fost trimisă. Profesorul va stabili o oră pentru sesiunea live — o vei vedea în „Activitatea mea".</div>
     );
   }
 
-  const buildContext = () => {
-    const modalityLabel = { WRITTEN: 'rezolvare scrisă', VIDEO: 'rezolvare video', LIVE: 'sesiune live' }[modality];
-    return [
-      message.trim() ? `Mesaj elev: ${message.trim()}` : '',
-      `Tip ajutor cerut: ${modalityLabel}.`,
-      answer.trim() ? `Răspuns final introdus: ${answer.trim()}` : 'Nu a introdus un răspuns final.',
-      `Încercări greșite: ${attempts}.`,
-      `Indicii consultate: ${hintCount}.`,
-      notesText.trim() ? `Notițele elevului:\n${notesText.trim()}` : '',
-    ].filter(Boolean).join('\n');
-  };
+  // Faza 0: doar sesiune live (singurul tip de cerere pe care profesorul îl gestionează
+  // în dashboard). Scris/video vor reveni odată cu inbox-ul unificat (Faza 2).
+  const buildContext = () => [
+    message.trim() ? `Mesaj elev: ${message.trim()}` : '',
+    answer.trim() ? `Răspuns final introdus: ${answer.trim()}` : 'Nu a introdus un răspuns final.',
+    `Încercări greșite: ${attempts}.`,
+    `Indicii consultate: ${hintCount}.`,
+    notesText.trim() ? `Notițele elevului:\n${notesText.trim()}` : '',
+  ].filter(Boolean).join('\n');
 
   const handleSend = async () => {
     setBusy(true);
     setError('');
     try {
-      await createHelpRequest({ exercise_id: exerciseId, flag_type: modality, notes: buildContext() });
+      await createHelpRequest({ exercise_id: exerciseId, flag_type: 'LIVE', notes: buildContext() });
       setSent(true);
     } catch (err: any) {
       setError(err?.response?.data?.detail || 'Nu am putut trimite cererea. Încearcă din nou.');
@@ -347,7 +344,7 @@ function TeacherEscalation({ exerciseId, canHelp, answer, notesText, hintCount, 
     return (
       <div className="ss-help-wrap">
         <button className="ss-help-open-btn" type="button" onClick={() => setOpen(true)}>
-          Cere ajutor profesorului
+          Cere o sesiune live cu profesorul
         </button>
       </div>
     );
@@ -355,19 +352,7 @@ function TeacherEscalation({ exerciseId, canHelp, answer, notesText, hintCount, 
 
   return (
     <div className="ss-help-panel">
-      <div className="ss-help-title">Cere ajutor profesorului</div>
-      <div className="ss-help-modalities">
-        {([['WRITTEN', 'Rezolvare scrisă'], ['VIDEO', 'Rezolvare video'], ['LIVE', 'Sesiune live']] as const).map(([val, label]) => (
-          <button
-            key={val}
-            type="button"
-            className={`ss-help-modality${modality === val ? ' active' : ''}`}
-            onClick={() => setModality(val)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <div className="ss-help-title">Cere o sesiune live cu profesorul</div>
       <textarea
         className="ss-help-message"
         value={message}
@@ -382,7 +367,7 @@ function TeacherEscalation({ exerciseId, canHelp, answer, notesText, hintCount, 
       <div className="ss-help-actions">
         <button className="ss-help-cancel" type="button" onClick={() => setOpen(false)} disabled={busy}>Renunță</button>
         <button className="ss-help-send" type="button" onClick={handleSend} disabled={busy}>
-          {busy ? 'Se trimite…' : 'Trimite profesorului'}
+          {busy ? 'Se trimite…' : 'Trimite cererea'}
         </button>
       </div>
     </div>

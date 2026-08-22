@@ -676,30 +676,6 @@
   margin-bottom: 10px;
 }
 
-.ss-help-modalities {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.ss-help-modality {
-  border: 1px solid #d1d5db;
-  background: #fff;
-  border-radius: 20px;
-  padding: 6px 14px;
-  font: inherit;
-  font-size: 0.82rem;
-  cursor: pointer;
-  color: #374151;
-}
-
-.ss-help-modality.active {
-  border-color: #6366f1;
-  background: #6366f1;
-  color: #fff;
-}
-
 .ss-help-message {
   width: 100%;
   box-sizing: border-box;
