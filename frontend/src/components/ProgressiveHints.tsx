@@ -15,8 +15,9 @@ export default function ProgressiveHints({
   onReveal,
 }: {
   exerciseId: string;
-  /** Se apelează când elevul cere ajutor (deblochează soluția la cerere în părinte). */
-  onReveal?: () => void;
+  /** Se apelează când elevul cere ajutor; primește câte indicii sunt dezvăluite
+      (deblochează soluția la cerere și alimentează contextul pentru profesor). */
+  onReveal?: (revealedCount: number) => void;
 }) {
   const [hints, setHints] = useState<string[] | null>(null);
   const [revealed, setRevealed] = useState(0);
@@ -24,7 +25,6 @@ export default function ProgressiveHints({
   const [error, setError] = useState(false);
 
   const handleNext = async () => {
-    onReveal?.();
     if (hints === null) {
       setLoading(true);
       setError(false);
@@ -32,7 +32,9 @@ export default function ProgressiveHints({
         const res = await getExerciseHints(exerciseId);
         const list = res.data.hints || [];
         setHints(list);
-        setRevealed(list.length ? 1 : 0);
+        const shown = list.length ? 1 : 0;
+        setRevealed(shown);
+        onReveal?.(shown);
       } catch {
         setError(true);
       } finally {
@@ -40,7 +42,9 @@ export default function ProgressiveHints({
       }
       return;
     }
-    setRevealed((r) => Math.min(r + 1, hints.length));
+    const next = Math.min(revealed + 1, hints.length);
+    setRevealed(next);
+    onReveal?.(next);
   };
 
   const noHints = hints !== null && hints.length === 0;

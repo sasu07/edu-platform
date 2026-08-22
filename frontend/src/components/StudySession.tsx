@@ -12,6 +12,7 @@ import {
   getCompletedExerciseIds,
   getExerciseSets,
   openReviewItem,
+  createHelpRequest,
   type SessionType,
   type StudySession as StudySessionType,
   type StudyStats,
@@ -19,6 +20,7 @@ import {
 } from '../api';
 import LatexRenderer from './LatexRenderer';
 import ProgressiveHints from './ProgressiveHints';
+import { useAuth } from '../AuthContext';
 import { evaluateNumericExpression } from '../utils/numericExpression';
 import './StudySession.css';
 
@@ -287,6 +289,106 @@ function ConfigurePhase({ onStart, planDayId, defaultType = 'test_scurt', defaul
   );
 }
 
+// ─── Escaladare la profesor (ultimul pas din ajutorul gradual) ────────────────
+
+function TeacherEscalation({ exerciseId, canHelp, answer, notesText, hintCount, attempts }: {
+  exerciseId: string;
+  canHelp: boolean;
+  answer: string;
+  notesText: string;
+  hintCount: number;
+  attempts: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [modality, setModality] = useState<'WRITTEN' | 'VIDEO' | 'LIVE'>('WRITTEN');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState('');
+
+  if (!canHelp) {
+    return (
+      <div className="ss-help-locked">🔒 Ajutorul de la profesor este disponibil cu abonament premium.</div>
+    );
+  }
+
+  if (sent) {
+    return (
+      <div className="ss-help-sent">✓ Cererea a fost trimisă profesorului, împreună cu ce ai lucrat. Vei primi răspuns în „Cereri".</div>
+    );
+  }
+
+  const buildContext = () => {
+    const modalityLabel = { WRITTEN: 'rezolvare scrisă', VIDEO: 'rezolvare video', LIVE: 'sesiune live' }[modality];
+    return [
+      message.trim() ? `Mesaj elev: ${message.trim()}` : '',
+      `Tip ajutor cerut: ${modalityLabel}.`,
+      answer.trim() ? `Răspuns final introdus: ${answer.trim()}` : 'Nu a introdus un răspuns final.',
+      `Încercări greșite: ${attempts}.`,
+      `Indicii consultate: ${hintCount}.`,
+      notesText.trim() ? `Notițele elevului:\n${notesText.trim()}` : '',
+    ].filter(Boolean).join('\n');
+  };
+
+  const handleSend = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await createHelpRequest({ exercise_id: exerciseId, flag_type: modality, notes: buildContext() });
+      setSent(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || 'Nu am putut trimite cererea. Încearcă din nou.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <div className="ss-help-wrap">
+        <button className="ss-help-open-btn" type="button" onClick={() => setOpen(true)}>
+          Cere ajutor profesorului
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ss-help-panel">
+      <div className="ss-help-title">Cere ajutor profesorului</div>
+      <div className="ss-help-modalities">
+        {([['WRITTEN', 'Rezolvare scrisă'], ['VIDEO', 'Rezolvare video'], ['LIVE', 'Sesiune live']] as const).map(([val, label]) => (
+          <button
+            key={val}
+            type="button"
+            className={`ss-help-modality${modality === val ? ' active' : ''}`}
+            onClick={() => setModality(val)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <textarea
+        className="ss-help-message"
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        placeholder="Opțional: spune pe scurt unde te-ai blocat."
+        rows={2}
+      />
+      <div className="ss-help-context-note">
+        Trimitem automat profesorului: răspunsul tău, notițele, câte indicii ai folosit și numărul de încercări.
+      </div>
+      {error && <div className="ss-help-error">{error}</div>}
+      <div className="ss-help-actions">
+        <button className="ss-help-cancel" type="button" onClick={() => setOpen(false)} disabled={busy}>Renunță</button>
+        <button className="ss-help-send" type="button" onClick={handleSend} disabled={busy}>
+          {busy ? 'Se trimite…' : 'Trimite profesorului'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Active Phase ─────────────────────────────────────────────────────────────
 
 interface ActiveProps {
@@ -296,6 +398,7 @@ interface ActiveProps {
 }
 
 function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
+  const { canHelpRequests } = useAuth();
   const elapsed = useTimer(true);
   const [completedIds, setCompletedIds] = useState<Set<string>>(new Set());
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -308,6 +411,8 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
   const [wrongAttempts, setWrongAttempts] = useState<Record<string, number>>({});
   // Exerciții la care elevul a cerut ajutor (deblochează „Vezi răspunsul oficial").
   const [hintsUsed, setHintsUsed] = useState<Set<string>>(new Set());
+  // Câte indicii a consultat efectiv (pentru contextul trimis profesorului).
+  const [hintCounts, setHintCounts] = useState<Record<string, number>>({});
   // Exerciții deja trimise în lista „De revizuit" (ca să nu apelăm de mai multe ori).
   const [reviewMarked, setReviewMarked] = useState<Set<string>>(new Set());
   const [completing, setCompleting] = useState(false);
@@ -561,7 +666,10 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
 
                   <ProgressiveHints
                     exerciseId={ex.id}
-                    onReveal={() => setHintsUsed((prev) => (prev.has(ex.id) ? prev : new Set(prev).add(ex.id)))}
+                    onReveal={(count) => {
+                      setHintsUsed((prev) => (prev.has(ex.id) ? prev : new Set(prev).add(ex.id)));
+                      setHintCounts((prev) => ({ ...prev, [ex.id]: Math.max(prev[ex.id] || 0, count) }));
+                    }}
                   />
 
                   {/* Soluția la cerere, DUPĂ indicii: se deblochează după ce elevul a cerut
@@ -593,6 +701,19 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
                       <span className="ss-ex-answer-label">Răspuns:</span>
                       <LatexRenderer text={ex.answer_latex} />
                     </div>
+                  )}
+
+                  {/* Ultimul pas din ajutorul gradual: escaladare la profesor,
+                      cu tot contextul de lucru atașat automat. Apare după indicii. */}
+                  {hintsUsed.has(ex.id) && (
+                    <TeacherEscalation
+                      exerciseId={ex.id}
+                      canHelp={canHelpRequests}
+                      answer={answerInputs[ex.id] || ''}
+                      notesText={notes[ex.id] || ''}
+                      hintCount={hintCounts[ex.id] || 0}
+                      attempts={wrongAttempts[ex.id] || 0}
+                    />
                   )}
                 </div>
               )}
