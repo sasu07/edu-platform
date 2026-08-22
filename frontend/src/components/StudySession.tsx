@@ -301,6 +301,8 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [revealedAnswers, setRevealedAnswers] = useState<Set<string>>(new Set());
   const [answerInputs, setAnswerInputs] = useState<Record<string, string>>({});
+  // Notițe/ciornă per exercițiu (autosave local, restaurate la revenire).
+  const [notes, setNotes] = useState<Record<string, string>>({});
   const [answerChecks, setAnswerChecks] = useState<Record<string, { status: 'correct' | 'incorrect' | 'invalid' | 'pending'; message: string }>>({});
   // Câte încercări greșite are elevul la fiecare exercițiu (pentru „De revizuit" după a 2-a).
   const [wrongAttempts, setWrongAttempts] = useState<Record<string, number>>({});
@@ -314,11 +316,34 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
   const limitSec = sessionMinutes * 60;
   const exercises = session.exercises || [];
 
+  const draftKey = `ss-draft-${session.id}`;
+
   useEffect(() => {
     if (exercises.length > 0) {
       setExpanded(exercises[0].id);
     }
+    // Restaurează ciorna locală (răspunsuri + notițe) la revenire / refresh.
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const d = JSON.parse(raw);
+        if (d && typeof d === 'object') {
+          if (d.answerInputs) setAnswerInputs(d.answerInputs);
+          if (d.notes) setNotes(d.notes);
+        }
+      }
+    } catch {}
   }, [session.id]);
+
+  // Autosave local cu debounce (răspunsul introdus și notițele nu se pierd la refresh).
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(draftKey, JSON.stringify({ answerInputs, notes }));
+      } catch {}
+    }, 700);
+    return () => clearTimeout(t);
+  }, [answerInputs, notes, draftKey]);
 
   useEffect(() => {
     // load already-completed from API to sync with existing progress
@@ -407,9 +432,19 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
     }));
   };
 
+  const clearDraft = () => {
+    try { localStorage.removeItem(draftKey); } catch {}
+  };
+
   const handleComplete = async () => {
     setCompleting(true);
+    clearDraft();
     await onComplete(elapsed, completedIds.size);
+  };
+
+  const handleAbandon = () => {
+    clearDraft();
+    onAbandon();
   };
 
   const doneCount = completedIds.size;
@@ -477,6 +512,18 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
               {open && (
                 <div className="ss-ex-body">
                   <LatexRenderer text={ex.statement_latex || ex.statement_text || ''} />
+
+                  <div className="ss-notes">
+                    <label className="ss-notes-label" htmlFor={`notes-${ex.id}`}>Ciornă / notițe</label>
+                    <textarea
+                      id={`notes-${ex.id}`}
+                      className="ss-notes-input"
+                      value={notes[ex.id] || ''}
+                      onChange={(e) => setNotes((prev) => ({ ...prev, [ex.id]: e.target.value }))}
+                      placeholder="Scrie aici pașii de lucru, calculele intermediare, ce ai încercat… (se salvează automat)"
+                      rows={3}
+                    />
+                  </div>
 
                   <div className={`ss-answer-checker${canAutoCheck ? '' : ' disabled'}`}>
                     <div className="ss-answer-checker-label">Răspunsul meu</div>
@@ -556,7 +603,7 @@ function ActivePhase({ session, onComplete, onAbandon }: ActiveProps) {
 
       {/* Footer actions */}
       <div className="ss-active-footer">
-        <button className="ss-abandon-btn" onClick={onAbandon} disabled={completing}>
+        <button className="ss-abandon-btn" onClick={handleAbandon} disabled={completing}>
           <XCircle size={15} /> Abandonează
         </button>
         <button className="ss-complete-btn" onClick={handleComplete} disabled={completing || doneCount === 0}>

@@ -499,6 +499,38 @@
   margin-right: 8px;
 }
 
+.ss-notes {
+  margin-top: 14px;
+}
+
+.ss-notes-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--gray-600, #4b5563);
+  margin-bottom: 6px;
+}
+
+.ss-notes-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 64px;
+}
+
+.ss-notes-input:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
 .ss-answer-checker {
   margin-top: 14px;
   padding: 12px 14px;
