@@ -499,3 +499,148 @@
     padding: 40px 16px;
   }
 }
+
+/* ─── Firul unificat „Activitatea mea" (Faza 5) ─── */
+.my-req-sub {
+  margin: 4px 0 0;
+  font-size: 0.88rem;
+  color: #6b7280;
+}
+
+.my-req-filters {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+
+.my-req-filter {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 20px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 0.82rem;
+  color: #374151;
+  cursor: pointer;
+}
+.my-req-filter.active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.thread-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.thread-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+.thread-head:hover { background: #f9fafb; }
+
+.thread-statement {
+  font-size: 0.92rem;
+  color: #1f2937;
+  line-height: 1.4;
+}
+
+.thread-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.thread-chip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: #f3f4f6;
+  color: #374151;
+}
+.thread-chip.chip-review { background: #fef3c7; color: #92400e; }
+.thread-chip.chip-help { background: #eef2ff; color: #4338ca; }
+.thread-chip.chip-done { background: #dcfce7; color: #166534; }
+.thread-chip.ts-pending { background: #f3f4f6; color: #6b7280; }
+.thread-chip.ts-correct { background: #dcfce7; color: #166534; }
+.thread-chip.ts-incorrect { background: #fee2e2; color: #b91c1c; }
+
+.thread-body {
+  padding: 0 16px 16px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.thread-section {
+  margin-top: 14px;
+}
+
+.thread-section-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.thread-answer,
+.thread-note,
+.thread-resp {
+  font-size: 0.88rem;
+  color: #374151;
+  margin: 6px 0;
+}
+
+.thread-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.thread-act {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 8px;
+  padding: 7px 13px;
+  font: inherit;
+  font-size: 0.83rem;
+  cursor: pointer;
+  color: #374151;
+}
+.thread-act:hover { background: #f9fafb; }
+.thread-act.danger { border-color: #fca5a5; color: #b91c1c; }
+.thread-act:disabled { opacity: 0.6; cursor: default; }
+
+.thread-feedback {
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 0.88rem;
+}
+.thread-feedback.ok { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+.thread-feedback.bad { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+
+.thread-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.thread-zoom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.thread-zoom-time { font-size: 0.8rem; color: #6b7280; }
+.thread-xp { font-size: 0.82rem; font-weight: 600; color: #b45309; margin-top: 6px; }

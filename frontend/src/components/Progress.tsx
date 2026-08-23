@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { LayoutDashboard, CalendarDays, RotateCcw, History, Route } from 'lucide-react';
+import { LayoutDashboard, CalendarDays, History, Route } from 'lucide-react';
 import {
   getStudySessions, getStudyPlan, getMyGamification,
   type StudySession, type StudyPlanDay, type GamificationProfile,
@@ -12,14 +12,13 @@ import './Practice.css';
    Rezumat, Calendar, De revizuit, Istoric și Traseul meu. */
 
 const SummaryPanel = lazy(() => import('./progress/SummaryPanel'));
-const ReviewList = lazy(() => import('./progress/ReviewList'));
 const HistoryList = lazy(() => import('./progress/HistoryList'));
 const LearningPath = lazy(() => import('./LearningPath'));
 
+// „De revizuit" a fost mutat în „Activitatea mea" (firul unificat) — vezi MyRequests.
 const TABS = [
   { id: 'rezumat', label: 'Rezumat', icon: LayoutDashboard },
   { id: 'calendar', label: 'Calendar', icon: CalendarDays },
-  { id: 'revizuit', label: 'De revizuit', icon: RotateCcw },
   { id: 'istoric', label: 'Istoric', icon: History },
   { id: 'traseu', label: 'Traseul meu', icon: Route },
 ] as const;
@@ -72,7 +71,6 @@ export default function Progress() {
       <div className="prac-panel">
         <Suspense fallback={<LoadingState lines={4} />}>
           {tab === 'rezumat' && <SummaryPanel />}
-          {tab === 'revizuit' && <ReviewList />}
           {tab === 'istoric' && <HistoryList />}
           {tab === 'traseu' && <LearningPath />}
           {tab === 'calendar' && (
