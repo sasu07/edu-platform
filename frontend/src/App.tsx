@@ -19,6 +19,7 @@ import {
   Users,
   UserRound,
   LogOut,
+  Inbox,
 } from "lucide-react";
 import { PrimaryCTA } from "./components/StateViews";
 
@@ -782,6 +783,14 @@ function AppShell() {
                   Progres
                 </NavLink>
                 <NavLink
+                  to="/app/my-requests"
+                  className={({ isActive }) =>
+                    isActive ? "nav-link active" : "nav-link"
+                  }
+                >
+                  Activitatea mea
+                </NavLink>
+                <NavLink
                   to="/app/league"
                   className={({ isActive }) =>
                     isActive ? "nav-link active" : "nav-link"
@@ -964,6 +973,15 @@ function AppShell() {
           >
             <BarChart3 size={21} aria-hidden="true" />
             <span>Progres</span>
+          </NavLink>
+          <NavLink
+            to="/app/my-requests"
+            className={({ isActive }) =>
+              isActive ? "mobile-bottom-link active" : "mobile-bottom-link"
+            }
+          >
+            <Inbox size={21} aria-hidden="true" />
+            <span>Activitate</span>
           </NavLink>
           <NavLink
             to="/app/league"

@@ -306,7 +306,7 @@
     left: 0;
     z-index: 280;
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     border-top: 1px solid rgba(148, 163, 184, 0.24);
     background: rgba(255, 255, 255, 0.96);
     box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);

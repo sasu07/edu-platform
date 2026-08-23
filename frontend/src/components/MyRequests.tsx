@@ -58,7 +58,7 @@ function HelpRequestsTab() {
     <div className="my-req-empty">
       <AlertCircle size={36} />
       <p>Nu ai trimis nicio cerere de ajutor încă.</p>
-      <p className="my-req-hint">Mergi la <strong>Exerciții</strong> și apasă butonul „Ajutor" pe un exercițiu.</p>
+      <p className="my-req-hint">Mergi la <strong>Exerciții</strong>, apasă „Cere ajutor" pe un exercițiu și alege o explicație scrisă sau o sesiune live.</p>
     </div>
   );
 
@@ -213,7 +213,7 @@ function SolutionsTab() {
       <BookCheck size={36} />
       <p>Nu ai trimis nicio soluție încă.</p>
       <p className="my-req-hint">
-        Mergi la <strong>Exerciții</strong>, rezolvă un exercițiu și apasă „○ Rezolvat" pentru a trimite autoevaluarea.
+        Mergi la <strong>Exerciții</strong>, apasă „Cere ajutor" → „Trimite soluția spre verificare" pentru a-i trimite profesorului rezolvarea ta.
       </p>
     </div>
   );
