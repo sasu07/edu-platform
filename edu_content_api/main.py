@@ -1797,6 +1797,54 @@ def get_review_items(
         return cur.fetchall()
 
 
+@app.get("/teacher/students/{student_id}/review-items", tags=["Teacher"])
+def get_student_review_items(
+    student_id: str,
+    conn: Connection = Depends(get_db_conn),
+    _staff: UserDB = Depends(require_staff),
+):
+    """Lista „De revizuit" a unui elev — pentru profesor, ca să lucreze pe ea
+    într-o sesiune live (exercițiile pe care elevul le-a flag-uit)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            """
+            SELECT
+                ri.id,
+                ri.exercise_id,
+                ri.source_reason,
+                ri.fail_count,
+                ri.revisit_count,
+                ri.first_flagged_at,
+                ri.last_flagged_at,
+                e.statement_latex,
+                e.statement_text,
+                e.answer_latex,
+                e.solution_latex,
+                e.difficulty,
+                e.points
+            FROM exercise_review_items ri
+            JOIN exercises e ON e.id = ri.exercise_id
+            WHERE ri.student_id=%s AND ri.status='open'
+            ORDER BY ri.last_flagged_at DESC
+            """,
+            (student_id,),
+        )
+        return cur.fetchall()
+
+
+@app.post("/teacher/students/{student_id}/review-items/{exercise_id}/resolve", tags=["Teacher"])
+def resolve_student_review_item(
+    student_id: str,
+    exercise_id: str,
+    conn: Connection = Depends(get_db_conn),
+    _staff: UserDB = Depends(require_staff),
+):
+    """Profesorul bifează un exercițiu ca lămurit în timpul sesiunii live."""
+    _resolve_review_item(conn, student_id, exercise_id)
+    conn.commit()
+    return {"status": "resolved"}
+
+
 # =============================================================================
 # --- Teacher: Verificare soluții (doar EtoX teachers + admin) ---
 # =============================================================================

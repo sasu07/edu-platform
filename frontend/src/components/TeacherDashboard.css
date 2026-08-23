@@ -867,6 +867,59 @@
   margin-right: 8px;
 }
 
+/* Faza 3: panoul „De revizuit" al elevului în cardul live */
+.student-review-panel {
+  margin-top: 12px;
+  border-top: 1px dashed #e5e7eb;
+  padding-top: 12px;
+}
+
+.student-review-toggle {
+  background: none;
+  border: 1px solid #c7d2fe;
+  color: #4338ca;
+  border-radius: 8px;
+  padding: 7px 13px;
+  font: inherit;
+  font-size: 0.83rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.student-review-toggle:hover { background: #eef2ff; }
+
+.student-review-empty {
+  margin-top: 10px;
+  font-size: 0.83rem;
+  color: #6b7280;
+}
+
+.student-review-list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.student-review-item {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.student-review-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.student-review-answer {
+  font-size: 0.85rem;
+  color: #374151;
+  margin: 6px 0;
+}
+
 .help-reply-input {
   width: 100%;
   box-sizing: border-box;

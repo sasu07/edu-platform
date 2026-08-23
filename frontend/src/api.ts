@@ -562,6 +562,26 @@ export const getLiveHelpRequests = () =>
 export const scheduleLiveHelp = (requestId: string, data: { scheduled_at: string; zoom_link?: string }) =>
   api.post(`/teacher/help-requests/${requestId}/schedule`, data);
 
+// Lista „De revizuit" a unui elev, pentru profesor (sesiune live pe exercițiile flag-uite).
+export interface StudentReviewItem {
+  id: string;
+  exercise_id: string;
+  source_reason: string;
+  fail_count: number;
+  revisit_count: number;
+  last_flagged_at: string;
+  statement_latex: string | null;
+  statement_text: string | null;
+  answer_latex: string | null;
+  solution_latex: string | null;
+  difficulty: number | null;
+  points: number | null;
+}
+export const getStudentReviewItems = (studentId: string) =>
+  api.get<StudentReviewItem[]>(`/teacher/students/${studentId}/review-items`);
+export const resolveStudentReviewItem = (studentId: string, exerciseId: string) =>
+  api.post(`/teacher/students/${studentId}/review-items/${exerciseId}/resolve`);
+
 // --- Parent-Student ---
 export interface ParentStudentLink {
   id: string;
