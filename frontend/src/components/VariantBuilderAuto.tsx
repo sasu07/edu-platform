@@ -15,7 +15,6 @@ import {
   generateVariant,
   getMyLimits,
   getMyVariants,
-  getVariantDocument,
   getVariantExercises,
   type GenLimits,
 } from "../api";
@@ -177,22 +176,14 @@ export default function VariantBuilderAuto() {
     }
   };
 
-  const openPreview = async (endpoint: string, requiresPdf = false) => {
+  // Deschide pagina de print din aplicație (KaTeX din bundle, CSP-safe).
+  const openPreview = (mode: 'exam' | 'solutions' | 'barem') => {
     if (!selectedVariantId) { setError("Selectează o variantă."); return; }
-    if (requiresPdf && !canDownloadPdf) {
+    if (!canDownloadPdf) {
       setError("Descărcarea PDF necesită abonamentul Premium PDF. Contactează un administrator.");
       return;
     }
-    setInfo("Se generează documentul…");
-    try {
-      const res = await getVariantDocument(selectedVariantId, endpoint as 'preview-exam' | 'preview-solutions' | 'preview-barem');
-      const blob = res.data as Blob;
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
-      setMsg(null);
-    } catch (err: any) {
-      setError(err.message ?? "Eroare la generare.");
-    }
+    window.open(`/variant-print/${selectedVariantId}?mode=${mode}`, '_blank');
   };
 
   return (
@@ -266,7 +257,7 @@ export default function VariantBuilderAuto() {
             <button
               className={`vx-btn ${canDownloadPdf ? 'vx-btn-secondary' : 'vx-btn-locked'}`}
               type="button"
-              onClick={() => openPreview("preview-exam", true)}
+              onClick={() => openPreview("exam")}
               disabled={!selectedVariantId || loading}
               title={canDownloadPdf ? 'Descarcă subiect PDF' : 'Necesită Premium PDF'}
             >
@@ -276,7 +267,7 @@ export default function VariantBuilderAuto() {
             <button
               className={`vx-btn ${canDownloadPdf ? 'vx-btn-secondary' : 'vx-btn-locked'}`}
               type="button"
-              onClick={() => openPreview("preview-solutions", true)}
+              onClick={() => openPreview("solutions")}
               disabled={!selectedVariantId || loading}
               title={canDownloadPdf ? 'Descarcă rezolvare PDF' : 'Necesită Premium PDF'}
             >
@@ -286,7 +277,7 @@ export default function VariantBuilderAuto() {
             <button
               className={`vx-btn ${canDownloadPdf ? 'vx-btn-secondary' : 'vx-btn-locked'}`}
               type="button"
-              onClick={() => openPreview("preview-barem", true)}
+              onClick={() => openPreview("barem")}
               disabled={!selectedVariantId || loading}
               title={canDownloadPdf ? 'Descarcă barem PDF' : 'Necesită Premium PDF'}
             >

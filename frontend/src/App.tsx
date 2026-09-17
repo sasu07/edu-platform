@@ -56,6 +56,7 @@ const TeacherDashboard = lazy(() => import("./components/TeacherDashboard"));
 const LeagueHub = lazy(() => import("./components/LeagueHub"));
 const AdminPanel = lazy(() => import("./components/AdminPanel"));
 const MyRequests = lazy(() => import("./components/MyRequests"));
+const VariantPrint = lazy(() => import("./components/VariantPrint"));
 const ParentDashboard = lazy(() => import("./components/ParentDashboard"));
 const StudySession = lazy(() => import("./components/StudySession"));
 const StudyPlan = lazy(() => import("./components/StudyPlan"));
@@ -1029,6 +1030,16 @@ export default function App() {
               <Suspense fallback={<RouteLoader />}>
                 <ResetPassword />
               </Suspense>
+            }
+          />
+          <Route
+            path="/variant-print/:variantId"
+            element={
+              <RequireAuth>
+                <Suspense fallback={<RouteLoader />}>
+                  <VariantPrint />
+                </Suspense>
+              </RequireAuth>
             }
           />
           <Route
