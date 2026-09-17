@@ -315,9 +315,12 @@ def reorder_variant_exercises(variant_id: uuid.UUID, exercise_order: List[uuid.U
 @router.get("/variants/{variant_id}/download-pdf")
 def download_variant_pdf(
     variant_id: uuid.UUID,
+    mode: str = "exam",
     current_user: UserDB = Depends(require_pdf_premium),
     conn: Connection = Depends(get_db_conn),
 ):
+    if mode not in ("exam", "solutions", "barem"):
+        mode = "exam"
     _ensure_variant_access(conn, variant_id, current_user)
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("SELECT id, name FROM variants WHERE id = %s;", (variant_id,))
@@ -326,9 +329,10 @@ def download_variant_pdf(
         raise HTTPException(status_code=404, detail="Varianta nu a fost găsită")
 
     try:
-        pdf_buffer = get_pdf_generator(conn).generate_variant_pdf(variant_id)
+        pdf_buffer = get_pdf_generator(conn).generate_variant_pdf(variant_id, mode=mode)
+        mode_suffix = {"exam": "", "solutions": "_rezolvare", "barem": "_barem"}.get(mode, "")
         safe_name = variant["name"].replace(" ", "_").replace("/", "-")
-        filename = f"{safe_name}.pdf"
+        filename = f"{safe_name}{mode_suffix}.pdf"
         return StreamingResponse(
             pdf_buffer,
             media_type="application/pdf",
