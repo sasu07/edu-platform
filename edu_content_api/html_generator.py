@@ -146,6 +146,8 @@ body {
         print-color-adjust: exact;
     }
     a { text-decoration: none; color: #000; }
+    .exercise { break-inside: avoid; page-break-inside: avoid; }
+    .subpoint { break-inside: avoid; page-break-inside: avoid; }
 }
 """
 
@@ -153,7 +155,6 @@ KATEX_HEAD = """
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function() {
     renderMathInElement(document.body, {
@@ -164,26 +165,16 @@ KATEX_HEAD = """
       throwOnError: false
     });
     var btn = document.getElementById('btn-print');
-    btn.disabled = false;
-    btn.textContent = '⬇️ Descarcă PDF';
-
-    btn.addEventListener('click', function() {
-      btn.disabled = true;
-      btn.textContent = 'Se generează...';
-      var filename = document.title.replace(/[^a-zA-Z0-9_\-\.]/g, '_') + '.pdf';
-      var opt = {
-        margin: [10, 12, 10, 12],
-        filename: filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-      html2pdf().set(opt).from(document.getElementById('printable')).save()
-        .then(function() {
-          btn.disabled = false;
-          btn.textContent = '⬇️ Descarcă PDF';
-        });
-    });
+    function enable() { btn.disabled = false; btn.textContent = '⬇️ Descarcă PDF'; }
+    // Așteptăm fonturile KaTeX ca formulele să fie randate complet înainte de print.
+    if (document.fonts && document.fonts.ready) {
+      document.fonts.ready.then(enable);
+    } else {
+      enable();
+    }
+    // Export prin printul nativ al browserului: randează KaTeX exact ca pe ecran
+    // (fără html2canvas, care lăsa formule needitate în PDF). „Salvează ca PDF".
+    btn.addEventListener('click', function() { window.print(); });
   });
 </script>
 """

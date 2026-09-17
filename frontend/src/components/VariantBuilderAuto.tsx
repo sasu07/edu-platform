@@ -15,7 +15,7 @@ import {
   generateVariant,
   getMyLimits,
   getMyVariants,
-  downloadVariantPdf,
+  getVariantDocument,
   getVariantExercises,
   type GenLimits,
 } from "../api";
@@ -177,29 +177,21 @@ export default function VariantBuilderAuto() {
     }
   };
 
-  // Descărcare PDF server-side (matplotlib) — randează corect LaTeX în PDF,
-  // spre deosebire de exportul html2pdf din pagina de preview.
-  const downloadPdf = async (mode: 'exam' | 'solutions' | 'barem') => {
+  const openPreview = async (endpoint: string, requiresPdf = false) => {
     if (!selectedVariantId) { setError("Selectează o variantă."); return; }
-    if (!canDownloadPdf) {
+    if (requiresPdf && !canDownloadPdf) {
       setError("Descărcarea PDF necesită abonamentul Premium PDF. Contactează un administrator.");
       return;
     }
-    setInfo("Se generează PDF-ul…");
+    setInfo("Se generează documentul…");
     try {
-      const res = await downloadVariantPdf(selectedVariantId, mode);
-      const url = URL.createObjectURL(res.data as Blob);
-      const suffix = mode === 'solutions' ? '_rezolvare' : mode === 'barem' ? '_barem' : '';
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `variant${suffix}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      setSuccess("PDF descărcat.");
+      const res = await getVariantDocument(selectedVariantId, endpoint as 'preview-exam' | 'preview-solutions' | 'preview-barem');
+      const blob = res.data as Blob;
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setMsg(null);
     } catch (err: any) {
-      setError(err.message ?? "Eroare la generarea PDF-ului.");
+      setError(err.message ?? "Eroare la generare.");
     }
   };
 
@@ -274,7 +266,7 @@ export default function VariantBuilderAuto() {
             <button
               className={`vx-btn ${canDownloadPdf ? 'vx-btn-secondary' : 'vx-btn-locked'}`}
               type="button"
-              onClick={() => downloadPdf("exam")}
+              onClick={() => openPreview("preview-exam", true)}
               disabled={!selectedVariantId || loading}
               title={canDownloadPdf ? 'Descarcă subiect PDF' : 'Necesită Premium PDF'}
             >
@@ -284,7 +276,7 @@ export default function VariantBuilderAuto() {
             <button
               className={`vx-btn ${canDownloadPdf ? 'vx-btn-secondary' : 'vx-btn-locked'}`}
               type="button"
-              onClick={() => downloadPdf("solutions")}
+              onClick={() => openPreview("preview-solutions", true)}
               disabled={!selectedVariantId || loading}
               title={canDownloadPdf ? 'Descarcă rezolvare PDF' : 'Necesită Premium PDF'}
             >
@@ -294,7 +286,7 @@ export default function VariantBuilderAuto() {
             <button
               className={`vx-btn ${canDownloadPdf ? 'vx-btn-secondary' : 'vx-btn-locked'}`}
               type="button"
-              onClick={() => downloadPdf("barem")}
+              onClick={() => openPreview("preview-barem", true)}
               disabled={!selectedVariantId || loading}
               title={canDownloadPdf ? 'Descarcă barem PDF' : 'Necesită Premium PDF'}
             >

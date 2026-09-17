@@ -203,11 +203,6 @@ export const generateVariant = (variantId: string) =>
   api.post('/variants/generate', { variant_id: variantId });
 export const getVariantDocument = (variantId: string, endpoint: 'preview-exam' | 'preview-solutions' | 'preview-barem' | 'download-pdf') =>
   api.get(`/variants/${variantId}/${endpoint}`, { responseType: 'blob' });
-
-// PDF generat server-side (matplotlib) — randează corect LaTeX, spre deosebire de
-// exportul html2pdf din pagina de preview. mode: subiect / rezolvare / barem.
-export const downloadVariantPdf = (variantId: string, mode: 'exam' | 'solutions' | 'barem') =>
-  api.get(`/variants/${variantId}/download-pdf`, { params: { mode }, responseType: 'blob' });
 export const getNotifications = () => api.get<any[]>('/notifications/');
 export const markNotificationRead = (id: string) => api.put(`/notifications/${id}/read`);
 export const markAllNotificationsRead = () => api.put('/notifications/read-all');
